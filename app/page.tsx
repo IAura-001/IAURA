@@ -1,4 +1,5 @@
 "use client";
+import LevelProgress from "@/components/sections/LevelProgress";
 import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
 import { useState } from "react";
@@ -24,11 +25,23 @@ const completedMissions = MISSIONS.filter(
   (mission) => mission.completed
 );
 const recentMissions = completedMissions.slice(-3).reverse();
+
+if (!isLoaded) {
   return (
     <main
-  className="relative min-h-screen overflow-hidden px-6 text-white"
-  style={{ backgroundColor: theme.colors.background }}
->
+      className="flex min-h-screen items-center justify-center text-white"
+      style={{ backgroundColor: theme.colors.background }}
+    >
+      Loading IAURA...
+    </main>
+  );
+}
+
+return (
+  <main
+    className="relative min-h-screen overflow-hidden px-6 text-white"
+    style={{ backgroundColor: theme.colors.background }}
+  >
       <div className="absolute left-[-150px] top-[-150px] h-[420px] w-[420px] rounded-full bg-purple-700/20 blur-[130px]" />
 
       <div className="absolute bottom-[-180px] right-[-120px] h-[400px] w-[400px] rounded-full bg-blue-600/15 blur-[130px]" />
@@ -57,12 +70,13 @@ const recentMissions = completedMissions.slice(-3).reverse();
 <ProgressSummary
   completed={completedMissions.length}
   total={MISSIONS.length}
-  
 />
+
+<LevelProgress experience={memory.experience} />
+
 <StatsGrid
   completed={completedMissions.length}
   total={MISSIONS.length}
-  
 />
 <DailyQuote />
 <MissionList missions={recentMissions} />

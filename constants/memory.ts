@@ -16,7 +16,7 @@ export const DEFAULT_MEMORY: Memory = {
 
   level: 1,
 
-  experience: 0,
+  experience: 35,
 
   lastLogin: new Date().toISOString(),
 };
