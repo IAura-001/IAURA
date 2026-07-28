@@ -2,7 +2,7 @@
 
 import { MISSIONS } from "@/constants/missions";
 import { useState } from "react";
-
+import DailyFocus from "@/components/sections/DailyFocus";
 import { theme } from "@/config/theme";
 import DashboardGreeting from "@/components/sections/DashboardGreeting";
 import AssistantCard from "@/components/sections/AssistantCard";
@@ -50,6 +50,8 @@ const recentMissions = completedMissions.slice(-3).reverse();
          modeIcon={activeMode.icon}
 />
 <DashboardGreeting name="Founder" />
+
+<DailyFocus />
 
 <ProgressSummary
   completed={completedMissions.length}
