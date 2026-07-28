@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
+import Button from "@/components/ui/Button";
 const modes = [
   {
     id: "learn",
@@ -138,19 +138,16 @@ export default function Home() {
               />
             </div>
 
-            <button
-              type="button"
-              className="mt-5 w-full rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4 font-semibold transition hover:scale-[1.02]"
-            >
-              Comenzar con Aura →
-            </button>
+            <Button fullWidth>
+  Comenzar con Aura →
+</Button>
 
             <p className="mt-5 text-center text-xs text-zinc-600">
               Aura piensa contigo, no en tu lugar.
             </p>
           </div>
         </div>
-      </section>
+       </section>
     </main>
   );
 }
