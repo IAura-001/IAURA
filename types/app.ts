@@ -1,4 +1,4 @@
-export interface Mode {
+export interface AppMode {
   id: string;
   name: string;
   icon: string;
