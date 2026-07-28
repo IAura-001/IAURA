@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import { rewardXP } from "@/utils/xp";
 import { DEFAULT_MEMORY } from "@/constants/memory";
 import type { Memory } from "@/types/memory";
 
@@ -41,6 +41,11 @@ export function useMemory() {
       ...updates,
     }));
   }
+function addExperience(amount: number) {
+  setMemory((currentMemory) =>
+    rewardXP(currentMemory, amount)
+  );
+}
 
   function resetMemory() {
     setMemory(DEFAULT_MEMORY);
@@ -51,6 +56,7 @@ export function useMemory() {
     memory,
     isLoaded,
     updateMemory,
+    addExperience,
     resetMemory,
   };
 }

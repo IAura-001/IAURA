@@ -17,7 +17,7 @@ import StatsGrid from "@/components/sections/StatsGrid";
 import { useMemory } from "@/hooks/useMemory";
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
-const { memory, isLoaded } = useMemory();
+const { memory, isLoaded, addExperience } = useMemory();
 const activeMode =
   MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
 
@@ -72,7 +72,7 @@ return (
   total={MISSIONS.length}
 />
 
-<LevelProgress experience={memory.experience} />
+<LevelProgress experience={memory.experience} onEarnXP={() => addExperience(25)} />
 
 <StatsGrid
   completed={completedMissions.length}

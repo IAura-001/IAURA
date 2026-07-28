@@ -5,10 +5,12 @@ import {
 
 type LevelProgressProps = {
   experience: number;
+  onEarnXP: () => void;
 };
 
 export default function LevelProgress({
   experience,
+  onEarnXP, 
 }: LevelProgressProps) {
   const level = getLevelFromExperience(experience);
   const progress = getExperienceProgress(experience);
@@ -42,6 +44,14 @@ export default function LevelProgress({
             style={{ width: `${progress}%` }}
           />
         </div>
+        <button
+  type="button"
+  onClick={onEarnXP}
+  className="mt-5 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500"
+>
+  Complete action +25 XP
+</button>
+
       </div>
     </div>
   );
