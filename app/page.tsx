@@ -1,5 +1,5 @@
 "use client";
-
+import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
 import { useState } from "react";
 import DailyFocus from "@/components/sections/DailyFocus";
