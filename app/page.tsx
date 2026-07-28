@@ -57,11 +57,14 @@ const recentMissions = completedMissions.slice(-3).reverse();
 <ProgressSummary
   completed={completedMissions.length}
   total={MISSIONS.length}
+  
 />
 <StatsGrid
   completed={completedMissions.length}
   total={MISSIONS.length}
+  
 />
+<DailyQuote />
 <MissionList missions={recentMissions} />
     
       
