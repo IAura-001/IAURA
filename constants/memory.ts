@@ -1,4 +1,5 @@
 import type { Memory } from "@/types/memory";
+
 export const DEFAULT_MEMORY: Memory = {
   id: "default",
 
@@ -11,6 +12,7 @@ export const DEFAULT_MEMORY: Memory = {
   projects: ["IAURA"],
 
   completedMissions: 16,
+  completedMissionIds: ["001", "002", "003", "004", "005"],
 
   streak: 16,
 

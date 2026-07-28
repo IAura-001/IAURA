@@ -9,9 +9,10 @@ export interface Memory {
 
   projects: string[];
 
-  completedMissions: number;
+completedMissions: number;
+completedMissionIds: string[];
 
-  streak: number;
+streak: number;
 
   level: number;
 
