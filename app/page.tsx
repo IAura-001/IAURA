@@ -21,9 +21,16 @@ const { memory, isLoaded, addExperience, markMissionComplete } = useMemory();
 const activeMode =
   MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
 
-const completedMissions = MISSIONS.filter(
-  (mission) => mission.completed
+const completedMissionIds = memory.completedMissionIds ?? [];
+
+const completedMissions = MISSIONS.filter((mission) =>
+  completedMissionIds.includes(mission.id)
 );
+
+const pendingMissions = MISSIONS.filter(
+  (mission) => !completedMissionIds.includes(mission.id)
+);
+
 const recentMissions = completedMissions.slice(-3).reverse();
 
 if (!isLoaded) {
@@ -73,23 +80,14 @@ return (
 />
 
 <LevelProgress experience={memory.experience} onEarnXP={() => addExperience(25)} />
-<button
-  type="button"
-  onClick={() => markMissionComplete("023", 25)}
-  disabled={(memory.completedMissionIds ?? []).includes("023")}
-  className="lg:col-span-2 rounded-2xl bg-purple-600 px-5 py-3 font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
->
-  {(memory.completedMissionIds ?? []).includes("023")
-    ? "Mission 023 Completed"
-    : "Complete Mission 023 +25 XP"}
-</button>
+
 <StatsGrid
   completed={completedMissions.length}
   total={MISSIONS.length}
 />
 <DailyQuote />
 <MissionList
-  missions={recentMissions}
+  missions={pendingMissions}
   completedMissionIds={memory.completedMissionIds ?? []}
   onComplete={(missionId) => markMissionComplete(missionId, 25)}
 />

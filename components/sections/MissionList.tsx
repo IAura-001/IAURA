@@ -18,11 +18,11 @@ export default function MissionList({
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs tracking-[0.25em] text-zinc-500">
-              RECENT ACTIVITY
+              MISSION QUEUE
             </p>
 
             <h2 className="mt-2 text-2xl font-semibold">
-              Recent Missions
+              Available Missions
             </h2>
           </div>
 
