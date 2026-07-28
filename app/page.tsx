@@ -130,13 +130,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 p-4">
-              <input
-                type="text"
-                placeholder="Escribe tu primera misión..."
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
-              />
-            </div>
+            
 
             <Button fullWidth>
   Comenzar con Aura →
