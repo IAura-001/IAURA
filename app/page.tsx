@@ -9,7 +9,7 @@ import AssistantCard from "@/components/sections/AssistantCard";
 import Hero from "@/components/sections/Hero";
 import ModeSelector from "@/components/sections/ModeSelector";
 import Navbar from "@/components/sections/Navbar";
-
+import ProgressSummary from "@/components/sections/ProgressSummary";
 import MissionList from "@/components/sections/MissionList";
 import { MODES } from "@/constants/modes";
 
@@ -46,10 +46,16 @@ const completedMissions = MISSIONS.filter(
         </div>
 
         <AssistantCard
-          modeName={activeMode.name}
-          modeIcon={activeMode.icon}
-        />
-  <MissionList missions={completedMissions} />
+        modeName={activeMode.name}
+         modeIcon={activeMode.icon}
+/>
+
+<ProgressSummary
+  completed={completedMissions.length}
+  total={MISSIONS.length}
+/>
+
+<MissionList missions={completedMissions} />
     
       
       </section>
