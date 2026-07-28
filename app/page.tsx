@@ -22,7 +22,7 @@ const activeMode =
 const completedMissions = MISSIONS.filter(
   (mission) => mission.completed
 );
-
+const recentMissions = completedMissions.slice(-3).reverse();
   return (
     <main
   className="relative min-h-screen overflow-hidden px-6 text-white"
@@ -58,7 +58,7 @@ const completedMissions = MISSIONS.filter(
   completed={completedMissions.length}
   total={MISSIONS.length}
 />
-<MissionList missions={completedMissions} />
+<MissionList missions={recentMissions} />
     
       
       </section>

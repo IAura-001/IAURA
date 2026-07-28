@@ -12,11 +12,11 @@ export default function MissionList({ missions }: MissionListProps) {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs tracking-[0.25em] text-zinc-500">
-              DEVELOPMENT LOG
+              RECENT ACTIVITY
             </p>
 
             <h2 className="mt-2 text-2xl font-semibold">
-              Misiones completadas
+              Recent Missions
             </h2>
           </div>
 
