@@ -12,7 +12,7 @@ import Navbar from "@/components/sections/Navbar";
 import ProgressSummary from "@/components/sections/ProgressSummary";
 import MissionList from "@/components/sections/MissionList";
 import { MODES } from "@/constants/modes";
-
+import StatsGrid from "@/components/sections/StatsGrid";
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
 
@@ -54,7 +54,10 @@ const completedMissions = MISSIONS.filter(
   completed={completedMissions.length}
   total={MISSIONS.length}
 />
-
+<StatsGrid
+  completed={completedMissions.length}
+  total={MISSIONS.length}
+/>
 <MissionList missions={completedMissions} />
     
       
