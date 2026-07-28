@@ -11,14 +11,14 @@ export const DEFAULT_MEMORY: Memory = {
 
   projects: ["IAURA"],
 
-  completedMissions: 16,
-  completedMissionIds: ["001", "002", "003", "004", "005"],
+  completedMissions: 0,
+ completedMissionIds: [],
 
-  streak: 16,
+  streak: 0,
 
   level: 1,
 
-  experience: 35,
+  experience: 0,
 
   lastLogin: new Date().toISOString(),
 };
