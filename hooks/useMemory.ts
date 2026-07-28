@@ -17,8 +17,14 @@ export function useMemory() {
       const savedMemory = localStorage.getItem(STORAGE_KEY);
 
       if (savedMemory) {
-        setMemory(JSON.parse(savedMemory) as Memory);
-      }
+  const parsedMemory = JSON.parse(savedMemory) as Partial<Memory>;
+
+  setMemory({
+    ...DEFAULT_MEMORY,
+    ...parsedMemory,
+    completedMissionIds: parsedMemory.completedMissionIds ?? [],
+  });
+}
     } catch (error) {
       console.error("Unable to load IAURA memory:", error);
     } finally {

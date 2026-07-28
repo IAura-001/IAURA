@@ -17,7 +17,7 @@ import StatsGrid from "@/components/sections/StatsGrid";
 import { useMemory } from "@/hooks/useMemory";
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
-const { memory, isLoaded, addExperience } = useMemory();
+const { memory, isLoaded, addExperience, markMissionComplete } = useMemory();
 const activeMode =
   MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
 
@@ -73,7 +73,16 @@ return (
 />
 
 <LevelProgress experience={memory.experience} onEarnXP={() => addExperience(25)} />
-
+<button
+  type="button"
+  onClick={() => markMissionComplete("023", 25)}
+  disabled={(memory.completedMissionIds ?? []).includes("023")}
+  className="lg:col-span-2 rounded-2xl bg-purple-600 px-5 py-3 font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+>
+  {(memory.completedMissionIds ?? []).includes("023")
+    ? "Mission 023 Completed"
+    : "Complete Mission 023 +25 XP"}
+</button>
 <StatsGrid
   completed={completedMissions.length}
   total={MISSIONS.length}
