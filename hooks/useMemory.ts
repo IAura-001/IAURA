@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { rewardXP } from "@/utils/xp";
+import { completeMission } from "@/utils/mission";
 import { DEFAULT_MEMORY } from "@/constants/memory";
 import type { Memory } from "@/types/memory";
 
@@ -46,7 +47,14 @@ function addExperience(amount: number) {
     rewardXP(currentMemory, amount)
   );
 }
-
+function markMissionComplete(
+  missionId: string,
+  xpReward = 25
+) {
+  setMemory((currentMemory) =>
+    completeMission(currentMemory, missionId, xpReward)
+  );
+}
   function resetMemory() {
     setMemory(DEFAULT_MEMORY);
     localStorage.removeItem(STORAGE_KEY);
@@ -57,6 +65,7 @@ function addExperience(amount: number) {
     isLoaded,
     updateMemory,
     addExperience,
+    markMissionComplete,
     resetMemory,
   };
 }
