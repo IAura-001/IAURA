@@ -4,7 +4,7 @@ import { MISSIONS } from "@/constants/missions";
 import { useState } from "react";
 
 import { theme } from "@/config/theme";
-
+import DashboardGreeting from "@/components/sections/DashboardGreeting";
 import AssistantCard from "@/components/sections/AssistantCard";
 import Hero from "@/components/sections/Hero";
 import ModeSelector from "@/components/sections/ModeSelector";
@@ -49,6 +49,7 @@ const recentMissions = completedMissions.slice(-3).reverse();
         modeName={activeMode.name}
          modeIcon={activeMode.icon}
 />
+<DashboardGreeting name="Founder" />
 
 <ProgressSummary
   completed={completedMissions.length}
