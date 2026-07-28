@@ -13,6 +13,7 @@ import ProgressSummary from "@/components/sections/ProgressSummary";
 import MissionList from "@/components/sections/MissionList";
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
+
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
 
