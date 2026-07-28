@@ -88,7 +88,11 @@ return (
   total={MISSIONS.length}
 />
 <DailyQuote />
-<MissionList missions={recentMissions} />
+<MissionList
+  missions={recentMissions}
+  completedMissionIds={memory.completedMissionIds ?? []}
+  onComplete={(missionId) => markMissionComplete(missionId, 25)}
+/>
     
       
       </section>

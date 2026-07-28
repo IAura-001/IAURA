@@ -3,9 +3,15 @@ import type { Mission } from "@/types/mission";
 
 type MissionListProps = {
   missions: Mission[];
+  completedMissionIds: string[];
+  onComplete: (missionId: string) => void;
 };
 
-export default function MissionList({ missions }: MissionListProps) {
+export default function MissionList({
+  missions,
+  completedMissionIds,
+  onComplete,
+}: MissionListProps) {
   return (
     <div className="lg:col-span-2">
       <div className="mt-6 rounded-[28px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl">
@@ -27,7 +33,12 @@ export default function MissionList({ missions }: MissionListProps) {
 
         <div className="mt-6 grid gap-3 md:grid-cols-2">
           {missions.map((mission) => (
-            <MissionCard key={mission.id} mission={mission} />
+            <MissionCard
+              key={mission.id}
+              mission={mission}
+              isCompleted={completedMissionIds.includes(mission.id)}
+              onComplete={onComplete}
+            />
           ))}
         </div>
       </div>
