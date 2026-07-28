@@ -1,9 +1,8 @@
-import { Memory } from "@/types/memory";
-
+import type { Memory } from "@/types/memory";
 export const DEFAULT_MEMORY: Memory = {
   id: "default",
 
-  userName: "Founder",
+  userName: "Diego",
 
   goals: [],
 
