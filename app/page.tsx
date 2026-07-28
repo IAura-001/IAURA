@@ -17,7 +17,13 @@ import StatsGrid from "@/components/sections/StatsGrid";
 import { useMemory } from "@/hooks/useMemory";
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
-const { memory, isLoaded, addExperience, markMissionComplete } = useMemory();
+const {
+  memory,
+  isLoaded,
+  addExperience,
+  markMissionComplete,
+  resetMemory,
+} = useMemory();
 const activeMode =
   MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
 
@@ -80,7 +86,13 @@ return (
 />
 
 <LevelProgress experience={memory.experience} onEarnXP={() => addExperience(25)} />
-
+<button
+  type="button"
+  onClick={resetMemory}
+  className="rounded-xl bg-red-600 px-4 py-2 text-white hover:bg-red-500"
+>
+  Reset IAURA Memory
+</button>
 <StatsGrid
   completed={completedMissions.length}
   total={MISSIONS.length}
