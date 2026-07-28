@@ -13,7 +13,7 @@ import Navbar from "@/components/sections/Navbar";
 
 import type { AppMode } from "@/types/app";
 import MissionCard from "@/components/ui/MissionCard";
-
+import MissionList from "@/components/sections/MissionList";
 
 
 const modes: AppMode[] = [
@@ -86,7 +86,7 @@ export default function Home() {
     <div className="flex items-center justify-between">
       <div>
         <p className="text-xs tracking-[0.25em] text-zinc-500">
-          DEVELOPMENT LOG
+          <MissionList missions={completedMissions} />
         </p>
 
         <h2 className="mt-2 text-2xl font-semibold">
