@@ -14,7 +14,7 @@ import Navbar from "@/components/sections/Navbar";
 import type { AppMode } from "@/types/app";
 import MissionCard from "@/components/ui/MissionCard";
 import MissionList from "@/components/sections/MissionList";
-
+import { MODES } from "@/constants/modes";
 
 const modes: AppMode[] = [
   {
