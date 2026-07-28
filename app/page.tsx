@@ -13,10 +13,10 @@ import ProgressSummary from "@/components/sections/ProgressSummary";
 import MissionList from "@/components/sections/MissionList";
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
-
+import { useMemory } from "@/hooks/useMemory";
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
-
+const { memory, isLoaded } = useMemory();
 const activeMode =
   MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
 
@@ -50,7 +50,7 @@ const recentMissions = completedMissions.slice(-3).reverse();
         modeName={activeMode.name}
          modeIcon={activeMode.icon}
 />
-<DashboardGreeting name="Founder" />
+<DashboardGreeting name={memory.userName} />
 
 <DailyFocus />
 
