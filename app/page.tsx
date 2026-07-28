@@ -3,7 +3,6 @@
 import { MISSIONS } from "@/constants/missions";
 import { useState } from "react";
 
-import { APP_NAME, APP_TAGLINE } from "@/constants/app";
 import { theme } from "@/config/theme";
 
 import AssistantCard from "@/components/sections/AssistantCard";
@@ -11,50 +10,18 @@ import Hero from "@/components/sections/Hero";
 import ModeSelector from "@/components/sections/ModeSelector";
 import Navbar from "@/components/sections/Navbar";
 
-import type { AppMode } from "@/types/app";
-import MissionCard from "@/components/ui/MissionCard";
 import MissionList from "@/components/sections/MissionList";
 import { MODES } from "@/constants/modes";
-
-const modes: AppMode[] = [
-  {
-    id: "learn",
-    name: "Aprender",
-    icon: "✦",
-    description: "Aura te guía con preguntas, pistas y práctica.",
-  },
-  {
-    id: "build",
-    name: "Construir",
-    icon: "⬡",
-    description: "Convierte una idea en un proyecto ejecutable.",
-  },
-  {
-    id: "founder",
-    name: "Founder",
-    icon: "◇",
-    description: "Estrategia, decisiones y progreso para IAURA.",
-  },
-  {
-    id: "solve",
-    name: "Resolver",
-    icon: "◈",
-    description: "Obtén ayuda directa cuando necesitas avanzar rápido.",
-  },
-];
 
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
 
-  const activeMode =
+const activeMode =
+  MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
 
-    modes.find((mode) => mode.id === selectedMode) ?? modes[0];
-
-    const completedMissions = MISSIONS.filter(
+const completedMissions = MISSIONS.filter(
   (mission) => mission.completed
 );
-
-
 
   return (
     <main
@@ -72,7 +39,7 @@ export default function Home() {
           <Hero />
 
           <ModeSelector
-            modes={modes}
+            modes={MODES}
             selectedMode={selectedMode}
             onSelect={setSelectedMode}
           />
