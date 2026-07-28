@@ -1,5 +1,6 @@
 "use client";
 import LevelProgress from "@/components/sections/LevelProgress";
+import ProfileSettings from "@/components/sections/ProfileSettings";
 import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
 import { useState } from "react";
@@ -20,6 +21,7 @@ export default function Home() {
 const {
   memory,
   isLoaded,
+  updateMemory,
   addExperience,
   markMissionComplete,
   resetMemory,
@@ -77,7 +79,14 @@ return (
          modeIcon={activeMode.icon}
 />
 <DashboardGreeting name={memory.userName} />
-
+<ProfileSettings
+  userName={memory.userName}
+  onSaveName={(name) =>
+    updateMemory({
+      userName: name,
+    })
+  }
+/>
 <DailyFocus />
 
 <ProgressSummary

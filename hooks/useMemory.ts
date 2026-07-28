@@ -73,5 +73,6 @@ function markMissionComplete(
     addExperience,
     markMissionComplete,
     resetMemory,
+
   };
 }
