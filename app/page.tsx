@@ -1,6 +1,7 @@
 "use client";
 import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
+import DailyIntelligence from "@/components/sections/DailyIntelligence";
 import HabitsManager from "@/components/sections/HabitsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
 import DailyQuote from "@/components/sections/DailyQuote";
@@ -57,7 +58,18 @@ function handleRemoveGoal(goalIndex: number) {
   });
 }
 const habits = memory.habits;
-
+const dailyPriorities = [
+  ...memory.goals.slice(0, 2),
+  ...memory.habits.slice(0, 1),
+].filter(Boolean);
+const intelligencePriorities =
+  dailyPriorities.length > 0
+    ? dailyPriorities
+    : [
+        "Add your first goal",
+        "Create a daily habit",
+        "Complete your next IAURA mission",
+      ];
 function handleAddHabit(habit: string) {
   updateMemory({
     habits: [...habits, habit],
@@ -122,7 +134,7 @@ return (
   habits={habits}
   onAddHabit={handleAddHabit}
   onRemoveHabit={handleRemoveHabit}
-/>
+/><DailyIntelligence priorities={intelligencePriorities} />
 <DailyFocus />
 
 <ProgressSummary
