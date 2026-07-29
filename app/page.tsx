@@ -1,4 +1,5 @@
 "use client";
+import { iauraBrain } from "@/core/brain";
 import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
 import { generateAIResponse } from "@/services/ai";
@@ -115,18 +116,42 @@ const handleAnalyze = () => {
   }, 700);
 };
 const handleSend = () => {
-  if (!input.trim()) return;
+  const trimmedInput = input.trim();
+
+  if (!trimmedInput) return;
+
+  const brainResult = iauraBrain.analyze({
+    message: trimmedInput,
+    userContext: prompt,
+  });
 
   const userMessage: ChatMessage = {
     id: crypto.randomUUID(),
     role: "user",
-    content: input,
+    content: trimmedInput,
   };
+
+  const assistantPrompt = `
+IAURA THINKING MODE:
+${brainResult.decision.mode}
+
+DECISION REASON:
+${brainResult.decision.reason}
+
+VALIDATED:
+${brainResult.validated}
+
+USER MESSAGE:
+${trimmedInput}
+
+USER CONTEXT:
+${brainResult.context.userContext}
+  `.trim();
 
   const assistantMessage: ChatMessage = {
     id: crypto.randomUUID(),
     role: "assistant",
-    content: generateAIResponse(input),
+    content: generateAIResponse(assistantPrompt),
   };
 
   setMessages((prev) => [
