@@ -14,24 +14,32 @@ const MODE_RULES: ModeRule[] = [
   {
     mode: "planner",
     keywords: [
-      "plan",
-      "roadmap",
-      "schedule",
-      "organize",
-      "steps",
-    ],
+  "plan",
+  "planning",
+  "roadmap",
+  "schedule",
+  "organize",
+  "steps",
+  "strategy",
+  "timeline",
+  "goal",
+  "priority"
+],
     reason:
       "The request requires organization and actionable steps.",
   },
   {
     mode: "mentor",
     keywords: [
-      "explain",
-      "teach",
-      "learn",
-      "understand",
-      "why",
-    ],
+  "explain",
+  "teach",
+  "learn",
+  "understand",
+  "why",
+  "how",
+  "guide",
+  "example"
+],
     reason:
       "The request would benefit from teaching and explanation.",
   },

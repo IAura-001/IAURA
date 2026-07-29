@@ -1,8 +1,10 @@
 "use client";
 import { iauraBrain } from "@/core/brain";
+import { conversationController } from "@/core/conversation";
 import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
 import { generateAIResponse } from "@/services/ai";
+import { generateOpenAIResponse } from "@/services/openai";
 import { generatePriorities } from "@/utils/intelligence";
 import { generateRecommendation } from "@/utils/recommendations";
 import { buildUserContext } from "@/utils/context";
@@ -38,6 +40,7 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 const [input, setInput] = useState("");
+const [isSending, setIsSending] = useState(false);
 const {
   memory,
   isLoaded,
@@ -115,15 +118,10 @@ const handleAnalyze = () => {
     setIsAnalyzing(false);
   }, 700);
 };
-const handleSend = () => {
+const handleSend = async () => {
   const trimmedInput = input.trim();
 
-  if (!trimmedInput) return;
-
-  const brainResult = iauraBrain.analyze({
-    message: trimmedInput,
-    userContext: prompt,
-  });
+  if (!trimmedInput || isSending) return;
 
   const userMessage: ChatMessage = {
     id: crypto.randomUUID(),
@@ -131,37 +129,41 @@ const handleSend = () => {
     content: trimmedInput,
   };
 
-  const assistantPrompt = `
-IAURA THINKING MODE:
-${brainResult.decision.mode}
-
-DECISION REASON:
-${brainResult.decision.reason}
-
-VALIDATED:
-${brainResult.validated}
-
-USER MESSAGE:
-${trimmedInput}
-
-USER CONTEXT:
-${brainResult.context.userContext}
-  `.trim();
-
-  const assistantMessage: ChatMessage = {
-    id: crypto.randomUUID(),
-    role: "assistant",
-    content: generateAIResponse(assistantPrompt),
-  };
-
-  setMessages((prev) => [
-    ...prev,
-    userMessage,
-    assistantMessage,
-  ]);
+  setMessages((prev) => [...prev, userMessage]);
 
   setInput("");
+  setIsSending(true);
+
+  try {
+    const content = await conversationController.send(
+      trimmedInput,
+      prompt
+    );
+
+    const assistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content,
+    };
+
+    setMessages((prev) => [...prev, assistantMessage]);
+  } catch (error) {
+    const errorMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content:
+        error instanceof Error
+          ? `No pude completar la solicitud: ${error.message}`
+          : "No pude completar la solicitud.",
+    };
+
+    setMessages((prev) => [...prev, errorMessage]);
+  } finally {
+    setIsSending(false);
+  }
 };
+  
+
 function handleAddHabit(habit: string) {
   updateMemory({
     habits: [...habits, habit],
