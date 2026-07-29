@@ -1,7 +1,7 @@
 import { buildBrainContext } from "../context/ContextBuilder";
 import { makeBrainDecision } from "../decision/DecisionEngine";
 import { validateBrainResult } from "../validator/ResponseValidator";
-
+import { promptBuilder } from "../prompt";
 import type {
   BrainInput,
   BrainResult,
@@ -20,12 +20,17 @@ export class Brain {
         context,
         decision
       );
-
+const prompt =
+  promptBuilder.build({
+    context,
+    decision,
+  });
     return {
-      context,
-      decision,
-      validated,
-    };
+  context,
+  decision,
+  prompt,
+  validated,
+};
   }
 }
 

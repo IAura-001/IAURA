@@ -25,5 +25,6 @@ export interface BrainDecision {
 export interface BrainResult {
   context: BrainContext;
   decision: BrainDecision;
+  prompt: string;
   validated: boolean;
 }
