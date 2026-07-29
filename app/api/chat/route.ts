@@ -1,29 +1,64 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { createOpenAIProvider } from "@/services/providers";
 
-export async function POST(request: Request) {
+interface ChatRequestBody {
+  prompt?: unknown;
+  instructions?: unknown;
+}
+
+export async function POST(
+  request: Request
+) {
   try {
-    const { prompt } = await request.json();
+    const body =
+      (await request.json()) as ChatRequestBody;
 
-    const response = await client.responses.create({
-      model: process.env.OPENAI_MODEL || "gpt-5.6",
-      input: prompt,
-    });
+    if (
+      typeof body.prompt !== "string" ||
+      !body.prompt.trim()
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "A non-empty prompt is required.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
-    return NextResponse.json({
-      content: response.output_text,
-    });
+    const instructions =
+      typeof body.instructions === "string" &&
+      body.instructions.trim()
+        ? body.instructions.trim()
+        : undefined;
 
+    const provider =
+      createOpenAIProvider();
+
+    const result =
+      await provider.generate({
+        prompt: body.prompt.trim(),
+        instructions,
+      });
+
+    return NextResponse.json(result);
   } catch (error) {
-    console.error(error);
+    console.error(
+      "IAURA provider error:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown provider error.";
 
     return NextResponse.json(
       {
-        error: "IAURA could not generate a response.",
+        error: message,
       },
       {
         status: 500,
