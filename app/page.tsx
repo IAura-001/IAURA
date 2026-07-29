@@ -2,6 +2,7 @@
 import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
 import { generatePriorities } from "@/utils/intelligence";
+import { generateRecommendation } from "@/utils/recommendations";
 import DailyIntelligence from "@/components/sections/DailyIntelligence";
 import HabitsManager from "@/components/sections/HabitsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
@@ -81,6 +82,10 @@ const intelligencePriorities =
           score: 80,
         },
       ];
+      const recommendation = generateRecommendation(
+  memory.goals,
+  memory.habits
+);
 function handleAddHabit(habit: string) {
   updateMemory({
     habits: [...habits, habit],
@@ -145,7 +150,10 @@ return (
   habits={habits}
   onAddHabit={handleAddHabit}
   onRemoveHabit={handleRemoveHabit}
-/><DailyIntelligence priorities={intelligencePriorities} />
+/><DailyIntelligence
+  priorities={intelligencePriorities}
+  recommendation={recommendation}
+/>
 <DailyFocus />
 
 <ProgressSummary
