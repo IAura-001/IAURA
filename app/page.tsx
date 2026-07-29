@@ -1,5 +1,6 @@
 "use client";
 import LevelProgress from "@/components/sections/LevelProgress";
+import GoalsManager from "@/components/sections/GoalsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
 import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
@@ -40,6 +41,20 @@ const pendingMissions = MISSIONS.filter(
 );
 
 const recentMissions = completedMissions.slice(-3).reverse();
+
+const goals = memory.goals;
+
+function handleAddGoal(goal: string) {
+  updateMemory({
+    goals: [...goals, goal],
+  });
+}
+
+function handleRemoveGoal(goalIndex: number) {
+  updateMemory({
+    goals: goals.filter((_, index) => index !== goalIndex),
+  });
+}
 
 if (!isLoaded) {
   return (
@@ -86,6 +101,10 @@ return (
       userName: name,
     })
   }
+/><GoalsManager
+  goals={goals}
+  onAddGoal={handleAddGoal}
+  onRemoveGoal={handleRemoveGoal}
 />
 <DailyFocus />
 
