@@ -30,6 +30,7 @@ import { useMemory } from "@/hooks/useMemory";
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [analysis, setAnalysis] = useState("");
 const {
   memory,
   isLoaded,
@@ -94,8 +95,11 @@ const intelligencePriorities =
 const recommendation = generateRecommendation(userContext);
 
 const prompt = buildPrompt(userContext);
-const aiPreview = generateAIResponse(prompt);
+
 const handleAnalyze = () => {
+  const newAnalysis = generateAIResponse(prompt);
+
+  setAnalysis(newAnalysis);
   setShowAnalysis(true);
 };
 function handleAddHabit(habit: string) {
@@ -148,7 +152,7 @@ return (
          modeIcon={activeMode.icon}
 /><AIActionBar onAnalyze={handleAnalyze} />
 {showAnalysis && (
-  <AIAnalysisPanel analysis={aiPreview} />
+  <AIAnalysisPanel analysis={analysis} />
 )}
 <DashboardGreeting name={memory.userName} />
 <ProfileSettings
