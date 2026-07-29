@@ -29,6 +29,7 @@ import StatsGrid from "@/components/sections/StatsGrid";
 import { useMemory } from "@/hooks/useMemory";
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
+  const [showAnalysis, setShowAnalysis] = useState(false);
 const {
   memory,
   isLoaded,
@@ -95,7 +96,7 @@ const recommendation = generateRecommendation(userContext);
 const prompt = buildPrompt(userContext);
 const aiPreview = generateAIResponse(prompt);
 const handleAnalyze = () => {
-  console.log("Analyzing progress...");
+  setShowAnalysis(true);
 };
 function handleAddHabit(habit: string) {
   updateMemory({
@@ -146,7 +147,9 @@ return (
         modeName={activeMode.name}
          modeIcon={activeMode.icon}
 /><AIActionBar onAnalyze={handleAnalyze} />
-<AIAnalysisPanel analysis={aiPreview} />
+{showAnalysis && (
+  <AIAnalysisPanel analysis={aiPreview} />
+)}
 <DashboardGreeting name={memory.userName} />
 <ProfileSettings
   userName={memory.userName}
