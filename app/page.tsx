@@ -21,6 +21,9 @@ import ModeSelector from "@/components/sections/ModeSelector";
 import Navbar from "@/components/sections/Navbar";
 import ProgressSummary from "@/components/sections/ProgressSummary";
 import MissionList from "@/components/sections/MissionList";
+import { AIActionBar } from "@/components/sections/AIActionBar";
+import { AIAnalysisPanel } from "@/components/sections/AIAnalysisPanel";
+
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
 import { useMemory } from "@/hooks/useMemory";
@@ -91,6 +94,9 @@ const recommendation = generateRecommendation(userContext);
 
 const prompt = buildPrompt(userContext);
 const aiPreview = generateAIResponse(prompt);
+const handleAnalyze = () => {
+  console.log("Analyzing progress...");
+};
 function handleAddHabit(habit: string) {
   updateMemory({
     habits: [...habits, habit],
@@ -136,9 +142,11 @@ return (
         </div>
 
         <AssistantCard
+        
         modeName={activeMode.name}
          modeIcon={activeMode.icon}
-/>
+/><AIActionBar onAnalyze={handleAnalyze} />
+<AIAnalysisPanel analysis={aiPreview} />
 <DashboardGreeting name={memory.userName} />
 <ProfileSettings
   userName={memory.userName}
