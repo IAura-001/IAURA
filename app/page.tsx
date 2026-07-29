@@ -1,6 +1,7 @@
 "use client";
 import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
+import { generatePriorities } from "@/utils/intelligence";
 import DailyIntelligence from "@/components/sections/DailyIntelligence";
 import HabitsManager from "@/components/sections/HabitsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
@@ -58,13 +59,14 @@ function handleRemoveGoal(goalIndex: number) {
   });
 }
 const habits = memory.habits;
-const dailyPriorities = [
-  ...memory.goals.slice(0, 2),
-  ...memory.habits.slice(0, 1),
-].filter(Boolean);
+const scoredPriorities = generatePriorities(
+  memory.goals,
+  memory.habits
+);
+
 const intelligencePriorities =
-  dailyPriorities.length > 0
-    ? dailyPriorities
+  scoredPriorities.length > 0
+    ? scoredPriorities.slice(0, 3).map((item) => item.title)
     : [
         "Add your first goal",
         "Create a daily habit",
