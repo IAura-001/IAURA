@@ -1,6 +1,7 @@
 "use client";
 import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
+import { generateAIResponse } from "@/services/ai";
 import { generatePriorities } from "@/utils/intelligence";
 import { generateRecommendation } from "@/utils/recommendations";
 import { buildUserContext } from "@/utils/context";
@@ -89,7 +90,7 @@ const intelligencePriorities =
 const recommendation = generateRecommendation(userContext);
 
 const prompt = buildPrompt(userContext);
-
+const aiPreview = generateAIResponse(prompt);
 function handleAddHabit(habit: string) {
   updateMemory({
     habits: [...habits, habit],
