@@ -3,6 +3,7 @@ import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
 import { generatePriorities } from "@/utils/intelligence";
 import { generateRecommendation } from "@/utils/recommendations";
+import { buildUserContext } from "@/utils/context";
 import DailyIntelligence from "@/components/sections/DailyIntelligence";
 import HabitsManager from "@/components/sections/HabitsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
@@ -82,10 +83,10 @@ const intelligencePriorities =
           score: 80,
         },
       ];
-      const recommendation = generateRecommendation(
-  memory.goals,
-  memory.habits
-);
+      const userContext = buildUserContext(memory);
+
+const recommendation = generateRecommendation(userContext);
+console.log(userContext);
 function handleAddHabit(habit: string) {
   updateMemory({
     habits: [...habits, habit],
