@@ -23,6 +23,9 @@ import ProgressSummary from "@/components/sections/ProgressSummary";
 import MissionList from "@/components/sections/MissionList";
 import { AIActionBar } from "@/components/sections/AIActionBar";
 import { AIAnalysisPanel } from "@/components/sections/AIAnalysisPanel";
+import { ChatInput } from "@/components/sections/ChatInput";
+import { Conversation } from "@/components/sections/Conversation";
+import type { ChatMessage } from "@/types/chat";
 
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
@@ -32,6 +35,8 @@ export default function Home() {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysis, setAnalysis] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+const [input, setInput] = useState("");
 const {
   memory,
   isLoaded,
@@ -109,6 +114,29 @@ const handleAnalyze = () => {
     setIsAnalyzing(false);
   }, 700);
 };
+const handleSend = () => {
+  if (!input.trim()) return;
+
+  const userMessage: ChatMessage = {
+    id: crypto.randomUUID(),
+    role: "user",
+    content: input,
+  };
+
+  const assistantMessage: ChatMessage = {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: generateAIResponse(input),
+  };
+
+  setMessages((prev) => [
+    ...prev,
+    userMessage,
+    assistantMessage,
+  ]);
+
+  setInput("");
+};
 function handleAddHabit(habit: string) {
   updateMemory({
     habits: [...habits, habit],
@@ -164,6 +192,13 @@ return (
 {showAnalysis && (
   <AIAnalysisPanel analysis={analysis} />
 )}
+<Conversation messages={messages} />
+
+<ChatInput
+  value={input}
+  onChange={setInput}
+  onSend={handleSend}
+/>
 <DashboardGreeting name={memory.userName} />
 <ProfileSettings
   userName={memory.userName}
