@@ -66,11 +66,20 @@ const scoredPriorities = generatePriorities(
 
 const intelligencePriorities =
   scoredPriorities.length > 0
-    ? scoredPriorities.slice(0, 3).map((item) => item.title)
+    ? scoredPriorities.slice(0, 3)
     : [
-        "Add your first goal",
-        "Create a daily habit",
-        "Complete your next IAURA mission",
+        {
+          title: "Add your first goal",
+          score: 100,
+        },
+        {
+          title: "Create a daily habit",
+          score: 90,
+        },
+        {
+          title: "Complete your next IAURA mission",
+          score: 80,
+        },
       ];
 function handleAddHabit(habit: string) {
   updateMemory({

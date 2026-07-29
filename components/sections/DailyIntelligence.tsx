@@ -1,5 +1,10 @@
+type PriorityItem = {
+  title: string;
+  score: number;
+};
+
 type DailyIntelligenceProps = {
-  priorities: string[];
+  priorities: PriorityItem[];
 };
 
 export default function DailyIntelligence({
@@ -22,19 +27,25 @@ export default function DailyIntelligence({
 
         <div className="mt-6 space-y-3">
           {priorities.map((priority, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3"
-            >
-              <span className="text-cyan-300 font-bold">
-                {index + 1}.
-              </span>
+  <div
+    key={`${priority.title}-${index}`}
+    className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3"
+  >
+    <div className="flex items-center gap-3">
+      <span className="font-bold text-cyan-300">
+        {index + 1}.
+      </span>
 
-              <p className="text-zinc-200">
-                {priority}
-              </p>
-            </div>
-          ))}
+      <p className="text-zinc-200">
+        {priority.title}
+      </p>
+    </div>
+
+    <span className="shrink-0 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-300">
+      {priority.score} pts
+    </span>
+  </div>
+))}
         </div>
       </div>
     </div>
