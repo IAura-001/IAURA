@@ -1,6 +1,7 @@
 "use client";
 import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
+import HabitsManager from "@/components/sections/HabitsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
 import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
@@ -55,7 +56,19 @@ function handleRemoveGoal(goalIndex: number) {
     goals: goals.filter((_, index) => index !== goalIndex),
   });
 }
+const habits = memory.habits;
 
+function handleAddHabit(habit: string) {
+  updateMemory({
+    habits: [...habits, habit],
+  });
+}
+
+function handleRemoveHabit(habitIndex: number) {
+  updateMemory({
+    habits: habits.filter((_, index) => index !== habitIndex),
+  });
+}
 if (!isLoaded) {
   return (
     <main
@@ -105,6 +118,10 @@ return (
   goals={goals}
   onAddGoal={handleAddGoal}
   onRemoveGoal={handleRemoveGoal}
+/><HabitsManager
+  habits={habits}
+  onAddHabit={handleAddHabit}
+  onRemoveHabit={handleRemoveHabit}
 />
 <DailyFocus />
 
