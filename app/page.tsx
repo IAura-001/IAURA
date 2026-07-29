@@ -31,6 +31,7 @@ export default function Home() {
   const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysis, setAnalysis] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 const {
   memory,
   isLoaded,
@@ -97,10 +98,16 @@ const recommendation = generateRecommendation(userContext);
 const prompt = buildPrompt(userContext);
 
 const handleAnalyze = () => {
-  const newAnalysis = generateAIResponse(prompt);
+  setIsAnalyzing(true);
+  setShowAnalysis(false);
 
-  setAnalysis(newAnalysis);
-  setShowAnalysis(true);
+  setTimeout(() => {
+    const newAnalysis = generateAIResponse(prompt);
+
+    setAnalysis(newAnalysis);
+    setShowAnalysis(true);
+    setIsAnalyzing(false);
+  }, 700);
 };
 function handleAddHabit(habit: string) {
   updateMemory({
@@ -150,7 +157,10 @@ return (
         
         modeName={activeMode.name}
          modeIcon={activeMode.icon}
-/><AIActionBar onAnalyze={handleAnalyze} />
+/><AIActionBar
+  onAnalyze={handleAnalyze}
+  isLoading={isAnalyzing}
+/>
 {showAnalysis && (
   <AIAnalysisPanel analysis={analysis} />
 )}
