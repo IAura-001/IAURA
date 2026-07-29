@@ -4,6 +4,7 @@ import GoalsManager from "@/components/sections/GoalsManager";
 import { generatePriorities } from "@/utils/intelligence";
 import { generateRecommendation } from "@/utils/recommendations";
 import { buildUserContext } from "@/utils/context";
+import { buildPrompt } from "@/utils/prompt";
 import DailyIntelligence from "@/components/sections/DailyIntelligence";
 import HabitsManager from "@/components/sections/HabitsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
@@ -86,7 +87,9 @@ const intelligencePriorities =
       const userContext = buildUserContext(memory);
 
 const recommendation = generateRecommendation(userContext);
-console.log(userContext);
+
+const prompt = buildPrompt(userContext);
+
 function handleAddHabit(habit: string) {
   updateMemory({
     habits: [...habits, habit],
