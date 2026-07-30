@@ -35,14 +35,13 @@ const AnimatedMessage = memo(function AnimatedMessage({
   );
 
   useEffect(() => {
-    if (!isAssistant) {
-      setVisibleContent(message.content);
-      return;
-    }
+  if (!isAssistant) {
+    return;
+  }
 
     let wordIndex = 0;
 
-    setVisibleContent("");
+   
 
     const typingTimer = window.setInterval(() => {
       wordIndex += 1;
@@ -59,7 +58,7 @@ const AnimatedMessage = memo(function AnimatedMessage({
     return () => {
       window.clearInterval(typingTimer);
     };
-  }, [isAssistant, message.content, words]);
+ }, [isAssistant, words]);
 
   return (
     <article

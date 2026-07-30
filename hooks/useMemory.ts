@@ -9,29 +9,40 @@ import type { Memory } from "@/types/memory";
 const STORAGE_KEY = "iaura-memory";
 
 export function useMemory() {
-  const [memory, setMemory] = useState<Memory>(DEFAULT_MEMORY);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [memory, setMemory] = useState<Memory>(() => {
+  if (typeof window === "undefined") {
+    return DEFAULT_MEMORY;
+  }
 
-  useEffect(() => {
-    try {
-      const savedMemory = localStorage.getItem(STORAGE_KEY);
+  try {
+    const savedMemory = localStorage.getItem(STORAGE_KEY);
 
-      if (savedMemory) {
-  const parsedMemory = JSON.parse(savedMemory) as Partial<Memory>;
-
-  setMemory({
-    ...DEFAULT_MEMORY,
-    ...parsedMemory,
-    completedMissionIds: parsedMemory.completedMissionIds ?? [],
-  });
-}
-    } catch (error) {
-      console.error("Unable to load IAURA memory:", error);
-    } finally {
-      setIsLoaded(true);
+    if (!savedMemory) {
+      return DEFAULT_MEMORY;
     }
-  }, []);
 
+    const parsedMemory = JSON.parse(
+      savedMemory
+    ) as Partial<Memory>;
+
+    return {
+      ...DEFAULT_MEMORY,
+      ...parsedMemory,
+      completedMissionIds:
+        parsedMemory.completedMissionIds ?? [],
+    };
+  } catch (error) {
+    console.error(
+      "Unable to load IAURA memory:",
+      error
+    );
+
+    return DEFAULT_MEMORY;
+  }
+});
+  const [isLoaded] = useState(true);
+
+  
   useEffect(() => {
     if (!isLoaded) return;
 

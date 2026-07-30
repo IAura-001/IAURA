@@ -1,10 +1,10 @@
 "use client";
-import { iauraBrain } from "@/core/brain";
+
 import { conversationController } from "@/core/conversation";
 import LevelProgress from "@/components/sections/LevelProgress";
 import GoalsManager from "@/components/sections/GoalsManager";
 import { generateAIResponse } from "@/services/ai";
-import { generateOpenAIResponse } from "@/services/openai";
+
 import { generatePriorities } from "@/utils/intelligence";
 import { generateRecommendation } from "@/utils/recommendations";
 import { buildUserContext } from "@/utils/context";
@@ -75,7 +75,7 @@ const pendingMissions = MISSIONS.filter(
   (mission) => !completedMissionIds.includes(mission.id)
 );
 
-const recentMissions = completedMissions.slice(-3).reverse();
+
 
 const goals = memory.goals;
 

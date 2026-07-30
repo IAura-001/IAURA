@@ -20,7 +20,7 @@ export default function DailyIntelligence({
         </p>
 
         <h2 className="mt-2 text-2xl font-semibold text-white">
-          Today's Priorities
+          Today&apos;s Priorities
         </h2>
 
         <p className="mt-2 text-sm text-zinc-300">
