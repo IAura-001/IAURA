@@ -2,9 +2,13 @@ import type { IAuraProject } from "@/types/project";
 
 interface ProjectCardProps {
   project: IAuraProject;
+  onOpenStudio?: (studio: string) => void;
 }
 
-export default function ProjectCard({ project }: ProjectCardProps) {
+export default function ProjectCard({
+  project,
+  onOpenStudio,
+}: ProjectCardProps) {
   const activeStudios = Object.entries(project.studios)
     .filter(([, enabled]) => enabled)
     .map(([studio]) => studio);
@@ -27,13 +31,16 @@ export default function ProjectCard({ project }: ProjectCardProps) {
 
       <div className="flex flex-wrap gap-2">
         {activeStudios.map((studio) => (
-          <span
-            key={studio}
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm capitalize text-white/70"
-          >
-            {studio}
-          </span>
-        ))}
+  <button
+    key={studio}
+    onClick={() => onOpenStudio?.(studio)}
+    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm capitalize text-white/70 transition hover:border-purple-400 hover:bg-purple-500/10"
+  >
+    {studio}
+  </button>
+))}
+           
+       
       </div>
     </section>
   );

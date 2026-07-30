@@ -15,6 +15,7 @@ import ProfileSettings from "@/components/sections/ProfileSettings";
 import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
 import { useState } from "react";
+import { ProjectEngine } from "@/core/project";
 import DailyFocus from "@/components/sections/DailyFocus";
 import { theme } from "@/config/theme";
 import DashboardGreeting from "@/components/sections/DashboardGreeting";
@@ -28,32 +29,23 @@ import { AIActionBar } from "@/components/sections/AIActionBar";
 import { AIAnalysisPanel } from "@/components/sections/AIAnalysisPanel";
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
+import BrandingStudio from "@/components/sections/BrandingStudio";
 import type { ChatMessage } from "@/types/chat";
 import ProjectCard from "@/components/sections/ProjectCard";
 import type { IAuraProject } from "@/types/project";
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
 import { useMemory } from "@/hooks/useMemory";
+const projectEngine = new ProjectEngine();
 export default function Home() {
-  const activeProject: IAuraProject = {
-  id: "iaura-ecosystem",
-  name: "IAURA Ecosystem",
-  description: "The foundation of the IAURA artificial intelligence ecosystem.",
-  goal: "Build the first creative ecosystem powered by artificial intelligence.",
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  status: "planning",
-  studios: {
-    branding: true,
-    website: true,
-    app: true,
-    marketing: true,
-    documents: true,
-  },
-};
+  
   const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysis, setAnalysis] = useState("");
+ 
+const [activeProject, setActiveProject] =
+  useState<IAuraProject | null>(null);
+  const [openStudio, setOpenStudio] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 const [input, setInput] = useState("");
@@ -122,7 +114,39 @@ const intelligencePriorities =
 const recommendation = generateRecommendation(userContext);
 
 const prompt = buildPrompt(userContext);
+function createProjectFromIdea(idea: string): IAuraProject {
+  const cleanedIdea = idea
+    .replace(/quiero crear/gi, "")
+    .replace(/quiero hacer/gi, "")
+    .replace(/quiero construir/gi, "")
+    .trim();
 
+  const projectName =
+    cleanedIdea
+      .split(" ")
+      .slice(0, 4)
+      .map(
+        (word) => word.charAt(0).toUpperCase() + word.slice(1)
+      )
+      .join(" ") || "Nuevo Proyecto";
+
+  return {
+    id: crypto.randomUUID(),
+    name: projectName,
+    description: idea,
+    goal: `Convertir esta idea en un proyecto real.`,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    status: "planning",
+    studios: {
+      branding: true,
+      website: true,
+      app: false,
+      marketing: true,
+      documents: true,
+    },
+  };
+}
 const handleAnalyze = () => {
   setIsAnalyzing(true);
   setShowAnalysis(false);
@@ -144,11 +168,25 @@ const handleSend = async (missionOverride?: string) => {
   const trimmedInput = messageToSend.trim();
 
   if (!trimmedInput || isSending) return;
+  
+const lowerInput = trimmedInput.toLowerCase();
 
+const isProjectIdea =
+  lowerInput.includes("quiero crear") ||
+  lowerInput.includes("quiero hacer") ||
+  lowerInput.includes("quiero construir");
+
+if (isProjectIdea) {
+  const newProject = createProjectFromIdea(trimmedInput);
+
+  projectEngine.setCurrentProject(newProject);
+  setActiveProject(newProject);
+}
   const userMessage: ChatMessage = {
     id: crypto.randomUUID(),
     role: "user",
     content: trimmedInput,
+    
   };
 
   setMessages((prev) => [...prev, userMessage]);
@@ -224,7 +262,18 @@ return (
           <Hero />
 
 <div className="mt-8">
-  <ProjectCard project={activeProject} />
+  {activeProject && (
+  <div className="mt-8">
+    <ProjectCard
+  project={activeProject}
+  onOpenStudio={(studio) => {
+    setOpenStudio(studio);
+  }}
+/>{activeProject && openStudio === "branding" && (
+  <BrandingStudio project={activeProject} />
+)}
+  </div>
+)}
 </div>
 
 <ModeSelector
