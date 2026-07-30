@@ -1,3 +1,4 @@
+import { performanceMonitor } from "@/core/performance";
 import type {
   BrainContext,
   BrainDecision,
@@ -84,6 +85,11 @@ const MODE_RULES: ModeRule[] = [
 export function makeBrainDecision(
   context: BrainContext
 ): BrainDecision {
+  const startedAt =
+    typeof performance !== "undefined"
+      ? performance.now()
+      : Date.now();
+
   const normalizedMessage =
     context.message.toLowerCase();
 
@@ -93,16 +99,26 @@ export function makeBrainDecision(
     )
   );
 
-  if (matchedRule) {
-    return {
-      mode: matchedRule.mode,
-      reason: matchedRule.reason,
-    };
-  }
+  const decision: BrainDecision = matchedRule
+    ? {
+        mode: matchedRule.mode,
+        reason: matchedRule.reason,
+      }
+    : {
+        mode: "executor",
+        reason:
+          "The request can be handled with a direct and actionable response.",
+      };
 
-  return {
-    mode: "executor",
-    reason:
-      "The request can be handled with a direct and actionable response.",
-  };
+  const finishedAt =
+    typeof performance !== "undefined"
+      ? performance.now()
+      : Date.now();
+
+  performanceMonitor.recordDecision(
+    finishedAt - startedAt
+  );
+
+  return decision;
 }
+ 

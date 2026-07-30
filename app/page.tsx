@@ -14,6 +14,7 @@ import HabitsManager from "@/components/sections/HabitsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
 import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
+import { performanceMonitor } from "@/core/performance";
 
 import { ProjectEngine } from "@/core/project";
 import DailyFocus from "@/components/sections/DailyFocus";
@@ -39,6 +40,7 @@ import {
 import type { IAuraProject } from "@/types/project";
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
+import PerformancePanel from "@/components/sections/PerformancePanel";
 import { useMemory } from "@/hooks/useMemory";
 const projectEngine = new ProjectEngine();
 export default function Home() {
@@ -170,6 +172,7 @@ const handleSend = useCallback(
 if (!trimmedInput || isSending) {
   return;
 }
+const responseStartedAt = performance.now();
 
  
   
@@ -223,6 +226,10 @@ if (isProjectIdea) {
 
     setMessages((prev) => [...prev, errorMessage]);
   } finally {
+  performanceMonitor.recordResponse(
+    performance.now() - responseStartedAt
+  );
+
   setIsSending(false);
 }
 },
@@ -349,6 +356,11 @@ return (
 <StatsGrid
   completed={completedMissions.length}
   total={MISSIONS.length}
+/>
+<PerformancePanel
+  messageCount={messages.length}
+  goalsCount={memory.goals.length}
+  habitsCount={memory.habits.length}
 />
 <DailyQuote />
 <MissionList
