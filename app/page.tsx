@@ -14,7 +14,7 @@ import HabitsManager from "@/components/sections/HabitsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
 import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
-import { useState } from "react";
+
 import { ProjectEngine } from "@/core/project";
 import DailyFocus from "@/components/sections/DailyFocus";
 import { theme } from "@/config/theme";
@@ -32,6 +32,10 @@ import { Conversation } from "@/components/sections/Conversation";
 import BrandingStudio from "@/components/sections/BrandingStudio";
 import type { ChatMessage } from "@/types/chat";
 import ProjectCard from "@/components/sections/ProjectCard";
+import {
+  useCallback,
+  useState,
+} from "react";
 import type { IAuraProject } from "@/types/project";
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
@@ -48,7 +52,7 @@ const [activeProject, setActiveProject] =
   const [openStudio, setOpenStudio] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-const [input, setInput] = useState("");
+
 const [isSending, setIsSending] = useState(false);
 const {
   memory,
@@ -159,15 +163,15 @@ const handleAnalyze = () => {
     setIsAnalyzing(false);
   }, 700);
 };
-const handleSend = async (missionOverride?: string) => {
-  const messageToSend =
-    typeof missionOverride === "string"
-      ? missionOverride
-      : input;
+const handleSend = useCallback(
+  async (missionOverride?: string) => {
+  const trimmedInput = missionOverride?.trim();
 
-  const trimmedInput = messageToSend.trim();
+if (!trimmedInput || isSending) {
+  return;
+}
 
-  if (!trimmedInput || isSending) return;
+ 
   
 const lowerInput = trimmedInput.toLowerCase();
 
@@ -191,7 +195,7 @@ if (isProjectIdea) {
 
   setMessages((prev) => [...prev, userMessage]);
 
-  setInput("");
+ 
   setIsSending(true);
 
   try {
@@ -219,9 +223,12 @@ if (isProjectIdea) {
 
     setMessages((prev) => [...prev, errorMessage]);
   } finally {
-    setIsSending(false);
-  }
-};
+  setIsSending(false);
+}
+},
+[isSending, prompt]
+);
+
   
 
 function handleAddHabit(habit: string) {
@@ -301,9 +308,8 @@ return (
 />
 
 <ChatInput
-  value={input}
-  onChange={setInput}
   onSend={handleSend}
+  isSending={isSending}
 />
 <DashboardGreeting name={memory.userName} />
 <ProfileSettings

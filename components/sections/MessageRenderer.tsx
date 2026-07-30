@@ -1,13 +1,15 @@
-import type { ReactNode } from "react";
-import type { ChatMessage } from "@/types/chat";
+import { memo, type ReactNode } from "react";
 
 interface MessageRendererProps {
-  message: ChatMessage;
   children: ReactNode;
 }
 
-export function MessageRenderer({
+function MessageRendererComponent({
   children,
 }: MessageRendererProps) {
   return children;
 }
+
+export const MessageRenderer = memo(MessageRendererComponent);
+
+MessageRenderer.displayName = "MessageRenderer";

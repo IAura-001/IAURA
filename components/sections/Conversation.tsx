@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import type { ChatMessage } from "@/types/chat";
-import { MessageRenderer } from "./MessageRenderer";
+
 import { BrandIdentityCard } from "../cards/BrandIdentityCard";
 
 interface ConversationProps {
@@ -196,12 +196,10 @@ export function Conversation({
       </div>
 
       {messages.map((message) => (
-  <MessageRenderer
+  <AnimatedMessage
     key={message.id}
     message={message}
-  >
-    <AnimatedMessage message={message} />
-  </MessageRenderer>
+  />
 ))}
 <BrandIdentityCard
   name="IAURA"
