@@ -162,7 +162,7 @@ function createProjectFromIdea(idea: string): IAuraProject {
       .join(" ") || "Nuevo Proyecto";
 
   return {
-    id: crypto.randomUUID(),
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     name: projectName,
     description: idea,
     goal: `Convertir esta idea en un proyecto real.`,
@@ -215,7 +215,7 @@ if (isProjectIdea) {
   setActiveProject(newProject);
 }
   const userMessage: ChatMessage = {
-    id: crypto.randomUUID(),
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role: "user",
     content: trimmedInput,
     
@@ -233,7 +233,7 @@ if (isProjectIdea) {
     );
 
     const assistantMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       role: "assistant",
       content,
     };
@@ -241,7 +241,7 @@ if (isProjectIdea) {
     setMessages((prev) => [...prev, assistantMessage]);
   } catch (error) {
     const errorMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`  ,
       role: "assistant",
       content:
         error instanceof Error

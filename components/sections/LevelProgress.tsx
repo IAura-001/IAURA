@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useState } from "react";
 import {
   getExperienceProgress,
   getLevelFromExperience,
@@ -12,9 +14,16 @@ export default function LevelProgress({
   experience,
   onEarnXP, 
 }: LevelProgressProps) {
+  const [mounted, setMounted] = useState(false);
+
+useEffect(() => {
+  setMounted(true);
+}, []);
   const level = getLevelFromExperience(experience);
   const progress = getExperienceProgress(experience);
-
+if (!mounted) {
+  return null;
+}
   return (
     <div className="lg:col-span-2">
       <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl">

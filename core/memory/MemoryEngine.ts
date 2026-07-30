@@ -14,7 +14,7 @@ add(
 ) {
     
   const entry: MemoryEntry = {
-    id: crypto.randomUUID(),
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     type,
     content,
     importance: this.scorer.score(type),

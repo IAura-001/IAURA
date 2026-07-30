@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
 import DashboardGreeting from "@/components/sections/DashboardGreeting";
 import GoalsManager from "@/components/sections/GoalsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
@@ -63,6 +65,16 @@ export default function DashboardPanel({
   completedMissionIds,
   onMissionComplete,
 }: DashboardPanelProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
   return (
     <>
       <DashboardGreeting name={name} />
