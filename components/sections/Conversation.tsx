@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useEffect,
   useMemo,
   useState,
@@ -17,7 +18,7 @@ interface AnimatedMessageProps {
   message: ChatMessage;
 }
 
-function AnimatedMessage({
+const AnimatedMessage = memo(function AnimatedMessage({
   message,
 }: AnimatedMessageProps) {
   const isAssistant = message.role === "assistant";
@@ -130,9 +131,9 @@ function AnimatedMessage({
           </div>
         )}
     </article>
-  );
-}
-
+    );
+});
+AnimatedMessage.displayName = "AnimatedMessage";
 function AuraThinking() {
   return (
     <div
