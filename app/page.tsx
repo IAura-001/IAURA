@@ -27,21 +27,49 @@ import Navbar from "@/components/sections/Navbar";
 import ProgressSummary from "@/components/sections/ProgressSummary";
 import MissionList from "@/components/sections/MissionList";
 import { AIActionBar } from "@/components/sections/AIActionBar";
-import { AIAnalysisPanel } from "@/components/sections/AIAnalysisPanel";
+
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
-import BrandingStudio from "@/components/sections/BrandingStudio";
+
 import type { ChatMessage } from "@/types/chat";
 import ProjectCard from "@/components/sections/ProjectCard";
 import {
   useCallback,
   useState,
 } from "react";
+import dynamic from "next/dynamic";
 import type { IAuraProject } from "@/types/project";
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
 import PerformancePanel from "@/components/sections/PerformancePanel";
 import { useMemory } from "@/hooks/useMemory";
+const AIAnalysisPanel = dynamic(
+  () =>
+    import(
+      "@/components/sections/AIAnalysisPanel"
+    ).then((module) => module.AIAnalysisPanel),
+  {
+    loading: () => (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-500">
+        Loading analysis...
+      </div>
+    ),
+  }
+);
+
+const BrandingStudio = dynamic(
+  () =>
+    import(
+      "@/components/sections/BrandingStudio"
+    ),
+  {
+    loading: () => (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-500">
+        Loading Branding Studio...
+      </div>
+    ),
+  }
+);
 const projectEngine = new ProjectEngine();
 export default function Home() {
   
