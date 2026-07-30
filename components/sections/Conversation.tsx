@@ -9,6 +9,7 @@ import {
 
 import type { ChatMessage } from "@/types/chat";
 import { MessageRenderer } from "./MessageRenderer";
+import { BrandIdentityCard } from "../cards/BrandIdentityCard";
 
 interface ConversationProps {
   messages: ChatMessage[];
@@ -202,6 +203,13 @@ export function Conversation({
     <AnimatedMessage message={message} />
   </MessageRenderer>
 ))}
+<BrandIdentityCard
+  name="IAURA"
+  slogan="Intelligence that builds with you"
+  mission="Convert ideas into complete digital projects through artificial intelligence."
+  colors={["#2563EB", "#7C3AED", "#0F172A"]}
+  font="Inter"
+/>
       {isThinking && <AuraThinking />}
 
       <style jsx>{`
