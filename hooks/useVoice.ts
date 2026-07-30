@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { voiceEngine } from "@/core/voice/voiceEngine";
 
 export type VoiceState =
   | "idle"
@@ -63,41 +64,25 @@ export function useVoice() {
     setVoiceMode(false);
   }
 
-  function speak(text: string) {
-    if (typeof window === "undefined") return;
+  async function speak(text: string) {
+  if (typeof window === "undefined") return;
 
-    // Aura solo habla si el modo voz está activo
-    
+  const voiceText = text
+    .replaceAll("IAURA", "Aura")
+    .replaceAll("I.A.U.R.A", "Aura");
 
-    const voiceText = text
-      .replaceAll("IAURA", "Aura")
-      .replaceAll("I.A.U.R.A", "Aura");
+  setState("speaking");
 
-    const utterance = new SpeechSynthesisUtterance(voiceText);
+  await voiceEngine.speak(
+  voiceText,
+  "companion"
+);
 
-    utterance.lang = "es-ES";
-    utterance.rate = 0.95;
-    utterance.pitch = 1.05;
-    utterance.volume = 1;
-
-    const voices = window.speechSynthesis.getVoices();
-
-    const spanishVoice = voices.find((voice) =>
-      voice.lang.startsWith("es")
-    );
-
-    if (spanishVoice) {
-      utterance.voice = spanishVoice;
-    }
-
-    utterance.onstart = () => setState("speaking");
-    utterance.onend = () => setState("idle");
-
-    speechSynthesis.speak(utterance);
-  }
+  setState("idle");
+}
 
   function stopSpeaking() {
-    speechSynthesis.cancel();
+    voiceEngine.stop();
     setState("idle");
   }
 
