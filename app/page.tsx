@@ -9,7 +9,7 @@ import { buildUserContext } from "@/utils/context";
 import { buildPrompt } from "@/utils/prompt";
 import { MISSIONS } from "@/constants/missions";
 import { performanceMonitor } from "@/core/performance";
-
+import { useVoiceContext } from "@/core/context/VoiceContext";
 import { ProjectEngine } from "@/core/project";
 import { theme } from "@/config/theme";
 import AssistantCard from "@/components/sections/AssistantCard";
@@ -30,6 +30,7 @@ import {
 import type { IAuraProject } from "@/types/project";
 import { MODES } from "@/constants/modes";
 import { useMemory } from "@/hooks/useMemory";
+import { cleanAIText } from "@/utils/formatText";
 const DashboardPanel = dynamic(
   () => import("@/components/sections/DashboardPanel"),
   {
@@ -69,7 +70,10 @@ const BrandingStudio = dynamic(
 );
 const projectEngine = new ProjectEngine();
 export default function Home() {
-  
+const {
+  speak,
+  voiceMode,
+} = useVoiceContext();  
   const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysis, setAnalysis] = useState("");
@@ -227,11 +231,13 @@ if (isProjectIdea) {
   setIsSending(true);
 
   try {
-    const content = await conversationController.send(
-      trimmedInput,
-      prompt
-    );
+    const rawContent = await conversationController.send(
+  trimmedInput,
+  prompt
+);
 
+const content = cleanAIText(rawContent);
+console.log("VOICE MODE:", voiceMode);
     const assistantMessage: ChatMessage = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       role: "assistant",
@@ -239,6 +245,10 @@ if (isProjectIdea) {
     };
 
     setMessages((prev) => [...prev, assistantMessage]);
+
+if (voiceMode) {
+  speak(content);
+}
   } catch (error) {
     const errorMessage: ChatMessage = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`  ,
@@ -250,6 +260,9 @@ if (isProjectIdea) {
     };
 
     setMessages((prev) => [...prev, errorMessage]);
+    if (voiceMode) {
+  speak(errorMessage.content);
+}
   } finally {
   performanceMonitor.recordResponse(
     performance.now() - responseStartedAt
@@ -258,7 +271,7 @@ if (isProjectIdea) {
   setIsSending(false);
 }
 },
-[isSending, prompt]
+[isSending, prompt, voiceMode, speak]
 );
 
   

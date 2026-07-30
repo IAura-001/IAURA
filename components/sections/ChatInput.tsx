@@ -2,9 +2,14 @@
 
 import {
   memo,
+  useEffect,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
+
+import VoiceButton from "@/components/sections/VoiceButton";
+import { useVoiceContext } from "@/core/context/VoiceContext";
 
 interface ChatInputProps {
   onSend: (message?: string) => void | Promise<void>;
@@ -20,6 +25,35 @@ function ChatInputComponent({
   isSending = false,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
+
+  const lastTranscriptRef = useRef("");
+
+  const {
+  state,
+  transcript,
+  startListening,
+  stopListening,
+  stopSpeaking,
+} = useVoiceContext();
+  useEffect(() => {
+    const trimmedTranscript = transcript.trim();
+
+    if (
+      !trimmedTranscript ||
+      isSending ||
+      trimmedTranscript === lastTranscriptRef.current
+    ) {
+      return;
+    }
+
+    lastTranscriptRef.current = trimmedTranscript;
+    setValue(trimmedTranscript);
+
+    void (async () => {
+  await onSend(trimmedTranscript);
+  setValue("");
+})();
+  }, [transcript, isSending, onSend]);
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
@@ -44,11 +78,23 @@ function ChatInputComponent({
         onChange={(event) =>
           setValue(event.target.value)
         }
-        placeholder="Ask IAURA anything..."
+        placeholder={
+          state === "listening"
+            ? "Escuchando..."
+            : "Ask IAURA anything..."
+        }
         autoComplete="off"
         enterKeyHint="send"
         disabled={isSending}
-        className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3"
+        className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3"
+      />
+
+      <VoiceButton
+        state={state}
+        onStartListening={startListening}
+        onStopListening={stopListening}
+        onStopSpeaking={stopSpeaking}
+        disabled={isSending}
       />
 
       <button
