@@ -1,30 +1,292 @@
+"use client";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import type { ChatMessage } from "@/types/chat";
 
 interface ConversationProps {
   messages: ChatMessage[];
+  isThinking?: boolean;
+}
+
+interface AnimatedMessageProps {
+  message: ChatMessage;
+}
+
+function AnimatedMessage({
+  message,
+}: AnimatedMessageProps) {
+  const isAssistant = message.role === "assistant";
+
+  const [visibleContent, setVisibleContent] = useState(
+    isAssistant ? "" : message.content
+  );
+
+  const words = useMemo(
+    () => message.content.split(" "),
+    [message.content]
+  );
+
+  useEffect(() => {
+    if (!isAssistant) {
+      setVisibleContent(message.content);
+      return;
+    }
+
+    let wordIndex = 0;
+
+    setVisibleContent("");
+
+    const typingTimer = window.setInterval(() => {
+      wordIndex += 1;
+
+      setVisibleContent(
+        words.slice(0, wordIndex).join(" ")
+      );
+
+      if (wordIndex >= words.length) {
+        window.clearInterval(typingTimer);
+      }
+    }, 35);
+
+    return () => {
+      window.clearInterval(typingTimer);
+    };
+  }, [isAssistant, message.content, words]);
+
+  return (
+    <article
+      className={[
+        "aura-message relative overflow-hidden rounded-2xl border p-5",
+        "animate-[message-enter_500ms_ease-out]",
+        isAssistant
+          ? "border-purple-400/20 bg-purple-500/[0.04]"
+          : "border-white/10 bg-white/[0.03]",
+      ].join(" ")}
+    >
+      {isAssistant && (
+        <div
+          aria-hidden="true"
+          className="aura-response-line absolute left-0 top-0 h-px w-full"
+        />
+      )}
+
+      <div className="flex items-center gap-3">
+        <div
+          className={[
+            "flex h-8 w-8 items-center justify-center rounded-xl text-sm",
+            isAssistant
+              ? "bg-gradient-to-br from-purple-500 to-blue-600 shadow-[0_0_20px_rgba(147,51,234,0.35)]"
+              : "bg-white/10",
+          ].join(" ")}
+        >
+          {isAssistant ? "✦" : "●"}
+        </div>
+
+        <div>
+          <p
+            className={[
+              "text-sm font-medium",
+              isAssistant
+                ? "text-purple-200"
+                : "text-zinc-200",
+            ].join(" ")}
+          >
+            {isAssistant ? "IAURA" : "Tú"}
+          </p>
+
+          <p className="text-xs text-zinc-600">
+            {isAssistant
+              ? "Inteligencia contextual"
+              : "Misión enviada"}
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-4 whitespace-pre-wrap leading-7 text-zinc-200">
+        {visibleContent}
+
+        {isAssistant &&
+          visibleContent.length <
+            message.content.length && (
+            <span
+              aria-hidden="true"
+              className="ml-1 inline-block h-5 w-[2px] animate-pulse bg-purple-300 align-middle"
+            />
+          )}
+      </p>
+
+      {isAssistant &&
+        visibleContent.length ===
+          message.content.length && (
+          <div className="mt-4 flex items-center gap-2 text-xs text-zinc-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
+
+            Respuesta completada
+          </div>
+        )}
+    </article>
+  );
+}
+
+function AuraThinking() {
+  return (
+    <div
+      aria-live="polite"
+      className="relative overflow-hidden rounded-2xl border border-purple-400/20 bg-purple-500/[0.04] p-5"
+    >
+      <div className="aura-thinking-line absolute left-0 top-0 h-px w-full" />
+
+      <div className="flex items-center gap-4">
+        <div className="relative flex h-10 w-10 items-center justify-center">
+          <div className="absolute inset-0 animate-ping rounded-full bg-purple-500/20" />
+
+          <div className="absolute inset-1 animate-pulse rounded-full border border-purple-400/30" />
+
+          <span className="relative text-lg text-purple-200">
+            ✦
+          </span>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium text-purple-200">
+            IAURA está pensando
+          </p>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            Analizando contexto, memoria e intención...
+          </p>
+        </div>
+
+        <div className="ml-auto flex gap-1">
+          <span className="aura-dot h-1.5 w-1.5 rounded-full bg-purple-300" />
+          <span className="aura-dot h-1.5 w-1.5 rounded-full bg-purple-300 [animation-delay:150ms]" />
+          <span className="aura-dot h-1.5 w-1.5 rounded-full bg-purple-300 [animation-delay:300ms]" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function Conversation({
   messages,
+  isThinking = false,
 }: ConversationProps) {
-  return (
-    <section className="space-y-4">
-      {messages.map((message) => (
-        <div
-          key={message.id}
-          className="rounded-xl bg-zinc-900 p-4"
-        >
-          <strong>
-            {message.role === "user"
-              ? "You"
-              : "IAURA"}
-          </strong>
+  if (messages.length === 0 && !isThinking) {
+    return null;
+  }
 
-          <p className="mt-2 whitespace-pre-wrap">
-            {message.content}
-          </p>
-        </div>
+  return (
+    <section className="relative space-y-4">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-purple-500/30 to-transparent" />
+
+        <p className="text-xs tracking-[0.25em] text-zinc-600">
+          IAURA CONVERSATION
+        </p>
+
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+      </div>
+
+      {messages.map((message) => (
+        <AnimatedMessage
+          key={message.id}
+          message={message}
+        />
       ))}
+
+      {isThinking && <AuraThinking />}
+
+      <style jsx>{`
+        .aura-response-line,
+        .aura-thinking-line {
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(168, 85, 247, 0.95),
+            rgba(59, 130, 246, 0.95),
+            transparent
+          );
+          background-size: 200% 100%;
+          animation: aura-line 1.8s linear infinite;
+        }
+
+        .aura-message::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          opacity: 0;
+          background: radial-gradient(
+            circle at top left,
+            rgba(168, 85, 247, 0.08),
+            transparent 45%
+          );
+          animation: aura-flash 900ms ease-out;
+        }
+
+        .aura-dot {
+          animation: aura-dot 900ms ease-in-out infinite;
+        }
+
+        @keyframes message-enter {
+          from {
+            opacity: 0;
+            transform: translateY(16px) scale(0.98);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes aura-line {
+          from {
+            background-position: 200% 0;
+          }
+
+          to {
+            background-position: -200% 0;
+          }
+        }
+
+        @keyframes aura-flash {
+          0% {
+            opacity: 0.8;
+          }
+
+          100% {
+            opacity: 0;
+          }
+        }
+
+        @keyframes aura-dot {
+          0%,
+          100% {
+            opacity: 0.25;
+            transform: translateY(0);
+          }
+
+          50% {
+            opacity: 1;
+            transform: translateY(-4px);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .aura-response-line,
+          .aura-thinking-line,
+          .aura-dot,
+          .aura-message::before {
+            animation: none;
+          }
+        }
+      `}</style>
     </section>
   );
 }

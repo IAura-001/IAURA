@@ -118,8 +118,13 @@ const handleAnalyze = () => {
     setIsAnalyzing(false);
   }, 700);
 };
-const handleSend = async () => {
-  const trimmedInput = input.trim();
+const handleSend = async (missionOverride?: string) => {
+  const messageToSend =
+    typeof missionOverride === "string"
+      ? missionOverride
+      : input;
+
+  const trimmedInput = messageToSend.trim();
 
   if (!trimmedInput || isSending) return;
 
@@ -209,17 +214,21 @@ return (
         </div>
 
         <AssistantCard
-        
-        modeName={activeMode.name}
-         modeIcon={activeMode.icon}
-/><AIActionBar
+  modeName={activeMode.name}
+  modeIcon={activeMode.icon}
+  onStart={handleSend}
+/>
+<AIActionBar
   onAnalyze={handleAnalyze}
   isLoading={isAnalyzing}
 />
 {showAnalysis && (
   <AIAnalysisPanel analysis={analysis} />
 )}
-<Conversation messages={messages} />
+<Conversation
+  messages={messages}
+  isThinking={isSending}
+/>
 
 <ChatInput
   value={input}
