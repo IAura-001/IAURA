@@ -1,3 +1,4 @@
+import type { ConversationMessage } from "../conversation/ConversationMemory";
 export type ThinkingMode =
   | "mentor"
   | "planner"
@@ -9,6 +10,7 @@ export type ThinkingMode =
 export interface BrainInput {
   message: string;
   userContext?: string;
+  history?: ConversationMessage[];
 }
 
 export interface BrainContext {

@@ -1,3 +1,4 @@
+import type { ConversationMessage } from "../conversation/ConversationMemory";
 import type {
   BrainContext,
   BrainDecision,
@@ -6,13 +7,24 @@ import type {
 export interface PromptBuildInput {
   context: BrainContext;
   decision: BrainDecision;
+  history?: ConversationMessage[];
 }
 
 export class PromptBuilder {
-  build({
-    context,
-    decision,
-  }: PromptBuildInput): string {
+ build({
+  context,
+  decision,
+  history,
+}: PromptBuildInput): string {
+ const historySection =
+  history && history.length > 0
+    ? history
+        .map(
+          (message) =>
+            `${message.role.toUpperCase()}: ${message.content}`
+        )
+        .join("\n\n")
+    : "No previous conversation.";
     return `
 You are IAURA.
 
@@ -53,7 +65,15 @@ Relevant User Context:
 
 ${context.userContext}
 
-User Message:
+Conversation History:
+
+${historySection}
+
+Current User Message:
+
+${context.message}
+
+Respond only as IAURA.
 
 ${context.message}
 

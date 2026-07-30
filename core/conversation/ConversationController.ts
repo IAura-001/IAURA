@@ -1,4 +1,5 @@
 import { iauraBrain } from "../brain";
+import { conversationMemory } from "./ConversationMemory";
 
 import { generateOpenAIResponse } from "@/services/openai";
 
@@ -7,15 +8,32 @@ export class ConversationController {
     message: string,
     userContext: string
   ): Promise<string> {
-    const result =
-      iauraBrain.analyze({
-        message,
-        userContext,
-      });
+    conversationMemory.add(
+  "user",
+  message
+);
 
-    return generateOpenAIResponse(
-      result.prompt
-    );
+const history =
+  conversationMemory.getHistory();
+
+const result =
+  iauraBrain.analyze({
+    message,
+    userContext,
+    history,
+  });
+
+const content =
+  await generateOpenAIResponse(
+    result.prompt
+  );
+
+conversationMemory.add(
+  "assistant",
+  content
+);
+
+return content;
   }
 }
 

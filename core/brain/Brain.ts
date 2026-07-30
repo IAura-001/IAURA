@@ -24,7 +24,7 @@ const prompt =
   promptBuilder.build({
     context,
     decision,
-    
+    history: input.history,
   });
     return {
   context,
