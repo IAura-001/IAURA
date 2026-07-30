@@ -29,11 +29,28 @@ import { AIAnalysisPanel } from "@/components/sections/AIAnalysisPanel";
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
 import type { ChatMessage } from "@/types/chat";
-
+import ProjectCard from "@/components/sections/ProjectCard";
+import type { IAuraProject } from "@/types/project";
 import { MODES } from "@/constants/modes";
 import StatsGrid from "@/components/sections/StatsGrid";
 import { useMemory } from "@/hooks/useMemory";
 export default function Home() {
+  const activeProject: IAuraProject = {
+  id: "iaura-ecosystem",
+  name: "IAURA Ecosystem",
+  description: "The foundation of the IAURA artificial intelligence ecosystem.",
+  goal: "Build the first creative ecosystem powered by artificial intelligence.",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  status: "planning",
+  studios: {
+    branding: true,
+    website: true,
+    app: true,
+    marketing: true,
+    documents: true,
+  },
+};
   const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysis, setAnalysis] = useState("");
@@ -206,11 +223,15 @@ return (
         <div>
           <Hero />
 
-          <ModeSelector
-            modes={MODES}
-            selectedMode={selectedMode}
-            onSelect={setSelectedMode}
-          />
+<div className="mt-8">
+  <ProjectCard project={activeProject} />
+</div>
+
+<ModeSelector
+  modes={MODES}
+  selectedMode={selectedMode}
+  onSelect={setSelectedMode}
+/>
         </div>
 
         <AssistantCard
