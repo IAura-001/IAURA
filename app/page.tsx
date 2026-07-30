@@ -372,45 +372,7 @@ return (
     markMissionComplete(missionId, 25)
   }
 />
-<HabitsManager
-  habits={habits}
-  onAddHabit={handleAddHabit}
-  onRemoveHabit={handleRemoveHabit}
-/><DailyIntelligence
-  priorities={intelligencePriorities}
-  recommendation={recommendation}
-  
-/>
-<DailyFocus />
 
-<ProgressSummary
-  completed={completedMissions.length}
-  total={MISSIONS.length}
-/>
-
-<LevelProgress experience={memory.experience} onEarnXP={() => addExperience(25)} />
-<button
-  type="button"
-  onClick={resetMemory}
-  className="rounded-xl bg-red-600 px-4 py-2 text-white hover:bg-red-500"
->
-  Reset IAURA Memory
-</button>
-<StatsGrid
-  completed={completedMissions.length}
-  total={MISSIONS.length}
-/>
-<PerformancePanel
-  messageCount={messages.length}
-  goalsCount={memory.goals.length}
-  habitsCount={memory.habits.length}
-/>
-<DailyQuote />
-<MissionList
-  missions={pendingMissions}
-  completedMissionIds={memory.completedMissionIds ?? []}
-  onComplete={(missionId) => markMissionComplete(missionId, 25)}
-/>
     
       
       </section>
