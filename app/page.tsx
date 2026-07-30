@@ -1,45 +1,45 @@
 "use client";
 
 import { conversationController } from "@/core/conversation";
-import LevelProgress from "@/components/sections/LevelProgress";
 import { generateAIResponse } from "@/services/ai";
 
 import { generatePriorities } from "@/utils/intelligence";
 import { generateRecommendation } from "@/utils/recommendations";
 import { buildUserContext } from "@/utils/context";
 import { buildPrompt } from "@/utils/prompt";
-import DailyIntelligence from "@/components/sections/DailyIntelligence";
-import HabitsManager from "@/components/sections/HabitsManager";
-import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
 import { performanceMonitor } from "@/core/performance";
 
 import { ProjectEngine } from "@/core/project";
-import DailyFocus from "@/components/sections/DailyFocus";
 import { theme } from "@/config/theme";
 import AssistantCard from "@/components/sections/AssistantCard";
 import Hero from "@/components/sections/Hero";
 import ModeSelector from "@/components/sections/ModeSelector";
 import Navbar from "@/components/sections/Navbar";
-import ProgressSummary from "@/components/sections/ProgressSummary";
-import MissionList from "@/components/sections/MissionList";
 import { AIActionBar } from "@/components/sections/AIActionBar";
-import DashboardPanel from "@/components/sections/DashboardPanel";
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
-
+import dynamic from "next/dynamic";
 import type { ChatMessage } from "@/types/chat";
 import ProjectCard from "@/components/sections/ProjectCard";
 import {
   useCallback,
   useState,
 } from "react";
-import dynamic from "next/dynamic";
+
 import type { IAuraProject } from "@/types/project";
 import { MODES } from "@/constants/modes";
-import StatsGrid from "@/components/sections/StatsGrid";
-import PerformancePanel from "@/components/sections/PerformancePanel";
 import { useMemory } from "@/hooks/useMemory";
+const DashboardPanel = dynamic(
+  () => import("@/components/sections/DashboardPanel"),
+  {
+    loading: () => (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-zinc-500">
+        Loading IAURA dashboard...
+      </div>
+    ),
+  }
+);
 const AIAnalysisPanel = dynamic(
   () =>
     import(
