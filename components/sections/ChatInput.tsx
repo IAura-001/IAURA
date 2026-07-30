@@ -1,29 +1,67 @@
+"use client";
+
+import {
+  memo,
+  useState,
+  type FormEvent,
+} from "react";
+
 interface ChatInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (message?: string) => void | Promise<void>;
+  isSending?: boolean;
+
+  // Compatibilidad temporal con AssistantCard.
+  value?: string;
+  onChange?: (value: string) => void;
 }
 
-export function ChatInput({
-  value,
-  onChange,
+function ChatInputComponent({
   onSend,
+  isSending = false,
 }: ChatInputProps) {
+  const [value, setValue] = useState("");
+
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue || isSending) return;
+
+    await onSend(trimmedValue);
+    setValue("");
+  }
+
   return (
-    <div className="flex gap-3">
+    <form
+      onSubmit={handleSubmit}
+      className="flex gap-3"
+    >
       <input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) =>
+          setValue(event.target.value)
+        }
         placeholder="Ask IAURA anything..."
-        className="flex-1 rounded-xl bg-zinc-900 border border-zinc-700 px-4 py-3"
+        autoComplete="off"
+        enterKeyHint="send"
+        disabled={isSending}
+        className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3"
       />
 
       <button
-        onClick={onSend}
-        className="rounded-xl bg-purple-600 px-5 py-3 font-semibold"
+        type="submit"
+        disabled={!value.trim() || isSending}
+        className="rounded-xl bg-purple-600 px-5 py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
       >
-        Send
+        {isSending ? "..." : "Send"}
       </button>
-    </div>
+    </form>
   );
 }
+
+export const ChatInput = memo(ChatInputComponent);
+
+ChatInput.displayName = "ChatInput";
