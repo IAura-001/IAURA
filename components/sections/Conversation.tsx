@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import type { ChatMessage } from "@/types/chat";
+import { MessageRenderer } from "./MessageRenderer";
 
 interface ConversationProps {
   messages: ChatMessage[];
@@ -194,12 +195,13 @@ export function Conversation({
       </div>
 
       {messages.map((message) => (
-        <AnimatedMessage
-          key={message.id}
-          message={message}
-        />
-      ))}
-
+  <MessageRenderer
+    key={message.id}
+    message={message}
+  >
+    <AnimatedMessage message={message} />
+  </MessageRenderer>
+))}
       {isThinking && <AuraThinking />}
 
       <style jsx>{`
