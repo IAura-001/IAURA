@@ -2,7 +2,6 @@
 
 import { conversationController } from "@/core/conversation";
 import LevelProgress from "@/components/sections/LevelProgress";
-import GoalsManager from "@/components/sections/GoalsManager";
 import { generateAIResponse } from "@/services/ai";
 
 import { generatePriorities } from "@/utils/intelligence";
@@ -11,7 +10,6 @@ import { buildUserContext } from "@/utils/context";
 import { buildPrompt } from "@/utils/prompt";
 import DailyIntelligence from "@/components/sections/DailyIntelligence";
 import HabitsManager from "@/components/sections/HabitsManager";
-import ProfileSettings from "@/components/sections/ProfileSettings";
 import DailyQuote from "@/components/sections/DailyQuote";
 import { MISSIONS } from "@/constants/missions";
 import { performanceMonitor } from "@/core/performance";
@@ -19,7 +17,6 @@ import { performanceMonitor } from "@/core/performance";
 import { ProjectEngine } from "@/core/project";
 import DailyFocus from "@/components/sections/DailyFocus";
 import { theme } from "@/config/theme";
-import DashboardGreeting from "@/components/sections/DashboardGreeting";
 import AssistantCard from "@/components/sections/AssistantCard";
 import Hero from "@/components/sections/Hero";
 import ModeSelector from "@/components/sections/ModeSelector";
@@ -27,7 +24,7 @@ import Navbar from "@/components/sections/Navbar";
 import ProgressSummary from "@/components/sections/ProgressSummary";
 import MissionList from "@/components/sections/MissionList";
 import { AIActionBar } from "@/components/sections/AIActionBar";
-
+import DashboardPanel from "@/components/sections/DashboardPanel";
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
 
@@ -346,25 +343,43 @@ return (
   onSend={handleSend}
   isSending={isSending}
 />
-<DashboardGreeting name={memory.userName} />
-<ProfileSettings
-  userName={memory.userName}
+<DashboardPanel
+  name={memory.userName}
+  goals={goals}
   onSaveName={(name) =>
     updateMemory({
       userName: name,
     })
   }
-/><GoalsManager
-  goals={goals}
   onAddGoal={handleAddGoal}
   onRemoveGoal={handleRemoveGoal}
-/><HabitsManager
+  habits={habits}
+  onAddHabit={handleAddHabit}
+  onRemoveHabit={handleRemoveHabit}
+  priorities={intelligencePriorities}
+  recommendation={recommendation}
+  completedCount={completedMissions.length}
+  totalMissions={MISSIONS.length}
+  experience={memory.experience}
+  onEarnXP={() => addExperience(25)}
+  onResetMemory={resetMemory}
+  messageCount={messages.length}
+  goalsCount={memory.goals.length}
+  habitsCount={memory.habits.length}
+  missions={pendingMissions}
+  completedMissionIds={memory.completedMissionIds ?? []}
+  onMissionComplete={(missionId) =>
+    markMissionComplete(missionId, 25)
+  }
+/>
+<HabitsManager
   habits={habits}
   onAddHabit={handleAddHabit}
   onRemoveHabit={handleRemoveHabit}
 /><DailyIntelligence
   priorities={intelligencePriorities}
   recommendation={recommendation}
+  
 />
 <DailyFocus />
 
