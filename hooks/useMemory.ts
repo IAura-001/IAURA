@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { rewardXP } from "@/utils/xp";
 import { completeMission } from "@/utils/mission";
 import { DEFAULT_MEMORY } from "@/constants/memory";
@@ -9,14 +13,10 @@ import type { Memory } from "@/types/memory";
 
 const STORAGE_KEY = "iaura-memory";
 
-export function useMemory() {
-  const [memory, setMemory] = useState<Memory>(() => {
-  if (typeof window === "undefined") {
-    return DEFAULT_MEMORY;
-  }
-
+function loadStoredMemory(): Memory {
   try {
-    const savedMemory = localStorage.getItem(STORAGE_KEY);
+    const savedMemory =
+      localStorage.getItem(STORAGE_KEY);
 
     if (!savedMemory) {
       return DEFAULT_MEMORY;
@@ -29,8 +29,26 @@ export function useMemory() {
     return {
       ...DEFAULT_MEMORY,
       ...parsedMemory,
-      completedMissionIds:
-        parsedMemory.completedMissionIds ?? [],
+      goals: Array.isArray(parsedMemory.goals)
+        ? parsedMemory.goals
+        : [],
+      habits: Array.isArray(
+        parsedMemory.habits
+      )
+        ? parsedMemory.habits
+        : [],
+      projects: Array.isArray(
+        parsedMemory.projects
+      )
+        ? parsedMemory.projects
+        : [],
+      activeProject:
+        parsedMemory.activeProject ?? null,
+      completedMissionIds: Array.isArray(
+        parsedMemory.completedMissionIds
+      )
+        ? parsedMemory.completedMissionIds
+        : [],
     };
   } catch (error) {
     console.error(
@@ -40,10 +58,28 @@ export function useMemory() {
 
     return DEFAULT_MEMORY;
   }
-});
-  const [isLoaded] = useState(true);
+}
 
-  
+export function useMemory() {
+  const [memory, setMemory] =
+    useState<Memory>(DEFAULT_MEMORY);
+  const [isLoaded, setIsLoaded] =
+    useState(false);
+
+  useEffect(() => {
+    const hydrationTimer = window.setTimeout(
+      () => {
+        setMemory(loadStoredMemory());
+        setIsLoaded(true);
+      },
+      0
+    );
+
+    return () => {
+      window.clearTimeout(hydrationTimer);
+    };
+  }, []);
+
   useEffect(() => {
     if (!isLoaded) return;
 
@@ -54,25 +90,42 @@ export function useMemory() {
     }
   }, [memory, isLoaded]);
 
-  function updateMemory(updates: Partial<Memory>) {
+  const updateMemory = useCallback(
+    (updates: Partial<Memory>) => {
+      setMemory((currentMemory) => ({
+        ...currentMemory,
+        ...updates,
+      }));
+    },
+    []
+  );
+
+  const replaceMemory = useCallback(
+    (nextMemory: Memory) => {
+      setMemory(nextMemory);
+    },
+    []
+  );
+
+  function addExperience(amount: number) {
     setMemory((currentMemory) => ({
-      ...currentMemory,
-      ...updates,
+      ...rewardXP(currentMemory, amount),
     }));
   }
-function addExperience(amount: number) {
-  setMemory((currentMemory) =>
-    rewardXP(currentMemory, amount)
-  );
-}
-function markMissionComplete(
-  missionId: string,
-  xpReward = 25
-) {
-  setMemory((currentMemory) =>
-    completeMission(currentMemory, missionId, xpReward)
-  );
-}
+
+  function markMissionComplete(
+    missionId: string,
+    xpReward = 25
+  ) {
+    setMemory((currentMemory) =>
+      completeMission(
+        currentMemory,
+        missionId,
+        xpReward
+      )
+    );
+  }
+
   function resetMemory() {
     setMemory(DEFAULT_MEMORY);
     localStorage.removeItem(STORAGE_KEY);
@@ -82,9 +135,9 @@ function markMissionComplete(
     memory,
     isLoaded,
     updateMemory,
+    replaceMemory,
     addExperience,
     markMissionComplete,
     resetMemory,
-
   };
 }

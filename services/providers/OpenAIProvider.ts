@@ -1,5 +1,9 @@
 import OpenAI from "openai";
 
+import {
+  IAURA_RESPONSE_SCHEMA,
+  parseAuraAssistantPlan,
+} from "@/core/actions";
 import type {
   AIProvider,
   AIRequest,
@@ -51,19 +55,26 @@ export class OpenAIProvider
         instructions:
           request.instructions,
         input: request.prompt,
+        text: {
+          verbosity: "medium",
+          format: {
+            type: "json_schema",
+            name: "iaura_action_plan",
+            description:
+              "IAURA response plus safe local actions.",
+            strict: true,
+            schema:
+              IAURA_RESPONSE_SCHEMA,
+          },
+        },
       });
 
-    const content =
-      response.output_text.trim();
-
-    if (!content) {
-      throw new Error(
-        "OpenAI returned an empty response."
-      );
-    }
+    const plan = parseAuraAssistantPlan(
+      response.output_text
+    );
 
     return {
-      content,
+      ...plan,
       provider: this.name,
       model: this.model,
     };

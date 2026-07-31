@@ -42,4 +42,18 @@ describe("PromptBuilder", () => {
 
     expect(occurrences).toBe(1);
   });
+
+  it("limits actions to the supervised local protocol", () => {
+    const prompt = new PromptBuilder().build(input);
+
+    expect(prompt).toContain(
+      "You may request only these local, reversible application actions:"
+    );
+    expect(prompt).toContain(
+      "Never invent an action type."
+    );
+    expect(prompt).toContain(
+      "do not claim that an emitted action has already succeeded"
+    );
+  });
 });

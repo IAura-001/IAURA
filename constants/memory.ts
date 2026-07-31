@@ -11,8 +11,10 @@ export const DEFAULT_MEMORY: Memory = {
 
   projects: ["IAURA"],
 
+  activeProject: null,
+
   completedMissions: 0,
- completedMissionIds: [],
+  completedMissionIds: [],
 
   streak: 0,
 

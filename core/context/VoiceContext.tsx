@@ -19,8 +19,6 @@ export function VoiceProvider({
 }) {
   const voice = useVoice();
 
-  console.log("VOICE PROVIDER", voice.voiceMode);
-
   return (
     <VoiceContext.Provider value={voice}>
       {children}

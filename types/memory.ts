@@ -1,3 +1,5 @@
+import type { IAuraProject } from "@/types/project";
+
 export interface Memory {
   id: string;
 
@@ -9,10 +11,12 @@ export interface Memory {
 
   projects: string[];
 
-completedMissions: number;
-completedMissionIds: string[];
+  activeProject: IAuraProject | null;
 
-streak: number;
+  completedMissions: number;
+  completedMissionIds: string[];
+
+  streak: number;
 
   level: number;
 

@@ -1,10 +1,14 @@
+import type {
+  AuraAssistantPlan,
+} from "@/core/actions";
+
 export interface AIRequest {
   prompt: string;
   instructions?: string;
 }
 
-export interface AIResponse {
-  content: string;
+export interface AIResponse
+  extends AuraAssistantPlan {
   provider: string;
   model: string;
 }

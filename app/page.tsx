@@ -10,9 +10,10 @@ import { buildPrompt } from "@/utils/prompt";
 import { MISSIONS } from "@/constants/missions";
 import { performanceMonitor } from "@/core/performance";
 import { useVoiceContext } from "@/core/context/VoiceContext";
-import { ProjectEngine } from "@/core/project";
+import { formatActionReceipt } from "@/core/actions";
 import { theme } from "@/config/theme";
 import AssistantCard from "@/components/sections/AssistantCard";
+import { ActionCenter } from "@/components/sections/ActionCenter";
 import Hero from "@/components/sections/Hero";
 import ModeSelector from "@/components/sections/ModeSelector";
 import Navbar from "@/components/sections/Navbar";
@@ -27,8 +28,8 @@ import {
   useState,
 } from "react";
 
-import type { IAuraProject } from "@/types/project";
 import { MODES } from "@/constants/modes";
+import { useAuraActions } from "@/hooks/useAuraActions";
 import { useMemory } from "@/hooks/useMemory";
 import { cleanAIText } from "@/utils/formatText";
 const DashboardPanel = dynamic(
@@ -68,7 +69,6 @@ const BrandingStudio = dynamic(
     ),
   }
 );
-const projectEngine = new ProjectEngine();
 export default function Home() {
 const {
   speak,
@@ -77,9 +77,6 @@ const {
   const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysis, setAnalysis] = useState("");
- 
-const [activeProject, setActiveProject] =
-  useState<IAuraProject | null>(null);
   const [openStudio, setOpenStudio] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -92,7 +89,18 @@ const {
   addExperience,
   markMissionComplete,
   resetMemory,
+  replaceMemory,
 } = useMemory();
+const {
+  history: actionHistory,
+  executeActions,
+  canUndoLast,
+  undoLast,
+} = useAuraActions({
+  memory,
+  replaceMemory,
+});
+const activeProject = memory.activeProject;
 const activeMode =
   MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
 
@@ -149,39 +157,6 @@ const intelligencePriorities =
 const recommendation = generateRecommendation(userContext);
 
 const prompt = buildPrompt(userContext);
-function createProjectFromIdea(idea: string): IAuraProject {
-  const cleanedIdea = idea
-    .replace(/quiero crear/gi, "")
-    .replace(/quiero hacer/gi, "")
-    .replace(/quiero construir/gi, "")
-    .trim();
-
-  const projectName =
-    cleanedIdea
-      .split(" ")
-      .slice(0, 4)
-      .map(
-        (word) => word.charAt(0).toUpperCase() + word.slice(1)
-      )
-      .join(" ") || "Nuevo Proyecto";
-
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    name: projectName,
-    description: idea,
-    goal: `Convertir esta idea en un proyecto real.`,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    status: "planning",
-    studios: {
-      branding: true,
-      website: true,
-      app: false,
-      marketing: true,
-      documents: true,
-    },
-  };
-}
 const handleAnalyze = () => {
   setIsAnalyzing(true);
   setShowAnalysis(false);
@@ -205,19 +180,6 @@ const responseStartedAt = performance.now();
 
  
   
-const lowerInput = trimmedInput.toLowerCase();
-
-const isProjectIdea =
-  lowerInput.includes("quiero crear") ||
-  lowerInput.includes("quiero hacer") ||
-  lowerInput.includes("quiero construir");
-
-if (isProjectIdea) {
-  const newProject = createProjectFromIdea(trimmedInput);
-
-  projectEngine.setCurrentProject(newProject);
-  setActiveProject(newProject);
-}
   const userMessage: ChatMessage = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role: "user",
@@ -231,13 +193,22 @@ if (isProjectIdea) {
   setIsSending(true);
 
   try {
-    const rawContent = await conversationController.send(
+    const response = await conversationController.send(
   trimmedInput,
   prompt
 );
 
-const content = cleanAIText(rawContent);
-console.log("VOICE MODE:", voiceMode);
+const actionItems = executeActions(response.actions);
+const actionReceipt = formatActionReceipt(actionItems);
+const spokenContent = cleanAIText(
+  response.content
+);
+const content = [
+  spokenContent,
+  actionReceipt,
+]
+  .filter(Boolean)
+  .join("\n\n");
     const assistantMessage: ChatMessage = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       role: "assistant",
@@ -247,7 +218,7 @@ console.log("VOICE MODE:", voiceMode);
     setMessages((prev) => [...prev, assistantMessage]);
 
 if (voiceMode) {
-  speak(content);
+  speak(spokenContent);
 }
   } catch (error) {
   console.error("IAURA conversation failed:", error);
@@ -269,7 +240,7 @@ if (voiceMode) {
   setIsSending(false);
 }
 },
-[isSending, prompt, voiceMode, speak]
+[executeActions, isSending, prompt, voiceMode, speak]
 );
 
   
@@ -353,6 +324,13 @@ return (
 <ChatInput
   onSend={handleSend}
   isSending={isSending}
+/>
+<ActionCenter
+  history={actionHistory}
+  canUndoLast={canUndoLast}
+  onUndoLast={() => {
+    undoLast();
+  }}
 />
 <DashboardPanel
   name={memory.userName}

@@ -1,39 +1,39 @@
 import { iauraBrain } from "../brain";
 import { conversationMemory } from "./ConversationMemory";
 
+import type { AuraAssistantPlan } from "@/core/actions";
 import { generateOpenAIResponse } from "@/services/openai";
 
 export class ConversationController {
   async send(
     message: string,
     userContext: string
-  ): Promise<string> {
+  ): Promise<AuraAssistantPlan> {
     conversationMemory.add(
-  "user",
-  message
-);
+      "user",
+      message
+    );
 
-const history =
-  conversationMemory.getHistory();
+    const history =
+      conversationMemory.getHistory();
 
-const result =
-  iauraBrain.analyze({
-    message,
-    userContext,
-    history,
-  });
+    const result = iauraBrain.analyze({
+      message,
+      userContext,
+      history,
+    });
 
-const content =
-  await generateOpenAIResponse(
-    result.prompt
-  );
+    const response =
+      await generateOpenAIResponse(
+        result.prompt
+      );
 
-conversationMemory.add(
-  "assistant",
-  content
-);
+    conversationMemory.add(
+      "assistant",
+      response.content
+    );
 
-return content;
+    return response;
   }
 }
 

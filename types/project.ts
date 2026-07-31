@@ -17,8 +17,8 @@ export interface IAuraProject {
   name: string;
   description: string;
   goal: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   status: ProjectStatus;
   studios: ProjectStudios;
 }

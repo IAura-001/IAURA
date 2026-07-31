@@ -1,11 +1,15 @@
-interface ChatResponse {
-  content?: string;
+import {
+  parseAuraAssistantPlan,
+  type AuraAssistantPlan,
+} from "@/core/actions";
+
+interface ChatErrorResponse {
   error?: string;
 }
 
 export async function generateOpenAIResponse(
   prompt: string
-): Promise<string> {
+): Promise<AuraAssistantPlan> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: {
@@ -17,14 +21,20 @@ export async function generateOpenAIResponse(
   });
 
   const data =
-    (await response.json()) as ChatResponse;
+    (await response.json()) as unknown;
 
   if (!response.ok) {
+    const errorResponse =
+      typeof data === "object" &&
+      data !== null
+        ? (data as ChatErrorResponse)
+        : {};
+
     throw new Error(
-      data.error ??
+      errorResponse.error ??
         "Unknown IAURA API error."
     );
   }
 
-  return data.content ?? "";
+  return parseAuraAssistantPlan(data);
 }
