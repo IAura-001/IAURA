@@ -14,6 +14,7 @@ const CURRENT_VOICE_MODE: VoiceProviderMode =
   voiceConfig.provider === "neural" ? "neural" : "browser";
 
 export interface VoiceEngine {
+  unlock(): Promise<void>;
   speak(
     text: string,
     mode?: AuraVoiceMode,
@@ -35,6 +36,10 @@ class IAURAVoiceEngine implements VoiceEngine {
     }
 
     return new BrowserVoiceProvider();
+  }
+
+  async unlock(): Promise<void> {
+    return this.provider.unlock();
   }
 
   async speak(

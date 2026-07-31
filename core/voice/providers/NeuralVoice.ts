@@ -5,10 +5,41 @@ import {
   type SupportedLocale,
 } from "@/core/i18n/languages";
 
+const SILENT_AUDIO_DATA_URL =
+  "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAACAgICA";
+
 export class NeuralVoiceProvider implements VoiceProvider {
   private currentAudio: HTMLAudioElement | null = null;
   private currentAudioUrl: string | null = null;
   private requestController: AbortController | null = null;
+  private audioUnlocked = false;
+  private playbackSettlement: {
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  } | null = null;
+
+  async unlock(): Promise<void> {
+    if (
+      typeof window === "undefined" ||
+      this.audioUnlocked
+    ) {
+      return;
+    }
+
+    const audio = this.getAudioElement();
+
+    audio.src = SILENT_AUDIO_DATA_URL;
+    audio.load();
+
+    try {
+      await audio.play();
+      audio.pause();
+      audio.currentTime = 0;
+      this.audioUnlocked = true;
+    } catch {
+      // A later user gesture can retry the unlock.
+    }
+  }
 
   async speak(
     text: string,
@@ -47,28 +78,32 @@ export class NeuralVoiceProvider implements VoiceProvider {
 
     const audioBlob = await response.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl);
+    const audio = this.getAudioElement();
 
-    this.currentAudio = audio;
+    audio.src = audioUrl;
+    audio.load();
+
     this.currentAudioUrl = audioUrl;
     this.requestController = null;
 
     await new Promise<void>((resolve, reject) => {
+      this.playbackSettlement = {
+        resolve,
+        reject,
+      };
+
       audio.onended = () => {
-        this.releaseAudio();
-        resolve();
+        this.settlePlayback();
       };
 
       audio.onerror = () => {
-        this.releaseAudio();
-        reject(
+        this.settlePlayback(
           new Error("IAURA could not play the neural voice.")
         );
       };
 
       audio.play().catch((error) => {
-        this.releaseAudio();
-        reject(error);
+        this.settlePlayback(error);
       });
     });
   }
@@ -82,19 +117,57 @@ export class NeuralVoiceProvider implements VoiceProvider {
       this.currentAudio.currentTime = 0;
     }
 
-    this.releaseAudio();
+    this.settlePlayback();
+    this.releaseAudioUrl();
   }
 
-  private releaseAudio(): void {
+  private getAudioElement(): HTMLAudioElement {
+    if (!this.currentAudio) {
+      const audio = new Audio();
+
+      audio.preload = "auto";
+      audio.setAttribute("playsinline", "");
+      this.currentAudio = audio;
+    }
+
+    return this.currentAudio;
+  }
+
+  private settlePlayback(error?: unknown): void {
+    const settlement = this.playbackSettlement;
+
+    this.playbackSettlement = null;
+
     if (this.currentAudio) {
       this.currentAudio.onended = null;
       this.currentAudio.onerror = null;
-      this.currentAudio = null;
     }
 
-    if (this.currentAudioUrl) {
-      URL.revokeObjectURL(this.currentAudioUrl);
-      this.currentAudioUrl = null;
+    this.releaseAudioUrl();
+
+    if (!settlement) {
+      return;
     }
+
+    if (error) {
+      settlement.reject(error);
+      return;
+    }
+
+    settlement.resolve();
+  }
+
+  private releaseAudioUrl(): void {
+    if (!this.currentAudioUrl) {
+      return;
+    }
+
+    if (this.currentAudio) {
+      this.currentAudio.removeAttribute("src");
+      this.currentAudio.load();
+    }
+
+    URL.revokeObjectURL(this.currentAudioUrl);
+    this.currentAudioUrl = null;
   }
 }

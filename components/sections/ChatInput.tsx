@@ -59,6 +59,7 @@ function ChatInputComponent({
     transcribeAudioFile,
     clearTranscript,
     clearVoiceError,
+    unlockAudio,
   } = useVoiceContext();
 
   useEffect(() => {
@@ -95,6 +96,7 @@ function ChatInputComponent({
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
+    void unlockAudio();
 
     const trimmedValue = value.trim();
 
@@ -142,9 +144,10 @@ function ChatInputComponent({
               ? t("chat.voiceOn")
               : t("chat.voiceOff")
           }
-          onClick={() =>
-            setVoiceMode(!voiceMode)
-          }
+          onClick={() => {
+            void unlockAudio();
+            setVoiceMode(!voiceMode);
+          }}
           className={[
             "group inline-flex items-center gap-2 rounded-full border px-3 py-1.5",
             "text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400",

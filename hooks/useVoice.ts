@@ -223,7 +223,9 @@ export function useVoice() {
         new Event(VOICE_MODE_EVENT)
       );
 
-      if (!enabled) {
+      if (enabled) {
+        void voiceEngine.unlock();
+      } else {
         voiceEngine.stop();
         setState("idle");
       }
@@ -559,6 +561,7 @@ export function useVoice() {
 
   const startListening = useCallback(
     async () => {
+      void voiceEngine.unlock();
       setVoiceError(null);
       setVoiceMode(true);
 
@@ -626,6 +629,10 @@ export function useVoice() {
     setVoiceError(null);
   }, []);
 
+  const unlockAudio = useCallback(() => {
+    return voiceEngine.unlock();
+  }, []);
+
   async function speak(text: string) {
     if (!getVoiceModeSnapshot()) {
       return;
@@ -667,6 +674,7 @@ export function useVoice() {
     transcribeAudioFile,
     clearTranscript,
     clearVoiceError,
+    unlockAudio,
     speak,
     stopSpeaking,
   };

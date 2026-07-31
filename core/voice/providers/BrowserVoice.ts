@@ -6,6 +6,8 @@ import {
 } from "@/core/i18n/languages";
 
 export interface VoiceProvider {
+  unlock(): Promise<void>;
+
   speak(
     text: string,
     mode?: AuraVoiceMode,
@@ -16,6 +18,10 @@ export interface VoiceProvider {
 }
 
 export class BrowserVoiceProvider implements VoiceProvider {
+  async unlock(): Promise<void> {
+    // Browser speech synthesis does not require a persistent media element.
+  }
+
   async speak(
     text: string,
     mode?: AuraVoiceMode,
