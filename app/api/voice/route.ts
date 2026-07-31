@@ -15,7 +15,9 @@ import {
 export const runtime = "nodejs";
 
 async function generateElevenLabsVoice(
-  text: string
+  text: string,
+  previousText: string,
+  nextText: string
 ): Promise<ArrayBuffer> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   const voiceId = process.env.ELEVENLABS_VOICE_ID;
@@ -27,7 +29,7 @@ async function generateElevenLabsVoice(
   }
 
   const response = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=mp3_44100_128`,
     {
       method: "POST",
       headers: {
@@ -36,7 +38,12 @@ async function generateElevenLabsVoice(
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_multilingual_v2",
+        model_id:
+          process.env.ELEVENLABS_MODEL_ID ??
+          "eleven_flash_v2_5",
+        previous_text:
+          previousText || undefined,
+        next_text: nextText || undefined,
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -115,10 +122,14 @@ export async function POST(request: Request) {
       text,
       language,
       mode,
+      previousText,
+      nextText,
     } = (await request.json()) as {
       text?: unknown;
       language?: unknown;
       mode?: unknown;
+      previousText?: unknown;
+      nextText?: unknown;
     };
 
     const normalizedText =
@@ -129,6 +140,14 @@ export async function POST(request: Request) {
       normalizeLocale(language);
     const normalizedMode =
       normalizeAuraVoiceMode(mode);
+    const normalizedPreviousText =
+      typeof previousText === "string"
+        ? previousText.trim().slice(-500)
+        : "";
+    const normalizedNextText =
+      typeof nextText === "string"
+        ? nextText.trim().slice(0, 500)
+        : "";
 
     if (!normalizedText) {
       return NextResponse.json(
@@ -148,7 +167,11 @@ export async function POST(request: Request) {
 
     try {
       audioBuffer =
-        await generateElevenLabsVoice(safeText);
+        await generateElevenLabsVoice(
+          safeText,
+          normalizedPreviousText,
+          normalizedNextText
+        );
     } catch (error) {
       console.error(
         "ElevenLabs voice failed; using fallback:",

@@ -4,6 +4,7 @@ import {
   DEFAULT_LOCALE,
   type SupportedLocale,
 } from "@/core/i18n/languages";
+import { splitSpeechText } from "@/core/voice/speechChunks";
 
 const SILENT_AUDIO_DATA_URL =
   "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAACAgICA";
@@ -56,56 +57,47 @@ export class NeuralVoiceProvider implements VoiceProvider {
 
     const controller = new AbortController();
     this.requestController = controller;
+    const chunks = splitSpeechText(
+      normalizedText
+    );
+    let pendingAudio = this.requestAudio(
+      chunks[0],
+      mode,
+      language,
+      controller.signal,
+      "",
+      chunks[1] ?? ""
+    );
 
-    const response = await fetch("/api/voice", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: normalizedText,
-        mode,
-        language,
-      }),
-      signal: controller.signal,
-    });
+    try {
+      for (
+        let index = 0;
+        index < chunks.length;
+        index += 1
+      ) {
+        const audioBlob = await pendingAudio;
+        const nextChunk = chunks[index + 1];
 
-    if (!response.ok) {
-      throw new Error(
-        `Neural voice request failed: ${response.status}`
-      );
+        if (nextChunk) {
+          pendingAudio = this.requestAudio(
+            nextChunk,
+            mode,
+            language,
+            controller.signal,
+            chunks[index],
+            chunks[index + 2] ?? ""
+          );
+        }
+
+        await this.playAudioBlob(audioBlob);
+      }
+    } finally {
+      if (
+        this.requestController === controller
+      ) {
+        this.requestController = null;
+      }
     }
-
-    const audioBlob = await response.blob();
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = this.getAudioElement();
-
-    audio.src = audioUrl;
-    audio.load();
-
-    this.currentAudioUrl = audioUrl;
-    this.requestController = null;
-
-    await new Promise<void>((resolve, reject) => {
-      this.playbackSettlement = {
-        resolve,
-        reject,
-      };
-
-      audio.onended = () => {
-        this.settlePlayback();
-      };
-
-      audio.onerror = () => {
-        this.settlePlayback(
-          new Error("IAURA could not play the neural voice.")
-        );
-      };
-
-      audio.play().catch((error) => {
-        this.settlePlayback(error);
-      });
-    });
   }
 
   stop(): void {
@@ -131,6 +123,71 @@ export class NeuralVoiceProvider implements VoiceProvider {
     }
 
     return this.currentAudio;
+  }
+
+  private async requestAudio(
+    text: string,
+    mode: AuraVoiceMode,
+    language: SupportedLocale,
+    signal: AbortSignal,
+    previousText: string,
+    nextText: string
+  ): Promise<Blob> {
+    const response = await fetch("/api/voice", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text,
+        mode,
+        language,
+        previousText,
+        nextText,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Neural voice request failed: ${response.status}`
+      );
+    }
+
+    return response.blob();
+  }
+
+  private async playAudioBlob(
+    audioBlob: Blob
+  ): Promise<void> {
+    const audioUrl =
+      URL.createObjectURL(audioBlob);
+    const audio = this.getAudioElement();
+
+    audio.src = audioUrl;
+    audio.load();
+    this.currentAudioUrl = audioUrl;
+
+    await new Promise<void>((resolve, reject) => {
+      this.playbackSettlement = {
+        resolve,
+        reject,
+      };
+
+      audio.onended = () => {
+        this.settlePlayback();
+      };
+
+      audio.onerror = () => {
+        this.settlePlayback(
+          new Error("IAURA could not play the neural voice.")
+        );
+      };
+
+      audio.play().catch((error) => {
+        this.settlePlayback(error);
+      });
+    });
   }
 
   private settlePlayback(error?: unknown): void {
