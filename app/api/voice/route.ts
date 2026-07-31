@@ -3,10 +3,6 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 async function generateElevenLabsVoice(
   text: string
 ): Promise<ArrayBuffer> {
@@ -43,10 +39,8 @@ async function generateElevenLabsVoice(
   );
 
   if (!response.ok) {
-    const message = await response.text();
-
     throw new Error(
-      `ElevenLabs failed (${response.status}): ${message}`
+      `ElevenLabs failed with status ${response.status}.`
     );
   }
 
@@ -56,10 +50,22 @@ async function generateElevenLabsVoice(
 async function generateOpenAIFallback(
   text: string
 ): Promise<ArrayBuffer> {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(
+      "OpenAI fallback configuration is missing."
+    );
+  }
+
+  const openai = new OpenAI({
+    apiKey,
+  });
+
   const speech = await openai.audio.speech.create({
     model: "gpt-4o-mini-tts-2025-12-15",
     voice: "marin",
-    input: text,
+    input: text.slice(0, 4096),
     instructions:
       "Speak naturally with a warm, calm and clear multilingual female voice.",
     response_format: "mp3",
@@ -78,8 +84,12 @@ export async function POST(request: Request) {
 
     if (!normalizedText) {
       return NextResponse.json(
-        { error: "Voice text is required." },
-        { status: 400 }
+        {
+          error: "Voice text is required.",
+        },
+        {
+          status: 400,
+        }
       );
     }
 
@@ -94,7 +104,9 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error(
         "ElevenLabs voice failed; using fallback:",
-        error
+        error instanceof Error
+          ? error.name
+          : "UnknownError"
       );
 
       provider = "openai";
@@ -112,7 +124,9 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error(
       "IAURA voice generation failed:",
-      error
+      error instanceof Error
+        ? error.name
+        : "UnknownError"
     );
 
     return NextResponse.json(
@@ -120,7 +134,9 @@ export async function POST(request: Request) {
         error:
           "Could not generate IAURA voice.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
