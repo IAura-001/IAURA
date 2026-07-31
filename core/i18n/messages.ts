@@ -47,6 +47,8 @@ const esMessages = {
   "chat.micStart": "Hablar con IAURA",
   "chat.micStop": "Detener y enviar audio",
   "chat.voiceStop": "Detener voz",
+  "chat.voiceOn": "Voz activada",
+  "chat.voiceOff": "Voz desactivada",
   "chat.recordAudio": "Grabar audio",
   "chat.voiceUnavailable":
     "Este navegador no permite grabar audio. Prueba desde un enlace HTTPS.",
@@ -244,6 +246,8 @@ const enMessages: Record<MessageKey, string> = {
   "chat.micStart": "Talk to IAURA",
   "chat.micStop": "Stop and send audio",
   "chat.voiceStop": "Stop voice",
+  "chat.voiceOn": "Voice on",
+  "chat.voiceOff": "Voice off",
   "chat.recordAudio": "Record audio",
   "chat.voiceUnavailable":
     "This browser cannot record audio. Try again from an HTTPS link.",
@@ -431,6 +435,8 @@ const ptMessages: Record<MessageKey, string> = {
   "chat.micStart": "Falar com IAURA",
   "chat.micStop": "Parar e enviar áudio",
   "chat.voiceStop": "Parar voz",
+  "chat.voiceOn": "Voz ativada",
+  "chat.voiceOff": "Voz desativada",
   "chat.recordAudio": "Gravar áudio",
   "chat.voiceUnavailable":
     "Este navegador não consegue gravar áudio. Tente por um link HTTPS.",
@@ -615,6 +621,8 @@ const frMessages: Record<MessageKey, string> = {
   "chat.micStart": "Parler à IAURA",
   "chat.micStop": "Arrêter et envoyer l’audio",
   "chat.voiceStop": "Arrêter la voix",
+  "chat.voiceOn": "Voix activée",
+  "chat.voiceOff": "Voix désactivée",
   "chat.recordAudio": "Enregistrer l’audio",
   "chat.voiceUnavailable":
     "Ce navigateur ne peut pas enregistrer l’audio. Réessayez avec un lien HTTPS.",

@@ -49,8 +49,10 @@ function ChatInputComponent({
   const {
     state,
     transcript,
+    voiceMode,
     captureMode,
     voiceError,
+    setVoiceMode,
     startListening,
     stopListening,
     stopSpeaking,
@@ -130,6 +132,63 @@ function ChatInputComponent({
 
   return (
     <div className="space-y-2">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={voiceMode}
+          aria-label={
+            voiceMode
+              ? t("chat.voiceOn")
+              : t("chat.voiceOff")
+          }
+          onClick={() =>
+            setVoiceMode(!voiceMode)
+          }
+          className={[
+            "group inline-flex items-center gap-2 rounded-full border px-3 py-1.5",
+            "text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400",
+            voiceMode
+              ? "border-purple-400/30 bg-purple-500/10 text-purple-100"
+              : "border-white/10 bg-white/[0.03] text-zinc-400",
+          ].join(" ")}
+        >
+          <span
+            className={[
+              "h-2 w-2 rounded-full transition",
+              voiceMode
+                ? "bg-purple-300 shadow-[0_0_12px_rgba(216,180,254,0.9)]"
+                : "bg-zinc-600",
+            ].join(" ")}
+            aria-hidden="true"
+          />
+          <span>Aura Prime</span>
+          <span className="text-[10px] uppercase tracking-[0.16em] opacity-70">
+            {voiceMode
+              ? t("chat.voiceOn")
+              : t("chat.voiceOff")}
+          </span>
+          <span
+            className={[
+              "relative h-5 w-9 rounded-full transition",
+              voiceMode
+                ? "bg-purple-500"
+                : "bg-zinc-700",
+            ].join(" ")}
+            aria-hidden="true"
+          >
+            <span
+              className={[
+                "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                voiceMode
+                  ? "translate-x-[18px]"
+                  : "translate-x-0.5",
+              ].join(" ")}
+            />
+          </span>
+        </button>
+      </div>
+
       <form
         onSubmit={handleSubmit}
         className="flex gap-3"

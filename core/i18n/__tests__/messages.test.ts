@@ -25,6 +25,8 @@ describe("IAURA interface messages", () => {
         "hero.intro",
         "assistant.question",
         "chat.placeholder",
+        "chat.voiceOn",
+        "chat.voiceOff",
         "dashboard.subtitle",
         "profile.languageHint",
         "missions.title",

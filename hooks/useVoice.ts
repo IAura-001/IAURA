@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { voiceEngine } from "@/core/voice/voiceEngine";
 import {
@@ -77,6 +78,69 @@ interface VoiceWindow extends Window {
 }
 
 const MAX_RECORDING_MS = 30_000;
+const VOICE_MODE_STORAGE_KEY =
+  "iaura.voice.enabled";
+const VOICE_MODE_EVENT =
+  "iaura:voice-mode-change";
+
+function getVoiceModeSnapshot(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  try {
+    return (
+      window.localStorage.getItem(
+        VOICE_MODE_STORAGE_KEY
+      ) !== "false"
+    );
+  } catch {
+    return true;
+  }
+}
+
+function getVoiceModeServerSnapshot(): boolean {
+  return true;
+}
+
+function subscribeToVoiceMode(
+  onStoreChange: () => void
+): () => void {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const handleStorage = (
+    event: StorageEvent
+  ) => {
+    if (
+      event.key === null ||
+      event.key === VOICE_MODE_STORAGE_KEY
+    ) {
+      onStoreChange();
+    }
+  };
+
+  window.addEventListener(
+    "storage",
+    handleStorage
+  );
+  window.addEventListener(
+    VOICE_MODE_EVENT,
+    onStoreChange
+  );
+
+  return () => {
+    window.removeEventListener(
+      "storage",
+      handleStorage
+    );
+    window.removeEventListener(
+      VOICE_MODE_EVENT,
+      onStoreChange
+    );
+  };
+}
 
 function chooseRecordingMimeType(): string {
   if (typeof MediaRecorder === "undefined") {
@@ -112,8 +176,11 @@ export function useVoice() {
     useState<VoiceState>("idle");
   const [transcript, setTranscript] =
     useState("");
-  const [voiceMode, setVoiceMode] =
-    useState(false);
+  const voiceMode = useSyncExternalStore(
+    subscribeToVoiceMode,
+    getVoiceModeSnapshot,
+    getVoiceModeServerSnapshot
+  );
   const [language, setLanguageState] =
     useState<SupportedLocale>(
       DEFAULT_LOCALE
@@ -136,6 +203,33 @@ export function useVoice() {
   const chunksRef = useRef<Blob[]>([]);
   const recordingTimerRef =
     useRef<number | null>(null);
+
+  const setVoiceMode = useCallback(
+    (enabled: boolean) => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      try {
+        window.localStorage.setItem(
+          VOICE_MODE_STORAGE_KEY,
+          String(enabled)
+        );
+      } catch {
+        // Voice still works when storage is unavailable.
+      }
+
+      window.dispatchEvent(
+        new Event(VOICE_MODE_EVENT)
+      );
+
+      if (!enabled) {
+        voiceEngine.stop();
+        setState("idle");
+      }
+    },
+    []
+  );
 
   const releaseRecording = useCallback(() => {
     if (recordingTimerRef.current !== null) {
@@ -230,7 +324,7 @@ export function useVoice() {
         setState("idle");
       }
     },
-    [language]
+    [language, setVoiceMode]
   );
 
   useEffect(() => {
@@ -459,6 +553,7 @@ export function useVoice() {
       }
     }, [
       releaseRecording,
+      setVoiceMode,
       transcribeAudio,
     ]);
 
@@ -497,7 +592,11 @@ export function useVoice() {
 
       setVoiceError("unavailable");
     },
-    [captureMode, startMediaRecording]
+    [
+      captureMode,
+      setVoiceMode,
+      startMediaRecording,
+    ]
   );
 
   const stopListening = useCallback(() => {
@@ -528,6 +627,10 @@ export function useVoice() {
   }, []);
 
   async function speak(text: string) {
+    if (!getVoiceModeSnapshot()) {
+      return;
+    }
+
     const voiceText = text
       .replaceAll("I.A.U.R.A", "Aura")
       .replaceAll("IAURA", "Aura");
@@ -554,6 +657,7 @@ export function useVoice() {
     state,
     transcript,
     voiceMode,
+    setVoiceMode,
     language,
     captureMode,
     voiceError,
