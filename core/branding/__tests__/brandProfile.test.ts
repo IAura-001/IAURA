@@ -39,6 +39,40 @@ describe("brand profile", () => {
       "Human-centered intelligence."
     );
     expect(profile.palette.primary).toBe("#7C3AED");
+    expect(profile.logo).toEqual({
+      symbol: "spark",
+      container: "squircle",
+      weight: "regular",
+    });
+  });
+
+  it("migrates a saved identity that predates the logo system", () => {
+    const legacyProject = {
+      ...project,
+      branding: {
+        brandName: "IAURA",
+        slogan: "Build beyond.",
+        mission: "Create useful intelligence.",
+        personality: ["futuristic" as const],
+        typography: "modern" as const,
+        palette: {
+          primary: "#111111",
+          secondary: "#222222",
+          accent: "#333333",
+          background: "#000000",
+          text: "#FFFFFF",
+        },
+        updatedAt: "2026-07-31T01:00:00.000Z",
+      },
+    } as IAuraProject;
+
+    const profile = createBrandProfile(legacyProject, {
+      slogan: "Fallback",
+      mission: "Fallback",
+    });
+
+    expect(profile.logo.symbol).toBe("spark");
+    expect(profile.palette.primary).toBe("#111111");
   });
 
   it("normalizes short and long hexadecimal colors", () => {

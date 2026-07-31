@@ -1,12 +1,19 @@
 "use client";
 
 import { useI18n } from "@/core/i18n/I18nContext";
+import { BrandMark } from "@/components/branding/BrandMark";
+import type {
+  BrandLogoSystem,
+  BrandPalette,
+} from "@/types/project";
 
 interface BrandIdentityCardProps {
   name: string;
   slogan: string;
   mission: string;
   colors: string[];
+  logo: BrandLogoSystem;
+  palette: BrandPalette;
   font: string;
   onContinue: () => void;
 }
@@ -16,6 +23,8 @@ export function BrandIdentityCard({
   slogan,
   mission,
   colors,
+  logo,
+  palette,
   font,
   onContinue,
 }: BrandIdentityCardProps) {
@@ -30,14 +39,23 @@ export function BrandIdentityCard({
     >
       <div className="relative space-y-6">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-purple-300/70">
-              {t("branding.eyebrow")}
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-              {name}
-            </h2>
-            <p className="mt-1 text-sm text-zinc-400">{slogan}</p>
+          <div className="flex min-w-0 items-start gap-4">
+            <BrandMark
+              brandName={name}
+              logo={logo}
+              palette={palette}
+              size={52}
+              label={`${name} ${t("branding.logoTitle")}`}
+            />
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-purple-300/70">
+                {t("branding.eyebrow")}
+              </p>
+              <h2 className="mt-2 truncate text-2xl font-semibold tracking-tight text-white">
+                {name}
+              </h2>
+              <p className="mt-1 text-sm text-zinc-400">{slogan}</p>
+            </div>
           </div>
 
           <div className="flex -space-x-2" aria-label={t("brand.identityColorsLabel")}>

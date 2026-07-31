@@ -1,8 +1,15 @@
 import type {
+  BrandLogoSystem,
   BrandPalette,
   BrandProfile,
   IAuraProject,
 } from "@/types/project";
+
+export const DEFAULT_BRAND_LOGO: BrandLogoSystem = {
+  symbol: "spark",
+  container: "squircle",
+  weight: "regular",
+};
 
 export interface BrandPalettePreset {
   id: "aura" | "celestial" | "obsidian" | "solar";
@@ -85,8 +92,7 @@ export function createBrandProfile(
     mission: string;
   }
 ): BrandProfile {
-  return (
-    project.branding ?? {
+  const baseProfile: BrandProfile = {
       brandName: project.name,
       slogan: defaults.slogan,
       mission:
@@ -101,7 +107,25 @@ export function createBrandProfile(
       palette: {
         ...BRAND_PALETTE_PRESETS[0].palette,
       },
+      logo: { ...DEFAULT_BRAND_LOGO },
       updatedAt: project.updatedAt,
-    }
-  );
+    };
+
+  if (!project.branding) {
+    return baseProfile;
+  }
+
+  return {
+    ...baseProfile,
+    ...project.branding,
+    personality: [...project.branding.personality],
+    palette: {
+      ...baseProfile.palette,
+      ...project.branding.palette,
+    },
+    logo: {
+      ...DEFAULT_BRAND_LOGO,
+      ...project.branding.logo,
+    },
+  };
 }

@@ -11,11 +11,16 @@ import {
   createBrandProfile,
   normalizeBrandColor,
 } from "@/core/branding/brandProfile";
+import { BrandMark } from "@/components/branding/BrandMark";
 import { useI18n } from "@/core/i18n/I18nContext";
 import type {
+  BrandIconContainer,
+  BrandLogoSystem,
   BrandPalette,
   BrandPersonality,
   BrandProfile,
+  BrandSymbol,
+  BrandSymbolWeight,
   BrandTypography,
   IAuraProject,
 } from "@/types/project";
@@ -77,6 +82,44 @@ const TYPOGRAPHY_CLASS: Record<BrandTypography, string> = {
   editorial: "font-serif tracking-normal",
   technical: "font-mono tracking-tight",
 };
+
+const SYMBOL_OPTIONS: readonly {
+  id: BrandSymbol;
+  key:
+    | "branding.logo.symbol.spark"
+    | "branding.logo.symbol.orbit"
+    | "branding.logo.symbol.monogram"
+    | "branding.logo.symbol.portal";
+}[] = [
+  { id: "spark", key: "branding.logo.symbol.spark" },
+  { id: "orbit", key: "branding.logo.symbol.orbit" },
+  { id: "monogram", key: "branding.logo.symbol.monogram" },
+  { id: "portal", key: "branding.logo.symbol.portal" },
+] as const;
+
+const CONTAINER_OPTIONS: readonly {
+  id: BrandIconContainer;
+  key:
+    | "branding.logo.container.squircle"
+    | "branding.logo.container.circle"
+    | "branding.logo.container.none";
+}[] = [
+  { id: "squircle", key: "branding.logo.container.squircle" },
+  { id: "circle", key: "branding.logo.container.circle" },
+  { id: "none", key: "branding.logo.container.none" },
+] as const;
+
+const WEIGHT_OPTIONS: readonly {
+  id: BrandSymbolWeight;
+  key:
+    | "branding.logo.weight.light"
+    | "branding.logo.weight.regular"
+    | "branding.logo.weight.bold";
+}[] = [
+  { id: "light", key: "branding.logo.weight.light" },
+  { id: "regular", key: "branding.logo.weight.regular" },
+  { id: "bold", key: "branding.logo.weight.bold" },
+] as const;
 
 export default function BrandingStudio({
   project,
@@ -145,6 +188,20 @@ export default function BrandingStudio({
       ...current,
       palette: {
         ...current.palette,
+        [field]: value,
+      },
+    }));
+    markEditing();
+  }
+
+  function updateLogo<Field extends keyof BrandLogoSystem>(
+    field: Field,
+    value: BrandLogoSystem[Field]
+  ) {
+    setProfile((current) => ({
+      ...current,
+      logo: {
+        ...current.logo,
         [field]: value,
       },
     }));
@@ -469,6 +526,110 @@ export default function BrandingStudio({
                 ))}
               </div>
             </section>
+
+            <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.035] p-5 sm:p-7">
+              <div className="mb-6">
+                <p className="text-xs uppercase tracking-[0.24em] text-fuchsia-300/80">
+                  03 · {t("branding.logoTitle")}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-white/45">
+                  {t("branding.logoHint")}
+                </p>
+              </div>
+
+              <div>
+                <span className="mb-3 block text-sm text-white/60">
+                  {t("branding.logoSymbolLabel")}
+                </span>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {SYMBOL_OPTIONS.map((option) => {
+                    const selected = profile.logo.symbol === option.id;
+                    const previewLogo = {
+                      ...profile.logo,
+                      symbol: option.id,
+                    };
+
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => updateLogo("symbol", option.id)}
+                        className={`flex min-w-0 flex-col items-center gap-3 rounded-2xl border px-3 py-4 text-xs transition ${
+                          selected
+                            ? "border-fuchsia-400/70 bg-fuchsia-500/15 text-fuchsia-100"
+                            : "border-white/10 bg-black/20 text-white/45 hover:border-white/25 hover:text-white/80"
+                        }`}
+                      >
+                        <BrandMark
+                          brandName={profile.brandName || project.name}
+                          logo={previewLogo}
+                          palette={profile.palette}
+                          size={48}
+                        />
+                        <span className="truncate">{t(option.key)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                <div>
+                  <span className="mb-3 block text-sm text-white/60">
+                    {t("branding.logoContainerLabel")}
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {CONTAINER_OPTIONS.map((option) => {
+                      const selected = profile.logo.container === option.id;
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => updateLogo("container", option.id)}
+                          className={`rounded-xl border px-2 py-2.5 text-xs transition ${
+                            selected
+                              ? "border-blue-400/70 bg-blue-500/15 text-blue-100"
+                              : "border-white/10 bg-black/20 text-white/40 hover:text-white/75"
+                          }`}
+                        >
+                          {t(option.key)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="mb-3 block text-sm text-white/60">
+                    {t("branding.logoWeightLabel")}
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {WEIGHT_OPTIONS.map((option) => {
+                      const selected = profile.logo.weight === option.id;
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => updateLogo("weight", option.id)}
+                          className={`rounded-xl border px-2 py-2.5 text-xs transition ${
+                            selected
+                              ? "border-purple-400/70 bg-purple-500/15 text-purple-100"
+                              : "border-white/10 bg-black/20 text-white/40 hover:text-white/75"
+                          }`}
+                        >
+                          {t(option.key)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
 
           <aside className="lg:sticky lg:top-8 lg:self-start">
@@ -514,16 +675,13 @@ export default function BrandingStudio({
                   </div>
 
                   <div className="my-auto py-12">
-                    <div
-                      className="mb-7 grid h-16 w-16 place-items-center rounded-[1.35rem] border text-3xl shadow-2xl"
-                      style={{
-                        borderColor: `${profile.palette.text}22`,
-                        backgroundColor: `${profile.palette.text}0E`,
-                        color: profile.palette.accent,
-                      }}
-                    >
-                      ✦
-                    </div>
+                    <BrandMark
+                      brandName={profile.brandName || project.name}
+                      logo={profile.logo}
+                      palette={profile.palette}
+                      size={72}
+                      className="mb-7"
+                    />
                     <h2
                       className={`break-words text-4xl font-semibold sm:text-5xl ${TYPOGRAPHY_CLASS[profile.typography]}`}
                     >
@@ -562,6 +720,52 @@ export default function BrandingStudio({
                     >
                       {t("branding.previewCta")} →
                     </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
+                <p className="mb-4 text-[0.62rem] uppercase tracking-[0.24em] text-white/35">
+                  {t("branding.logoUsageTitle")}
+                </p>
+                <div className="grid grid-cols-[auto_auto_1fr] items-end gap-4">
+                  <div className="text-center">
+                    <BrandMark
+                      brandName={profile.brandName || project.name}
+                      logo={profile.logo}
+                      palette={profile.palette}
+                      size={56}
+                    />
+                    <span className="mt-2 block text-[0.6rem] text-white/35">
+                      {t("branding.logoAppIcon")}
+                    </span>
+                  </div>
+                  <div className="text-center">
+                    <BrandMark
+                      brandName={profile.brandName || project.name}
+                      logo={profile.logo}
+                      palette={profile.palette}
+                      size={34}
+                    />
+                    <span className="mt-2 block text-[0.6rem] text-white/35">
+                      {t("branding.logoFavicon")}
+                    </span>
+                  </div>
+                  <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                    <div className="flex items-center gap-2.5">
+                      <BrandMark
+                        brandName={profile.brandName || project.name}
+                        logo={{ ...profile.logo, container: "none" }}
+                        palette={profile.palette}
+                        size={30}
+                      />
+                      <span className={`truncate text-sm font-semibold ${TYPOGRAPHY_CLASS[profile.typography]}`}>
+                        {profile.brandName || project.name}
+                      </span>
+                    </div>
+                    <span className="mt-2 block text-[0.6rem] text-white/35">
+                      {t("branding.logoWordmark")}
+                    </span>
                   </div>
                 </div>
               </div>

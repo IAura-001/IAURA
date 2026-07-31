@@ -10,6 +10,10 @@ import type { ChatMessage } from "@/types/chat";
 import type { IAuraProject } from "@/types/project";
 import { BrandIdentityCard } from "../cards/BrandIdentityCard";
 import { useI18n } from "@/core/i18n/I18nContext";
+import {
+  BRAND_PALETTE_PRESETS,
+  DEFAULT_BRAND_LOGO,
+} from "@/core/branding/brandProfile";
 
 interface ConversationProps {
   messages: ChatMessage[];
@@ -237,6 +241,10 @@ export function Conversation({
                   branding.palette.accent,
                 ]
               : ["#2563EB", "#7C3AED", "#0F172A"]
+          }
+          logo={branding?.logo || DEFAULT_BRAND_LOGO}
+          palette={
+            branding?.palette || BRAND_PALETTE_PRESETS[0].palette
           }
           font={
             branding

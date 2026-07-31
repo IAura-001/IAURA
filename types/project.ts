@@ -25,6 +25,28 @@ export type BrandTypography =
   | "editorial"
   | "technical";
 
+export type BrandSymbol =
+  | "spark"
+  | "orbit"
+  | "monogram"
+  | "portal";
+
+export type BrandIconContainer =
+  | "squircle"
+  | "circle"
+  | "none";
+
+export type BrandSymbolWeight =
+  | "light"
+  | "regular"
+  | "bold";
+
+export interface BrandLogoSystem {
+  symbol: BrandSymbol;
+  container: BrandIconContainer;
+  weight: BrandSymbolWeight;
+}
+
 export interface BrandPalette {
   primary: string;
   secondary: string;
@@ -40,6 +62,7 @@ export interface BrandProfile {
   personality: BrandPersonality[];
   typography: BrandTypography;
   palette: BrandPalette;
+  logo: BrandLogoSystem;
   updatedAt: string;
 }
 
