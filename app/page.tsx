@@ -22,6 +22,7 @@ import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
 import dynamic from "next/dynamic";
 import type { ChatMessage } from "@/types/chat";
+import type { BrandProfile } from "@/types/project";
 import ProjectCard from "@/components/sections/ProjectCard";
 import {
   useCallback,
@@ -145,6 +146,21 @@ useEffect(() => {
 ]);
 
 const activeProject = memory.activeProject;
+
+const handleSaveBranding = useCallback(
+  (branding: BrandProfile) => {
+    if (!memory.activeProject) return;
+
+    updateMemory({
+      activeProject: {
+        ...memory.activeProject,
+        branding,
+        updatedAt: branding.updatedAt,
+      },
+    });
+  },
+  [memory.activeProject, updateMemory]
+);
 const activeMode =
   MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
 
@@ -475,7 +491,12 @@ return (
     setOpenStudio(studio);
   }}
 />{activeProject && openStudio === "branding" && (
-  <BrandingStudio project={activeProject} />
+  <BrandingStudio
+    key={activeProject.id}
+    project={activeProject}
+    onSave={handleSaveBranding}
+    onClose={() => setOpenStudio(null)}
+  />
 )}
   </div>
 )}

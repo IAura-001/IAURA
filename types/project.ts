@@ -12,6 +12,37 @@ export interface ProjectStudios {
   documents: boolean;
 }
 
+export type BrandPersonality =
+  | "futuristic"
+  | "human"
+  | "premium"
+  | "bold"
+  | "serene"
+  | "playful";
+
+export type BrandTypography =
+  | "modern"
+  | "editorial"
+  | "technical";
+
+export interface BrandPalette {
+  primary: string;
+  secondary: string;
+  accent: string;
+  background: string;
+  text: string;
+}
+
+export interface BrandProfile {
+  brandName: string;
+  slogan: string;
+  mission: string;
+  personality: BrandPersonality[];
+  typography: BrandTypography;
+  palette: BrandPalette;
+  updatedAt: string;
+}
+
 export interface IAuraProject {
   id: string;
   name: string;
@@ -21,4 +52,5 @@ export interface IAuraProject {
   updatedAt: string;
   status: ProjectStatus;
   studios: ProjectStudios;
+  branding?: BrandProfile;
 }
