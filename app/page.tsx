@@ -95,7 +95,8 @@ const {
   setVoiceMode,
   setLanguage,
   startListening,
-  cancelListening,
+  startContinuousListening,
+  stopContinuousListening,
   stopSpeaking,
   unlockAudio,
 } = useVoiceContext();  
@@ -239,9 +240,9 @@ const stopAuraLive = useCallback(() => {
     auraLiveRestartTimerRef.current = null;
   }
 
-  cancelListening();
+  stopContinuousListening();
   stopSpeaking();
-}, [cancelListening, stopSpeaking]);
+}, [stopContinuousListening, stopSpeaking]);
 
 const scheduleAuraLiveListening =
   useCallback(() => {
@@ -283,11 +284,11 @@ const toggleAuraLive = useCallback(() => {
   setIsAuraLive(true);
   setVoiceMode(true);
   void unlockAudio();
-  void startListening();
+  void startContinuousListening();
 }, [
   isSending,
   setVoiceMode,
-  startListening,
+  startContinuousListening,
   stopAuraLive,
   unlockAudio,
 ]);

@@ -207,6 +207,8 @@ export function useVoice() {
   const chunksRef = useRef<Blob[]>([]);
   const discardRecordingRef =
     useRef(false);
+  const continuousListeningRef =
+    useRef(false);
   const recordingTimerRef =
     useRef<number | null>(null);
   const voiceActivityTimerRef =
@@ -268,7 +270,9 @@ export function useVoice() {
       }
     }, []);
 
-  const releaseRecording = useCallback(() => {
+  const releaseRecording = useCallback((
+    keepStream = false
+  ) => {
     if (recordingTimerRef.current !== null) {
       window.clearTimeout(
         recordingTimerRef.current
@@ -278,10 +282,13 @@ export function useVoice() {
 
     releaseVoiceActivity();
 
-    streamRef.current
-      ?.getTracks()
-      .forEach((track) => track.stop());
-    streamRef.current = null;
+    if (!keepStream) {
+      streamRef.current
+        ?.getTracks()
+        .forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
     recorderRef.current = null;
     chunksRef.current = [];
   }, [releaseVoiceActivity]);
@@ -627,16 +634,27 @@ export function useVoice() {
       }
 
       try {
+        releaseRecording(true);
+
+        const reusableStream =
+          streamRef.current;
+        const hasLiveAudioTrack =
+          reusableStream?.getAudioTracks().some(
+            (track) =>
+              track.readyState === "live"
+          ) ?? false;
         const stream =
-          await navigator.mediaDevices.getUserMedia(
-            {
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-              },
-            }
-          );
+          hasLiveAudioTrack && reusableStream
+          ? reusableStream
+          : await navigator.mediaDevices.getUserMedia(
+              {
+                audio: {
+                  echoCancellation: true,
+                  noiseSuppression: true,
+                  autoGainControl: true,
+                },
+              }
+            );
         const mimeType =
           chooseRecordingMimeType();
         const recorder = mimeType
@@ -645,7 +663,6 @@ export function useVoice() {
             })
           : new MediaRecorder(stream);
 
-        releaseRecording();
         streamRef.current = stream;
         recorderRef.current = recorder;
         chunksRef.current = [];
@@ -661,6 +678,8 @@ export function useVoice() {
         };
 
         recorder.onerror = () => {
+          continuousListeningRef.current =
+            false;
           setVoiceError(
             "transcription-failed"
           );
@@ -672,7 +691,7 @@ export function useVoice() {
           if (discardRecordingRef.current) {
             discardRecordingRef.current =
               false;
-            releaseRecording();
+            releaseRecording(false);
             setState("idle");
             return;
           }
@@ -687,7 +706,9 @@ export function useVoice() {
             }
           );
 
-          releaseRecording();
+          releaseRecording(
+            continuousListeningRef.current
+          );
           void transcribeAudio(audio);
         };
 
@@ -711,6 +732,8 @@ export function useVoice() {
             }
           }, MAX_RECORDING_MS);
       } catch (error) {
+        continuousListeningRef.current =
+          false;
         console.error(
           "IAURA microphone access failed:",
           error
@@ -719,7 +742,7 @@ export function useVoice() {
           "permission-denied"
         );
         setState("idle");
-        releaseRecording();
+        releaseRecording(false);
       }
     }, [
       releaseRecording,
@@ -783,7 +806,33 @@ export function useVoice() {
     recognitionRef.current?.stop();
   }, []);
 
+  const startContinuousListening =
+    useCallback(async () => {
+      continuousListeningRef.current = true;
+      await startListening();
+    }, [startListening]);
+
+  const stopContinuousListening =
+    useCallback(() => {
+      continuousListeningRef.current = false;
+
+      if (
+        recorderRef.current?.state ===
+        "recording"
+      ) {
+        discardRecordingRef.current = true;
+        recorderRef.current.stop();
+        return;
+      }
+
+      recognitionRef.current?.abort();
+      releaseRecording(false);
+      setState("idle");
+    }, [releaseRecording]);
+
   const cancelListening = useCallback(() => {
+    continuousListeningRef.current = false;
+
     if (
       recorderRef.current?.state ===
       "recording"
@@ -794,8 +843,9 @@ export function useVoice() {
     }
 
     recognitionRef.current?.abort();
+    releaseRecording(false);
     setState("idle");
-  }, []);
+  }, [releaseRecording]);
 
   const transcribeAudioFile = useCallback(
     async (file: File) => {
@@ -853,7 +903,9 @@ export function useVoice() {
     voiceError,
     setLanguage,
     startListening,
+    startContinuousListening,
     stopListening,
+    stopContinuousListening,
     cancelListening,
     transcribeAudioFile,
     clearTranscript,
