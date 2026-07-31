@@ -215,6 +215,8 @@ export function useVoice() {
     useRef<number | null>(null);
   const audioContextRef =
     useRef<AudioContext | null>(null);
+  const audioAnalyserRef =
+    useRef<AnalyserNode | null>(null);
   const audioSourceRef =
     useRef<MediaStreamAudioSourceNode | null>(
       null
@@ -250,7 +252,7 @@ export function useVoice() {
   );
 
   const releaseVoiceActivity =
-    useCallback(() => {
+    useCallback((keepContext = false) => {
       if (
         voiceActivityTimerRef.current !==
         null
@@ -261,8 +263,13 @@ export function useVoice() {
         voiceActivityTimerRef.current = null;
       }
 
+      if (keepContext) {
+        return;
+      }
+
       audioSourceRef.current?.disconnect();
       audioSourceRef.current = null;
+      audioAnalyserRef.current = null;
 
       if (audioContextRef.current) {
         void audioContextRef.current.close();
@@ -280,7 +287,7 @@ export function useVoice() {
       recordingTimerRef.current = null;
     }
 
-    releaseVoiceActivity();
+    releaseVoiceActivity(keepStream);
 
     if (!keepStream) {
       streamRef.current
@@ -310,10 +317,37 @@ export function useVoice() {
         }
 
         try {
-          releaseVoiceActivity();
+          releaseVoiceActivity(true);
 
-          const audioContext =
-            new AudioContextConstructor();
+          let audioContext =
+            audioContextRef.current;
+          let analyser =
+            audioAnalyserRef.current;
+
+          if (
+            !audioContext ||
+            audioContext.state === "closed" ||
+            !analyser
+          ) {
+            audioContext =
+              new AudioContextConstructor();
+            analyser =
+              audioContext.createAnalyser();
+            const source =
+              audioContext.createMediaStreamSource(
+                stream
+              );
+
+            analyser.fftSize = 1024;
+            analyser.smoothingTimeConstant =
+              0.35;
+            source.connect(analyser);
+
+            audioContextRef.current =
+              audioContext;
+            audioAnalyserRef.current = analyser;
+            audioSourceRef.current = source;
+          }
 
           if (
             audioContext.state ===
@@ -321,16 +355,6 @@ export function useVoice() {
           ) {
             void audioContext.resume();
           }
-
-          const analyser =
-            audioContext.createAnalyser();
-          const source =
-            audioContext.createMediaStreamSource(
-              stream
-            );
-
-          analyser.fftSize = 1024;
-          analyser.smoothingTimeConstant = 0.35;
 
           const samples = new Float32Array(
             analyser.fftSize
@@ -340,12 +364,6 @@ export function useVoice() {
           let heardVoice = false;
           let lastVoiceAt =
             recordingStartedAt;
-
-          source.connect(analyser);
-
-          audioContextRef.current =
-            audioContext;
-          audioSourceRef.current = source;
 
           voiceActivityTimerRef.current =
             window.setInterval(() => {
@@ -405,7 +423,7 @@ export function useVoice() {
             "IAURA voice activity detection unavailable:",
             error
           );
-          releaseVoiceActivity();
+          releaseVoiceActivity(false);
         }
       },
       [releaseVoiceActivity]
