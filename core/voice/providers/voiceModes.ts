@@ -78,3 +78,16 @@ export const auraVoiceModes: Record<
     expressiveness: 0.9,
   },
 };
+
+export function normalizeAuraVoiceMode(
+  value: unknown
+): AuraVoiceMode {
+  if (
+    typeof value === "string" &&
+    value in auraVoiceModes
+  ) {
+    return value as AuraVoiceMode;
+  }
+
+  return "companion";
+}

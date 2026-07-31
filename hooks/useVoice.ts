@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { voiceEngine } from "@/core/voice/voiceEngine";
+import {
+  DEFAULT_LOCALE,
+  normalizeLocale,
+  type SupportedLocale,
+} from "@/core/i18n/languages";
 
 export type VoiceState =
   | "idle"
@@ -52,6 +62,8 @@ export function useVoice() {
     useState<VoiceState>("idle");
   const [transcript, setTranscript] = useState("");
   const [voiceMode, setVoiceMode] = useState(false);
+  const [language, setLanguageState] =
+    useState<SupportedLocale>(DEFAULT_LOCALE);
 
   const recognitionRef =
     useRef<SpeechRecognitionInstance | null>(null);
@@ -67,7 +79,7 @@ export function useVoice() {
 
     const recognition = new SpeechRecognition();
 
-    recognition.lang = "es-419";
+    recognition.lang = language;
     recognition.continuous = false;
     recognition.interimResults = false;
 
@@ -95,10 +107,23 @@ export function useVoice() {
     recognitionRef.current = recognition;
 
     return () => {
+      recognition.onstart = null;
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
       recognition.stop();
       recognitionRef.current = null;
     };
-  }, []);
+  }, [language]);
+
+  const setLanguage = useCallback(
+    (nextLanguage: SupportedLocale) => {
+      setLanguageState(
+        normalizeLocale(nextLanguage)
+      );
+    },
+    []
+  );
 
   function startListening() {
     console.log("VOICE ACTIVATED");
@@ -121,7 +146,8 @@ export function useVoice() {
     try {
       await voiceEngine.speak(
         voiceText,
-        "companion"
+        "companion",
+        language
       );
     } finally {
       setState("idle");
@@ -137,6 +163,8 @@ export function useVoice() {
     state,
     transcript,
     voiceMode,
+    language,
+    setLanguage,
     startListening,
     stopListening,
     speak,

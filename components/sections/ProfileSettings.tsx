@@ -1,17 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import {
+  LANGUAGE_DEFINITIONS,
+  PROFILE_MESSAGES,
+  type SupportedLocale,
+} from "@/core/i18n/languages";
 
 type ProfileSettingsProps = {
   userName: string;
+  preferredLocale: SupportedLocale;
   onSaveName: (name: string) => void;
+  onLanguageChange: (
+    locale: SupportedLocale
+  ) => void;
 };
 
 export default function ProfileSettings({
   userName,
+  preferredLocale,
   onSaveName,
+  onLanguageChange,
 }: ProfileSettingsProps) {
   const [name, setName] = useState(userName);
+  const messages =
+    PROFILE_MESSAGES[preferredLocale];
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,35 +40,72 @@ export default function ProfileSettings({
     <div className="lg:col-span-2">
       <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl">
         <p className="text-xs tracking-[0.25em] text-zinc-500">
-          USER PROFILE
+          {messages.eyebrow}
         </p>
 
         <h2 className="mt-2 text-2xl font-semibold text-white">
-          Personalize IAURA
+          {messages.title}
         </h2>
 
         <p className="mt-2 text-sm text-zinc-400">
-          Choose the name IAURA should use when speaking to you.
+          {messages.description}
         </p>
 
         <form
           onSubmit={handleSubmit}
-          className="mt-6 flex flex-col gap-3 sm:flex-row"
+          className="mt-6 grid gap-4"
         >
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Your name"
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-purple-400/50"
-          />
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              type="text"
+              value={name}
+              onChange={(event) =>
+                setName(event.target.value)
+              }
+              placeholder={messages.namePlaceholder}
+              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-purple-400/50"
+            />
 
-          <button
-            type="submit"
-            className="rounded-xl bg-purple-600 px-5 py-3 font-semibold text-white transition hover:bg-purple-500"
-          >
-            Save Profile
-          </button>
+            <button
+              type="submit"
+              className="rounded-xl bg-purple-600 px-5 py-3 font-semibold text-white transition hover:bg-purple-500"
+            >
+              {messages.save}
+            </button>
+          </div>
+
+          <label className="grid gap-2">
+            <span className="text-sm font-medium text-zinc-200">
+              {messages.languageLabel}
+            </span>
+
+            <select
+              value={preferredLocale}
+              onChange={(event) =>
+                onLanguageChange(
+                  event.target
+                    .value as SupportedLocale
+                )
+              }
+              className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-purple-400/50"
+            >
+              {LANGUAGE_DEFINITIONS.map(
+                (language) => (
+                  <option
+                    key={language.locale}
+                    value={language.locale}
+                    className="bg-zinc-950"
+                  >
+                    {language.nativeName}
+                  </option>
+                )
+              )}
+            </select>
+
+            <span className="text-xs text-zinc-500">
+              {messages.languageHint}
+            </span>
+          </label>
         </form>
       </div>
     </div>

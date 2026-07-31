@@ -13,6 +13,7 @@ import PerformancePanel from "@/components/sections/PerformancePanel";
 import DailyQuote from "@/components/sections/DailyQuote";
 import MissionList from "@/components/sections/MissionList";
 import type { Mission } from "@/types/mission";
+import type { SupportedLocale } from "@/core/i18n/languages";
 
 type PriorityItem = {
   title: string;
@@ -21,8 +22,12 @@ type PriorityItem = {
 
 interface DashboardPanelProps {
   name: string;
+  preferredLocale: SupportedLocale;
   goals: string[];
   onSaveName: (name: string) => void;
+  onLanguageChange: (
+    locale: SupportedLocale
+  ) => void;
   onAddGoal: (goal: string) => void;
   onRemoveGoal: (goalIndex: number) => void;
   habits: string[];
@@ -45,8 +50,10 @@ interface DashboardPanelProps {
 
 export default function DashboardPanel({
   name,
+  preferredLocale,
   goals,
   onSaveName,
+  onLanguageChange,
   onAddGoal,
   onRemoveGoal,
   habits,
@@ -72,7 +79,9 @@ export default function DashboardPanel({
 
       <ProfileSettings
         userName={name}
+        preferredLocale={preferredLocale}
         onSaveName={onSaveName}
+        onLanguageChange={onLanguageChange}
       />
 
       <GoalsManager

@@ -1,5 +1,15 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import {
+  getLanguageDefinition,
+  normalizeLocale,
+  type SupportedLocale,
+} from "@/core/i18n/languages";
+import {
+  auraVoiceModes,
+  normalizeAuraVoiceMode,
+  type AuraVoiceMode,
+} from "@/core/voice/providers/voiceModes";
 
 export const runtime = "nodejs";
 
@@ -48,7 +58,9 @@ async function generateElevenLabsVoice(
 }
 
 async function generateOpenAIFallback(
-  text: string
+  text: string,
+  language: SupportedLocale,
+  mode: AuraVoiceMode
 ): Promise<ArrayBuffer> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -61,13 +73,20 @@ async function generateOpenAIFallback(
   const openai = new OpenAI({
     apiKey,
   });
+  const languageDefinition =
+    getLanguageDefinition(language);
+  const voiceStyle = auraVoiceModes[mode];
 
   const speech = await openai.audio.speech.create({
     model: "gpt-4o-mini-tts-2025-12-15",
     voice: "marin",
     input: text.slice(0, 4096),
-    instructions:
-      "Speak naturally with a warm, calm and clear multilingual female voice.",
+    instructions: [
+      `Speak in ${languageDefinition.englishName}.`,
+      "Use a natural, warm, calm and clear multilingual female voice.",
+      `The delivery should feel ${voiceStyle.emotion}, human and emotionally present.`,
+      "Avoid robotic cadence, exaggerated narration and artificial pauses.",
+    ].join(" "),
     response_format: "mp3",
   });
 
@@ -76,11 +95,24 @@ async function generateOpenAIFallback(
 
 export async function POST(request: Request) {
   try {
-    const { text } = (await request.json()) as {
-      text?: string;
+    const {
+      text,
+      language,
+      mode,
+    } = (await request.json()) as {
+      text?: unknown;
+      language?: unknown;
+      mode?: unknown;
     };
 
-    const normalizedText = text?.trim();
+    const normalizedText =
+      typeof text === "string"
+        ? text.trim()
+        : "";
+    const normalizedLanguage =
+      normalizeLocale(language);
+    const normalizedMode =
+      normalizeAuraVoiceMode(mode);
 
     if (!normalizedText) {
       return NextResponse.json(
@@ -111,7 +143,11 @@ export async function POST(request: Request) {
 
       provider = "openai";
       audioBuffer =
-        await generateOpenAIFallback(safeText);
+        await generateOpenAIFallback(
+          safeText,
+          normalizedLanguage,
+          normalizedMode
+        );
     }
 
     return new Response(audioBuffer, {
@@ -119,6 +155,8 @@ export async function POST(request: Request) {
         "Content-Type": "audio/mpeg",
         "Cache-Control": "no-store",
         "X-Voice-Provider": provider,
+        "X-Voice-Language":
+          normalizedLanguage,
       },
     });
   } catch (error) {

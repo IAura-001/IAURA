@@ -1,9 +1,12 @@
 import type { IAuraProject } from "@/types/project";
+import type { SupportedLocale } from "@/core/i18n/languages";
 
 export interface Memory {
   id: string;
 
   userName: string;
+
+  preferredLocale: SupportedLocale;
 
   goals: string[];
 

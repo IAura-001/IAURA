@@ -1,11 +1,20 @@
 import type { VoiceProvider } from "./BrowserVoice";
+import type { AuraVoiceMode } from "./voiceModes";
+import {
+  DEFAULT_LOCALE,
+  type SupportedLocale,
+} from "@/core/i18n/languages";
 
 export class NeuralVoiceProvider implements VoiceProvider {
   private currentAudio: HTMLAudioElement | null = null;
   private currentAudioUrl: string | null = null;
   private requestController: AbortController | null = null;
 
-  async speak(text: string): Promise<void> {
+  async speak(
+    text: string,
+    mode: AuraVoiceMode = "companion",
+    language: SupportedLocale = DEFAULT_LOCALE
+  ): Promise<void> {
     if (typeof window === "undefined") return;
 
     const normalizedText = text.trim();
@@ -24,6 +33,8 @@ export class NeuralVoiceProvider implements VoiceProvider {
       },
       body: JSON.stringify({
         text: normalizedText,
+        mode,
+        language,
       }),
       signal: controller.signal,
     });

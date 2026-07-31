@@ -56,4 +56,17 @@ describe("PromptBuilder", () => {
       "do not claim that an emitted action has already succeeded"
     );
   });
+
+  it("respects the preferred user language", () => {
+    const prompt = new PromptBuilder().build(
+      input
+    );
+
+    expect(prompt).toContain(
+      "Read the Preferred Language in Relevant User Context."
+    );
+    expect(prompt).toContain(
+      "Respond naturally in that language by default."
+    );
+  });
 });

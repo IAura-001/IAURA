@@ -8,6 +8,7 @@ import {
 import { rewardXP } from "@/utils/xp";
 import { completeMission } from "@/utils/mission";
 import { DEFAULT_MEMORY } from "@/constants/memory";
+import { normalizeLocale } from "@/core/i18n/languages";
 import type { Memory } from "@/types/memory";
 
 
@@ -29,6 +30,9 @@ function loadStoredMemory(): Memory {
     return {
       ...DEFAULT_MEMORY,
       ...parsedMemory,
+      preferredLocale: normalizeLocale(
+        parsedMemory.preferredLocale
+      ),
       goals: Array.isArray(parsedMemory.goals)
         ? parsedMemory.goals
         : [],

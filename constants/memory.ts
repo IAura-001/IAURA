@@ -1,9 +1,12 @@
 import type { Memory } from "@/types/memory";
+import { DEFAULT_LOCALE } from "@/core/i18n/languages";
 
 export const DEFAULT_MEMORY: Memory = {
   id: "default",
 
   userName: "Diego",
+
+  preferredLocale: DEFAULT_LOCALE,
 
   goals: [],
 

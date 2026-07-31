@@ -1,6 +1,7 @@
 import { voiceConfig } from "./voiceConfig";
 import { NeuralVoiceProvider } from "./providers/NeuralVoice";
 import type { AuraVoiceMode } from "./providers/voiceModes";
+import type { SupportedLocale } from "@/core/i18n/languages";
 
 import {
   BrowserVoiceProvider,
@@ -13,7 +14,11 @@ const CURRENT_VOICE_MODE: VoiceProviderMode =
   voiceConfig.provider === "neural" ? "neural" : "browser";
 
 export interface VoiceEngine {
-  speak(text: string, mode?: AuraVoiceMode): Promise<void>;
+  speak(
+    text: string,
+    mode?: AuraVoiceMode,
+    language?: SupportedLocale
+  ): Promise<void>;
   stop(): void;
 }
 
@@ -34,9 +39,14 @@ class IAURAVoiceEngine implements VoiceEngine {
 
   async speak(
     text: string,
-    mode?: AuraVoiceMode
+    mode?: AuraVoiceMode,
+    language?: SupportedLocale
   ): Promise<void> {
-    return this.provider.speak(text, mode);
+    return this.provider.speak(
+      text,
+      mode,
+      language
+    );
   }
 
   stop(): void {

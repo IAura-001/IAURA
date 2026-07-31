@@ -1,10 +1,15 @@
 import type { AuraVoiceMode } from "./voiceModes";
 import { auraVoiceModes } from "./voiceModes";
+import {
+  DEFAULT_LOCALE,
+  type SupportedLocale,
+} from "@/core/i18n/languages";
 
 export interface VoiceProvider {
   speak(
     text: string,
-    mode?: AuraVoiceMode
+    mode?: AuraVoiceMode,
+    language?: SupportedLocale
   ): Promise<void>;
 
   stop(): void;
@@ -12,45 +17,70 @@ export interface VoiceProvider {
 
 export class BrowserVoiceProvider implements VoiceProvider {
   async speak(
-  text: string,
-  mode?: AuraVoiceMode
-): Promise<void> {
+    text: string,
+    mode?: AuraVoiceMode,
+    language: SupportedLocale = DEFAULT_LOCALE
+  ): Promise<void> {
     if (typeof window === "undefined") return;
 
     const utterance =
       new SpeechSynthesisUtterance(text);
-      const voices = window.speechSynthesis.getVoices();
-      console.table(
-  voices.map((voice) => ({
-    name: voice.name,
-    lang: voice.lang
-  }))
-);
+    const voices =
+      window.speechSynthesis.getVoices();
+    const normalizedLanguage =
+      language.toLowerCase();
+    const languageCode =
+      normalizedLanguage.split("-")[0];
 
-const femaleVoice =
-  voices.find((voice) =>
-    voice.lang.startsWith("es") &&
-    voice.name.toLowerCase().includes("female")
-  ) ||
-  voices.find((voice) =>
-    voice.lang.startsWith("es")
-  );
+    const matchingVoice =
+      voices.find(
+        (voice) =>
+          voice.lang.toLowerCase() ===
+            normalizedLanguage &&
+          voice.name
+            .toLowerCase()
+            .includes("female")
+      ) ??
+      voices.find(
+        (voice) =>
+          voice.lang.toLowerCase() ===
+          normalizedLanguage
+      ) ??
+      voices.find(
+        (voice) =>
+          voice.lang
+            .toLowerCase()
+            .startsWith(languageCode)
+      );
 
-if (femaleVoice) {
-  utterance.voice = femaleVoice;
-}
+    if (matchingVoice) {
+      utterance.voice = matchingVoice;
+    }
 
-    const style =
-  mode
-    ? auraVoiceModes[mode]
-    : auraVoiceModes.future;
+    const style = mode
+      ? auraVoiceModes[mode]
+      : auraVoiceModes.future;
 
-utterance.lang = "es-419";
-utterance.rate = style.pacing;
-utterance.pitch = style.warmth;
-utterance.volume = 1;
+    utterance.lang = language;
+    utterance.rate = style.pacing;
+    utterance.pitch = style.warmth;
+    utterance.volume = 1;
 
-    window.speechSynthesis.speak(utterance);
+    this.stop();
+
+    await new Promise<void>(
+      (resolve, reject) => {
+        utterance.onend = () => resolve();
+        utterance.onerror = () =>
+          reject(
+            new Error(
+              "IAURA could not play the browser voice."
+            )
+          );
+
+        window.speechSynthesis.speak(utterance);
+      }
+    );
   }
 
   stop(): void {

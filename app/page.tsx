@@ -25,6 +25,7 @@ import type { ChatMessage } from "@/types/chat";
 import ProjectCard from "@/components/sections/ProjectCard";
 import {
   useCallback,
+  useEffect,
   useState,
 } from "react";
 
@@ -73,6 +74,7 @@ export default function Home() {
 const {
   speak,
   voiceMode,
+  setLanguage,
 } = useVoiceContext();  
   const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -100,6 +102,19 @@ const {
   memory,
   replaceMemory,
 });
+
+useEffect(() => {
+  if (!isLoaded) return;
+
+  setLanguage(memory.preferredLocale);
+  document.documentElement.lang =
+    memory.preferredLocale;
+}, [
+  isLoaded,
+  memory.preferredLocale,
+  setLanguage,
+]);
+
 const activeProject = memory.activeProject;
 const activeMode =
   MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
@@ -218,7 +233,12 @@ const content = [
     setMessages((prev) => [...prev, assistantMessage]);
 
 if (voiceMode) {
-  speak(spokenContent);
+  void speak(spokenContent).catch((error) => {
+    console.error(
+      "IAURA voice playback failed:",
+      error
+    );
+  });
 }
   } catch (error) {
   console.error("IAURA conversation failed:", error);
@@ -334,10 +354,16 @@ return (
 />
 <DashboardPanel
   name={memory.userName}
+  preferredLocale={memory.preferredLocale}
   goals={goals}
   onSaveName={(name) =>
     updateMemory({
       userName: name,
+    })
+  }
+  onLanguageChange={(preferredLocale) =>
+    updateMemory({
+      preferredLocale,
     })
   }
   onAddGoal={handleAddGoal}
