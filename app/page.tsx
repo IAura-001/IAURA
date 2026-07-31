@@ -250,19 +250,17 @@ if (voiceMode) {
   speak(content);
 }
   } catch (error) {
-    const errorMessage: ChatMessage = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`  ,
-      role: "assistant",
-      content:
-        error instanceof Error
-          ? `No pude completar la solicitud: ${error.message}`
-          : "No pude completar la solicitud.",
-    };
+  console.error("IAURA conversation failed:", error);
 
-    setMessages((prev) => [...prev, errorMessage]);
-    if (voiceMode) {
-  speak(errorMessage.content);
-}
+  const errorMessage: ChatMessage = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    role: "assistant",
+    content:
+      "No pude completar la solicitud en este momento. Inténtalo nuevamente.",
+  };
+
+  setMessages((prev) => [...prev, errorMessage]);
+
   } finally {
   performanceMonitor.recordResponse(
     performance.now() - responseStartedAt

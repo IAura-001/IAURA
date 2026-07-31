@@ -47,21 +47,20 @@ export async function POST(
     return NextResponse.json(result);
   } catch (error) {
     console.error(
-      "IAURA provider error:",
-      error
-    );
-
-    const message =
+      "IAURA provider request failed:",
       error instanceof Error
-        ? error.message
-        : "Unknown provider error.";
+        ? error.name
+        : "UnknownError"
+    );
 
     return NextResponse.json(
       {
-        error: message,
+        error:
+          "IAURA could not generate a response at this time.",
+        code: "IAURA_PROVIDER_ERROR",
       },
       {
-        status: 500,
+        status: 502,
       }
     );
   }

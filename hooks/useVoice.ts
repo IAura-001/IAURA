@@ -9,25 +9,65 @@ export type VoiceState =
   | "processing"
   | "speaking";
 
+interface SpeechRecognitionAlternative {
+  transcript: string;
+}
+
+interface SpeechRecognitionResult {
+  readonly [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionResultList {
+  readonly [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionInstance {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onstart: (() => void) | null;
+  onresult:
+    | ((event: SpeechRecognitionEvent) => void)
+    | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+type SpeechRecognitionConstructor =
+  new () => SpeechRecognitionInstance;
+
+interface VoiceWindow extends Window {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+}
+
 export function useVoice() {
-  const [state, setState] = useState<VoiceState>("idle");
+  const [state, setState] =
+    useState<VoiceState>("idle");
   const [transcript, setTranscript] = useState("");
   const [voiceMode, setVoiceMode] = useState(false);
 
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef =
+    useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const voiceWindow = window as VoiceWindow;
 
     const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
+      voiceWindow.SpeechRecognition ??
+      voiceWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognition) return;
 
     const recognition = new SpeechRecognition();
 
-    recognition.lang = "es-ES";
+    recognition.lang = "es-419";
     recognition.continuous = false;
     recognition.interimResults = false;
 
@@ -35,8 +75,10 @@ export function useVoice() {
       setState("listening");
     };
 
-    recognition.onresult = (event: any) => {
-      const text = event.results[0][0].transcript;
+    recognition.onresult = (event) => {
+      const text = event.results[0]?.[0]?.transcript;
+
+      if (!text) return;
 
       setTranscript(text);
       setState("processing");
@@ -51,13 +93,18 @@ export function useVoice() {
     };
 
     recognitionRef.current = recognition;
+
+    return () => {
+      recognition.stop();
+      recognitionRef.current = null;
+    };
   }, []);
 
   function startListening() {
-  console.log("VOICE ACTIVATED");
-  setVoiceMode(true);
-  recognitionRef.current?.start();
-}
+    console.log("VOICE ACTIVATED");
+    setVoiceMode(true);
+    recognitionRef.current?.start();
+  }
 
   function stopListening() {
     recognitionRef.current?.stop();
@@ -65,21 +112,21 @@ export function useVoice() {
   }
 
   async function speak(text: string) {
-  if (typeof window === "undefined") return;
+    const voiceText = text
+      .replaceAll("I.A.U.R.A", "Aura")
+      .replaceAll("IAURA", "Aura");
 
-  const voiceText = text
-    .replaceAll("IAURA", "Aura")
-    .replaceAll("I.A.U.R.A", "Aura");
+    setState("speaking");
 
-  setState("speaking");
-
-  await voiceEngine.speak(
-  voiceText,
-  "companion"
-);
-
-  setState("idle");
-}
+    try {
+      await voiceEngine.speak(
+        voiceText,
+        "companion"
+      );
+    } finally {
+      setState("idle");
+    }
+  }
 
   function stopSpeaking() {
     voiceEngine.stop();

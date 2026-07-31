@@ -1,13 +1,14 @@
 export const voiceConfig = {
-  provider: "neural",
+  provider: "neural" as const,
+
   aura: {
-    language: "es-LATAM",
+    language: "es-419",
     gender: "female",
     style: "futuristic-warm",
     emotion: "friendly",
   },
 
   neural: {
-  enabled: true,
-},
-};
+    enabled: true,
+  },
+} as const;

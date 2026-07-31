@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+
 import DashboardGreeting from "@/components/sections/DashboardGreeting";
 import GoalsManager from "@/components/sections/GoalsManager";
 import ProfileSettings from "@/components/sections/ProfileSettings";
@@ -13,6 +13,7 @@ import PerformancePanel from "@/components/sections/PerformancePanel";
 import DailyQuote from "@/components/sections/DailyQuote";
 import MissionList from "@/components/sections/MissionList";
 import type { Mission } from "@/types/mission";
+
 type PriorityItem = {
   title: string;
   score: number;
@@ -30,16 +31,16 @@ interface DashboardPanelProps {
   priorities: PriorityItem[];
   recommendation: string;
   completedCount: number;
-totalMissions: number;
-experience: number;
-onEarnXP: () => void;
-onResetMemory: () => void;
-messageCount: number;
-goalsCount: number;
-habitsCount: number;
-missions: Mission[];
-completedMissionIds: string[];
-onMissionComplete: (missionId: string) => void;
+  totalMissions: number;
+  experience: number;
+  onEarnXP: () => void;
+  onResetMemory: () => void;
+  messageCount: number;
+  goalsCount: number;
+  habitsCount: number;
+  missions: Mission[];
+  completedMissionIds: string[];
+  onMissionComplete: (missionId: string) => void;
 }
 
 export default function DashboardPanel({
@@ -58,23 +59,13 @@ export default function DashboardPanel({
   experience,
   onEarnXP,
   onResetMemory,
-    messageCount,
+  messageCount,
   goalsCount,
   habitsCount,
   missions,
   completedMissionIds,
   onMissionComplete,
 }: DashboardPanelProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return null;
-  }
-
   return (
     <>
       <DashboardGreeting name={name} />
@@ -89,25 +80,30 @@ export default function DashboardPanel({
         onAddGoal={onAddGoal}
         onRemoveGoal={onRemoveGoal}
       />
+
       <HabitsManager
         habits={habits}
         onAddHabit={onAddHabit}
         onRemoveHabit={onRemoveHabit}
-      /><DailyIntelligence
-  priorities={priorities}
-  recommendation={recommendation}
-/>
+      />
+
+      <DailyIntelligence
+        priorities={priorities}
+        recommendation={recommendation}
+      />
+
       <DailyFocus />
-      
+
       <ProgressSummary
-  completed={completedCount}
-  total={totalMissions}
-/>
-      
+        completed={completedCount}
+        total={totalMissions}
+      />
+
       <LevelProgress
-  experience={experience}
-  onEarnXP={onEarnXP}
-/>
+        experience={experience}
+        onEarnXP={onEarnXP}
+      />
+
       <button
         type="button"
         onClick={onResetMemory}
@@ -115,21 +111,25 @@ export default function DashboardPanel({
       >
         Reset IAURA Memory
       </button>
+
       <StatsGrid
-  completed={completedCount}
-  total={totalMissions}
-/>
+        completed={completedCount}
+        total={totalMissions}
+      />
+
       <PerformancePanel
-  messageCount={messageCount}
-  goalsCount={goalsCount}
-  habitsCount={habitsCount}
-/>
+        messageCount={messageCount}
+        goalsCount={goalsCount}
+        habitsCount={habitsCount}
+      />
+
       <DailyQuote />
+
       <MissionList
-  missions={missions}
-  completedMissionIds={completedMissionIds}
-  onComplete={onMissionComplete}
-/>
+        missions={missions}
+        completedMissionIds={completedMissionIds}
+        onComplete={onMissionComplete}
+      />
     </>
   );
 }

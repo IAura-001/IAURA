@@ -1,27 +1,19 @@
-
 import { voiceConfig } from "./voiceConfig";
+import { NeuralVoiceProvider } from "./providers/NeuralVoice";
+import type { AuraVoiceMode } from "./providers/voiceModes";
+
 import {
   BrowserVoiceProvider,
   type VoiceProvider,
 } from "./providers/BrowserVoice";
 
-import { NeuralVoiceProvider } from "./providers/NeuralVoice";
+type VoiceProviderMode = "browser" | "neural";
 
-type VoiceMode = "browser" | "neural";
-
-const CURRENT_VOICE_MODE: VoiceMode =
-  voiceConfig.provider === "neural"
-    ? "neural"
-    : "browser";
-
-import type { AuraVoiceMode } from "./providers/voiceModes";
+const CURRENT_VOICE_MODE: VoiceProviderMode =
+  voiceConfig.provider === "neural" ? "neural" : "browser";
 
 export interface VoiceEngine {
-  speak(
-    text: string,
-    mode?: AuraVoiceMode
-  ): Promise<void>;
-
+  speak(text: string, mode?: AuraVoiceMode): Promise<void>;
   stop(): void;
 }
 
@@ -29,13 +21,10 @@ class IAURAVoiceEngine implements VoiceEngine {
   private provider: VoiceProvider;
 
   constructor() {
-    this.provider =
-      this.createProvider(CURRENT_VOICE_MODE);
+    this.provider = this.createProvider(CURRENT_VOICE_MODE);
   }
 
-  private createProvider(
-    mode: VoiceMode
-  ): VoiceProvider {
+  private createProvider(mode: VoiceProviderMode): VoiceProvider {
     if (mode === "neural") {
       return new NeuralVoiceProvider();
     }
@@ -44,16 +33,15 @@ class IAURAVoiceEngine implements VoiceEngine {
   }
 
   async speak(
-  text: string,
-  mode: AuraVoiceMode
-): Promise<void> {
-  return this.provider.speak(text, mode);
-}
+    text: string,
+    mode?: AuraVoiceMode
+  ): Promise<void> {
+    return this.provider.speak(text, mode);
+  }
 
   stop(): void {
     this.provider.stop();
   }
 }
 
-export const voiceEngine =
-  new IAURAVoiceEngine();
+export const voiceEngine = new IAURAVoiceEngine();

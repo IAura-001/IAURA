@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+
 import {
   getExperienceProgress,
   getLevelFromExperience,
@@ -12,18 +12,11 @@ type LevelProgressProps = {
 
 export default function LevelProgress({
   experience,
-  onEarnXP, 
+  onEarnXP,
 }: LevelProgressProps) {
-  const [mounted, setMounted] = useState(false);
-
-useEffect(() => {
-  setMounted(true);
-}, []);
   const level = getLevelFromExperience(experience);
   const progress = getExperienceProgress(experience);
-if (!mounted) {
-  return null;
-}
+
   return (
     <div className="lg:col-span-2">
       <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl">
@@ -50,17 +43,19 @@ if (!mounted) {
         <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/[0.06]">
           <div
             className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-500 transition-all duration-500"
-            style={{ width: `${progress}%` }}
+            style={{
+              width: `${progress}%`,
+            }}
           />
         </div>
-        <button
-  type="button"
-  onClick={onEarnXP}
-  className="mt-5 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500"
->
-  Complete action +25 XP
-</button>
 
+        <button
+          type="button"
+          onClick={onEarnXP}
+          className="mt-5 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500"
+        >
+          Complete action +25 XP
+        </button>
       </div>
     </div>
   );
