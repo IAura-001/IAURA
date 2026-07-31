@@ -7,12 +7,15 @@ import {
   useState,
 } from "react";
 import type { ChatMessage } from "@/types/chat";
+import type { IAuraProject } from "@/types/project";
 import { BrandIdentityCard } from "../cards/BrandIdentityCard";
 import { useI18n } from "@/core/i18n/I18nContext";
 
 interface ConversationProps {
   messages: ChatMessage[];
   isThinking?: boolean;
+  project?: IAuraProject | null;
+  onOpenBranding?: () => void;
 }
 
 interface AnimatedMessageProps {
@@ -185,8 +188,11 @@ function AuraThinking() {
 export function Conversation({
   messages,
   isThinking = false,
+  project,
+  onOpenBranding,
 }: ConversationProps) {
   const { t } = useI18n();
+  const branding = project?.branding;
 
   if (
     messages.length === 0 &&
@@ -214,17 +220,32 @@ export function Conversation({
         />
       ))}
 
-      <BrandIdentityCard
-        name="IAURA"
-        slogan={t("brand.identitySlogan")}
-        mission={t("brand.identityMission")}
-        colors={[
-          "#2563EB",
-          "#7C3AED",
-          "#0F172A",
-        ]}
-        font="Inter"
-      />
+      {project && onOpenBranding && (
+        <BrandIdentityCard
+          name={branding?.brandName || project.name}
+          slogan={branding?.slogan || t("brand.identitySlogan")}
+          mission={
+            branding?.mission ||
+            project.description ||
+            t("brand.identityMission")
+          }
+          colors={
+            branding
+              ? [
+                  branding.palette.primary,
+                  branding.palette.secondary,
+                  branding.palette.accent,
+                ]
+              : ["#2563EB", "#7C3AED", "#0F172A"]
+          }
+          font={
+            branding
+              ? t(`branding.typography.${branding.typography}`)
+              : "Inter"
+          }
+          onContinue={onOpenBranding}
+        />
+      )}
 
       {isThinking && <AuraThinking />}
 

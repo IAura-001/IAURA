@@ -525,6 +525,12 @@ return (
 <Conversation
   messages={messages}
   isThinking={isSending}
+  project={activeProject}
+  onOpenBranding={
+    activeProject
+      ? () => setOpenStudio("branding")
+      : undefined
+  }
 />
 
 <ChatInput

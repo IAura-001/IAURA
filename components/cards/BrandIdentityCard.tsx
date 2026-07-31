@@ -8,6 +8,7 @@ interface BrandIdentityCardProps {
   mission: string;
   colors: string[];
   font: string;
+  onContinue: () => void;
 }
 
 export function BrandIdentityCard({
@@ -16,55 +17,67 @@ export function BrandIdentityCard({
   mission,
   colors,
   font,
+  onContinue,
 }: BrandIdentityCardProps) {
   const { t } = useI18n();
- 
-    return (
-  <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-lg">
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold">{name}</h2>
-        <p className="text-zinc-400">{slogan}</p>
-      </div>
 
-      <div>
-        <h3 className="text-sm font-semibold uppercase text-zinc-500">
-          {t("brand.identityMissionLabel")}
-        </h3>
+  return (
+    <article
+      className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.035] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+      style={{
+        backgroundImage: `radial-gradient(circle at 100% 0%, ${colors[2]}24, transparent 38%)`,
+      }}
+    >
+      <div className="relative space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-purple-300/70">
+              {t("branding.eyebrow")}
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+              {name}
+            </h2>
+            <p className="mt-1 text-sm text-zinc-400">{slogan}</p>
+          </div>
 
-        <p className="mt-1 text-sm text-zinc-300">
-          {mission}
-        </p>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold uppercase text-zinc-500">
-          {t("brand.identityColorsLabel")}
-        </h3>
-
-        <div className="mt-2 flex gap-2">
-          {colors.map((color) => (
-            <div
-              key={color}
-              className="h-8 w-8 rounded-full border border-zinc-700"
-              style={{ backgroundColor: color }}
-            />
-          ))}
+          <div className="flex -space-x-2" aria-label={t("brand.identityColorsLabel")}>
+            {colors.map((color) => (
+              <span
+                key={color}
+                className="h-9 w-9 rounded-full border-2 border-[#0b0712] shadow-lg"
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+          </div>
         </div>
+
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-600">
+              {t("brand.identityMissionLabel")}
+            </p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
+              {mission}
+            </p>
+          </div>
+
+          <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs text-zinc-300">
+            {font}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onContinue}
+          className="group flex w-full items-center justify-between rounded-2xl border border-purple-400/20 bg-gradient-to-r from-purple-600/80 to-blue-600/80 px-5 py-3.5 text-sm font-semibold text-white transition hover:border-purple-300/40 hover:brightness-110"
+        >
+          <span>{t("brand.identityContinue")}</span>
+          <span className="transition-transform group-hover:translate-x-1" aria-hidden="true">
+            →
+          </span>
+        </button>
       </div>
-
-      <div>
-        <h3 className="text-sm font-semibold uppercase text-zinc-500">
-          {t("brand.identityFontLabel")}
-        </h3>
-
-        <p className="mt-1 text-sm">{font}</p>
-      </div>
-
-      <button className="mt-4 w-full rounded-xl bg-blue-600 py-3 font-medium transition hover:bg-blue-500">
-        {t("brand.identityContinue")}
-      </button>
-    </div>
-  </div>
-);
+    </article>
+  );
 }
