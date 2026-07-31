@@ -1,3 +1,7 @@
+"use client";
+
+import { useI18n } from "@/core/i18n/I18nContext";
+
 type DashboardGreetingProps = {
   name: string;
 };
@@ -5,20 +9,21 @@ type DashboardGreetingProps = {
 export default function DashboardGreeting({
   name,
 }: DashboardGreetingProps) {
+  const { t } = useI18n();
   const hour = new Date().getHours();
 
   const greeting =
     hour < 12
-      ? "Good morning"
+      ? t("dashboard.morning")
       : hour < 18
-        ? "Good afternoon"
-        : "Good evening";
+        ? t("dashboard.afternoon")
+        : t("dashboard.evening");
 
   return (
     <div className="lg:col-span-2">
       <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl">
         <p className="text-xs tracking-[0.25em] text-zinc-500">
-          PERSONAL COMMAND CENTER
+          {t("dashboard.eyebrow")}
         </p>
 
         <h2 className="mt-3 text-3xl font-semibold text-white">
@@ -26,7 +31,7 @@ export default function DashboardGreeting({
         </h2>
 
         <p className="mt-2 text-sm leading-6 text-zinc-400">
-          Let&apos;s keep building your future, one mission at a time.
+          {t("dashboard.subtitle")}
         </p>
       </div>
     </div>

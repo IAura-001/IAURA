@@ -14,6 +14,7 @@ import DailyQuote from "@/components/sections/DailyQuote";
 import MissionList from "@/components/sections/MissionList";
 import type { Mission } from "@/types/mission";
 import type { SupportedLocale } from "@/core/i18n/languages";
+import { useI18n } from "@/core/i18n/I18nContext";
 
 type PriorityItem = {
   title: string;
@@ -73,6 +74,8 @@ export default function DashboardPanel({
   completedMissionIds,
   onMissionComplete,
 }: DashboardPanelProps) {
+  const { t } = useI18n();
+
   return (
     <>
       <DashboardGreeting name={name} />
@@ -118,7 +121,7 @@ export default function DashboardPanel({
         onClick={onResetMemory}
         className="rounded-xl bg-red-600 px-4 py-2 text-white hover:bg-red-500"
       >
-        Reset IAURA Memory
+        {t("memory.reset")}
       </button>
 
       <StatsGrid

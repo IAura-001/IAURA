@@ -1,3 +1,7 @@
+"use client";
+
+import { useI18n } from "@/core/i18n/I18nContext";
+
 type PriorityItem = {
   title: string;
   score: number;
@@ -12,19 +16,21 @@ export default function DailyIntelligence({
   priorities,
   recommendation,
 }: DailyIntelligenceProps) {
+  const { t } = useI18n();
+
   return (
     <div className="lg:col-span-2">
       <div className="rounded-[28px] border border-white/10 bg-gradient-to-br from-violet-500/10 to-cyan-500/10 p-6 backdrop-blur-xl">
         <p className="text-xs tracking-[0.25em] text-cyan-300">
-          IAURA INTELLIGENCE
+          {t("intelligence.eyebrow")}
         </p>
 
         <h2 className="mt-2 text-2xl font-semibold text-white">
-          Today&apos;s Priorities
+          {t("intelligence.title")}
         </h2>
 
         <p className="mt-2 text-sm text-zinc-300">
-          Based on your goals and habits, these deserve your attention today.
+          {t("intelligence.description")}
         </p>
 
        <div className="mt-6 space-y-3">
@@ -44,7 +50,9 @@ export default function DailyIntelligence({
       </div>
 
       <span className="shrink-0 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-300">
-        {priority.score} pts
+        {t("intelligence.points", {
+          score: priority.score,
+        })}
       </span>
     </div>
   ))}
@@ -52,7 +60,7 @@ export default function DailyIntelligence({
 
 <div className="mt-6 rounded-xl border border-violet-400/20 bg-violet-400/10 p-4">
   <p className="text-xs font-semibold tracking-[0.2em] text-violet-300">
-    IAURA RECOMMENDATION
+    {t("intelligence.recommendation")}
   </p>
 
   <p className="mt-2 text-sm leading-6 text-zinc-200">

@@ -1,9 +1,18 @@
-export function generateRecommendation(userContext: string): string {
+import type { SupportedLocale } from "@/core/i18n/languages";
+import { translate } from "@/core/i18n/messages";
+
+export function generateRecommendation(
+  userContext: string,
+  locale: SupportedLocale
+): string {
   if (userContext.includes("Goals:\n")) {
     const hasGoals = !userContext.includes("Goals:\n\n");
 
     if (!hasGoals) {
-      return "Create your first goal to give IAURA a clear direction.";
+      return translate(
+        locale,
+        "recommendation.goal"
+      );
     }
   }
 
@@ -11,9 +20,15 @@ export function generateRecommendation(userContext: string): string {
     const hasHabits = !userContext.includes("Habits:\n\n");
 
     if (!hasHabits) {
-      return "Add a daily habit to start building consistency.";
+      return translate(
+        locale,
+        "recommendation.habit"
+      );
     }
   }
 
-  return "Keep building momentum. Your profile is becoming stronger every day.";
+  return translate(
+    locale,
+    "recommendation.momentum"
+  );
 }

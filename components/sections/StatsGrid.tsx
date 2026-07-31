@@ -1,3 +1,7 @@
+"use client";
+
+import { useI18n } from "@/core/i18n/I18nContext";
+
 type StatsGridProps = {
   completed: number;
   total: number;
@@ -7,24 +11,25 @@ export default function StatsGrid({
   completed,
   total,
 }: StatsGridProps) {
+  const { t } = useI18n();
   const pending = total - completed;
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <StatCard
-        title="Completadas"
+        title={t("stats.completed")}
         value={completed}
         color="text-green-400"
       />
 
       <StatCard
-        title="Pendientes"
+        title={t("stats.pending")}
         value={pending}
         color="text-yellow-400"
       />
 
       <StatCard
-        title="Total"
+        title={t("stats.total")}
         value={total}
         color="text-purple-300"
       />

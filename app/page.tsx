@@ -33,13 +33,34 @@ import { MODES } from "@/constants/modes";
 import { useAuraActions } from "@/hooks/useAuraActions";
 import { useMemory } from "@/hooks/useMemory";
 import { cleanAIText } from "@/utils/formatText";
+import {
+  I18nProvider,
+  useI18n,
+} from "@/core/i18n/I18nContext";
+import {
+  translate,
+  type MessageKey,
+} from "@/core/i18n/messages";
+
+function LocalizedLoading({
+  messageKey,
+}: {
+  messageKey: MessageKey;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-500">
+      {t(messageKey)}
+    </div>
+  );
+}
+
 const DashboardPanel = dynamic(
   () => import("@/components/sections/DashboardPanel"),
   {
     loading: () => (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-zinc-500">
-        Loading IAURA dashboard...
-      </div>
+      <LocalizedLoading messageKey="loading.dashboard" />
     ),
   }
 );
@@ -50,9 +71,7 @@ const AIAnalysisPanel = dynamic(
     ).then((module) => module.AIAnalysisPanel),
   {
     loading: () => (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-500">
-        Loading analysis...
-      </div>
+      <LocalizedLoading messageKey="loading.analysis" />
     ),
   }
 );
@@ -64,9 +83,7 @@ const BrandingStudio = dynamic(
     ),
   {
     loading: () => (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-500">
-        Loading Branding Studio...
-      </div>
+      <LocalizedLoading messageKey="loading.branding" />
     ),
   }
 );
@@ -155,21 +172,33 @@ const intelligencePriorities =
     ? scoredPriorities.slice(0, 3)
     : [
         {
-          title: "Add your first goal",
+          title: translate(
+            memory.preferredLocale,
+            "priority.firstGoal"
+          ),
           score: 100,
         },
         {
-          title: "Create a daily habit",
+          title: translate(
+            memory.preferredLocale,
+            "priority.dailyHabit"
+          ),
           score: 90,
         },
         {
-          title: "Complete your next IAURA mission",
+          title: translate(
+            memory.preferredLocale,
+            "priority.nextMission"
+          ),
           score: 80,
         },
       ];
       const userContext = buildUserContext(memory);
 
-const recommendation = generateRecommendation(userContext);
+const recommendation = generateRecommendation(
+  userContext,
+  memory.preferredLocale
+);
 
 const prompt = buildPrompt(userContext);
 const handleAnalyze = () => {
@@ -246,8 +275,10 @@ if (voiceMode) {
   const errorMessage: ChatMessage = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role: "assistant",
-    content:
-      "No pude completar la solicitud en este momento. Inténtalo nuevamente.",
+    content: translate(
+      memory.preferredLocale,
+      "error.conversation"
+    ),
   };
 
   setMessages((prev) => [...prev, errorMessage]);
@@ -260,7 +291,7 @@ if (voiceMode) {
   setIsSending(false);
 }
 },
-[executeActions, isSending, prompt, voiceMode, speak]
+[executeActions, isSending, memory.preferredLocale, prompt, voiceMode, speak]
 );
 
   
@@ -282,14 +313,18 @@ if (!isLoaded) {
       className="flex min-h-screen items-center justify-center text-white"
       style={{ backgroundColor: theme.colors.background }}
     >
-      Loading IAURA...
+      {translate(
+        memory.preferredLocale,
+        "app.loading"
+      )}
     </main>
   );
 }
 
 return (
+  <I18nProvider locale={memory.preferredLocale}>
   <main
-    className="relative min-h-screen overflow-hidden px-6 text-white"
+    className="relative min-h-screen overflow-hidden px-4 text-white sm:px-6"
     style={{ backgroundColor: theme.colors.background }}
   >
       <div className="absolute left-[-150px] top-[-150px] h-[420px] w-[420px] rounded-full bg-purple-700/20 blur-[130px]" />
@@ -298,9 +333,9 @@ return (
 
       <Navbar />
 
-      <section className="relative z-10 mx-auto grid min-h-[calc(100vh-120px)] w-full max-w-6xl items-center gap-14 py-12 lg:grid-cols-2">
+      <section className="relative z-10 mx-auto grid min-h-[calc(100vh-120px)] w-full min-w-0 max-w-6xl grid-cols-[minmax(0,1fr)] items-center gap-14 py-12 [&>*]:min-w-0 lg:grid-cols-2">
         <div>
-          <Hero />
+          <Hero name={memory.userName} />
 
 <div className="mt-8">
   {activeProject && (
@@ -324,9 +359,8 @@ return (
 />
         </div>
 
-        <AssistantCard
-  modeName={activeMode.name}
-  modeIcon={activeMode.icon}
+<AssistantCard
+  modeId={activeMode.id}
   onStart={handleSend}
 />
 <AIActionBar
@@ -392,5 +426,6 @@ return (
       
       </section>
     </main>
+  </I18nProvider>
   );
 }

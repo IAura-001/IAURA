@@ -4,6 +4,7 @@ import {
   getExperienceProgress,
   getLevelFromExperience,
 } from "@/utils/level";
+import { useI18n } from "@/core/i18n/I18nContext";
 
 type LevelProgressProps = {
   experience: number;
@@ -14,6 +15,7 @@ export default function LevelProgress({
   experience,
   onEarnXP,
 }: LevelProgressProps) {
+  const { t } = useI18n();
   const level = getLevelFromExperience(experience);
   const progress = getExperienceProgress(experience);
 
@@ -23,15 +25,15 @@ export default function LevelProgress({
         <div className="flex items-end justify-between gap-6">
           <div>
             <p className="text-xs tracking-[0.25em] text-zinc-500">
-              FOUNDER LEVEL
+              {t("level.eyebrow")}
             </p>
 
             <h2 className="mt-2 text-2xl font-semibold text-white">
-              Level {level}
+              {t("level.title", { level })}
             </h2>
 
             <p className="mt-2 text-sm text-zinc-400">
-              {progress} / 100 XP toward the next level
+              {t("level.next", { progress })}
             </p>
           </div>
 
@@ -54,7 +56,7 @@ export default function LevelProgress({
           onClick={onEarnXP}
           className="mt-5 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500"
         >
-          Complete action +25 XP
+          {t("level.action")}
         </button>
       </div>
     </div>

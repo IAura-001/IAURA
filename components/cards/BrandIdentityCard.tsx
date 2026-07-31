@@ -1,3 +1,7 @@
+"use client";
+
+import { useI18n } from "@/core/i18n/I18nContext";
+
 interface BrandIdentityCardProps {
   name: string;
   slogan: string;
@@ -13,6 +17,7 @@ export function BrandIdentityCard({
   colors,
   font,
 }: BrandIdentityCardProps) {
+  const { t } = useI18n();
  
     return (
   <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-lg">
@@ -24,7 +29,7 @@ export function BrandIdentityCard({
 
       <div>
         <h3 className="text-sm font-semibold uppercase text-zinc-500">
-          Mission
+          {t("brand.identityMissionLabel")}
         </h3>
 
         <p className="mt-1 text-sm text-zinc-300">
@@ -34,7 +39,7 @@ export function BrandIdentityCard({
 
       <div>
         <h3 className="text-sm font-semibold uppercase text-zinc-500">
-          Colors
+          {t("brand.identityColorsLabel")}
         </h3>
 
         <div className="mt-2 flex gap-2">
@@ -50,14 +55,14 @@ export function BrandIdentityCard({
 
       <div>
         <h3 className="text-sm font-semibold uppercase text-zinc-500">
-          Font
+          {t("brand.identityFontLabel")}
         </h3>
 
         <p className="mt-1 text-sm">{font}</p>
       </div>
 
       <button className="mt-4 w-full rounded-xl bg-blue-600 py-3 font-medium transition hover:bg-blue-500">
-        Continue
+        {t("brand.identityContinue")}
       </button>
     </div>
   </div>

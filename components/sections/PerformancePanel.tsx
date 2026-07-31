@@ -1,6 +1,7 @@
 "use client";
 
 import { usePerformanceMetrics } from "@/hooks/usePerformanceMetrics";
+import { useI18n } from "@/core/i18n/I18nContext";
 
 interface PerformancePanelProps {
   messageCount: number;
@@ -8,9 +9,12 @@ interface PerformancePanelProps {
   habitsCount: number;
 }
 
-function formatDuration(duration: number | null) {
+function formatDuration(
+  duration: number | null,
+  waiting: string
+) {
   if (duration === null) {
-    return "Waiting";
+    return waiting;
   }
 
   if (duration < 1) {
@@ -30,26 +34,34 @@ export default function PerformancePanel({
   habitsCount,
 }: PerformancePanelProps) {
   const metrics = usePerformanceMetrics();
+  const { t } = useI18n();
+  const waiting = t("performance.waiting");
 
   const items = [
     {
-      label: "AI response",
-      value: formatDuration(metrics.latestResponseMs),
+      label: t("performance.aiResponse"),
+      value: formatDuration(
+        metrics.latestResponseMs,
+        waiting
+      ),
     },
     {
-      label: "Decision Engine",
-      value: formatDuration(metrics.latestDecisionMs),
+      label: t("performance.decision"),
+      value: formatDuration(
+        metrics.latestDecisionMs,
+        waiting
+      ),
     },
     {
-      label: "Messages",
+      label: t("performance.messages"),
       value: messageCount.toString(),
     },
     {
-      label: "Memory goals",
+      label: t("performance.goals"),
       value: goalsCount.toString(),
     },
     {
-      label: "Memory habits",
+      label: t("performance.habits"),
       value: habitsCount.toString(),
     },
   ];
@@ -58,11 +70,11 @@ export default function PerformancePanel({
     <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl">
       <div>
         <p className="text-xs tracking-[0.25em] text-zinc-500">
-          SYSTEM PERFORMANCE
+          {t("performance.eyebrow")}
         </p>
 
         <h2 className="mt-2 text-2xl font-semibold text-white">
-          IAURA Diagnostics
+          {t("performance.title")}
         </h2>
       </div>
 

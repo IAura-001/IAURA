@@ -1,5 +1,8 @@
+"use client";
+
 import MissionCard from "@/components/ui/MissionCard";
 import type { Mission } from "@/types/mission";
+import { useI18n } from "@/core/i18n/I18nContext";
 
 type MissionListProps = {
   missions: Mission[];
@@ -12,17 +15,19 @@ export default function MissionList({
   completedMissionIds,
   onComplete,
 }: MissionListProps) {
+  const { t } = useI18n();
+
   return (
     <div className="lg:col-span-2">
       <div className="mt-6 rounded-[28px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs tracking-[0.25em] text-zinc-500">
-              MISSION QUEUE
+              {t("missions.eyebrow")}
             </p>
 
             <h2 className="mt-2 text-2xl font-semibold">
-              Available Missions
+              {t("missions.title")}
             </h2>
           </div>
 

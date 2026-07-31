@@ -1,5 +1,8 @@
 "use client";
 
+import { useI18n } from "@/core/i18n/I18nContext";
+import type { MessageKey } from "@/core/i18n/messages";
+
 type Mode = {
   id: string;
   name: string;
@@ -18,6 +21,8 @@ export default function ModeSelector({
   selectedMode,
   onSelect,
 }: ModeSelectorProps) {
+  const { t } = useI18n();
+
   return (
     <div className="mt-10 grid gap-3 sm:grid-cols-2">
       {modes.map((mode) => {
@@ -36,10 +41,16 @@ export default function ModeSelector({
           >
             <span className="text-2xl text-purple-300">{mode.icon}</span>
 
-            <h2 className="mt-4 font-semibold">{mode.name}</h2>
+            <h2 className="mt-4 font-semibold">
+              {t(
+                `mode.${mode.id}.name` as MessageKey
+              )}
+            </h2>
 
             <p className="mt-2 text-sm leading-6 text-zinc-500">
-              {mode.description}
+              {t(
+                `mode.${mode.id}.description` as MessageKey
+              )}
             </p>
           </button>
         );

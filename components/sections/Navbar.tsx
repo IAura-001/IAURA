@@ -1,5 +1,11 @@
-import { APP_NAME, APP_TAGLINE, APP_VERSION } from "@/constants/app";
+"use client";
+
+import { APP_NAME, APP_VERSION } from "@/constants/app";
+import { useI18n } from "@/core/i18n/I18nContext";
+
 export default function Navbar() {
+  const { t } = useI18n();
+
   return (
     <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between py-8">
       <div>
@@ -8,7 +14,7 @@ export default function Navbar() {
         </p>
 
         <p className="mt-1 text-[10px] tracking-[0.25em] text-zinc-500">
-          {APP_TAGLINE}
+          {t("app.tagline")}
         </p>
       </div>
 

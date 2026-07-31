@@ -1,4 +1,7 @@
+"use client";
+
 import type { IAuraProject } from "@/types/project";
+import { useI18n } from "@/core/i18n/I18nContext";
 
 interface ProjectCardProps {
   project: IAuraProject;
@@ -9,6 +12,7 @@ export default function ProjectCard({
   project,
   onOpenStudio,
 }: ProjectCardProps) {
+  const { t } = useI18n();
   const activeStudios = Object.entries(project.studios)
     .filter(([, enabled]) => enabled)
     .map(([studio]) => studio);
@@ -17,7 +21,9 @@ export default function ProjectCard({
     <section className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <p className="text-sm text-purple-300">Proyecto activo</p>
+          <p className="text-sm text-purple-300">
+            {t("project.active")}
+          </p>
           <h2 className="text-2xl font-semibold">{project.name}</h2>
         </div>
 
@@ -26,7 +32,9 @@ export default function ProjectCard({
         </span>
       </div>
 
-      <p className="mb-2 text-sm text-white/50">Objetivo</p>
+      <p className="mb-2 text-sm text-white/50">
+        {t("project.objective")}
+      </p>
       <p className="mb-5 text-white/80">{project.goal}</p>
 
       <div className="flex flex-wrap gap-2">

@@ -1,27 +1,47 @@
 "use client";
 
-import type { VoiceState } from "@/hooks/useVoice";
+import { useI18n } from "@/core/i18n/I18nContext";
+import type {
+  VoiceCaptureMode,
+  VoiceState,
+} from "@/hooks/useVoice";
 
 interface VoiceButtonProps {
   state: VoiceState;
-  onStartListening: () => void;
+  captureMode: VoiceCaptureMode;
+  onStartListening: () => void | Promise<void>;
   onStopListening: () => void;
   onStopSpeaking: () => void;
+  onRequestAudioFile: () => void;
   disabled?: boolean;
 }
 
 export default function VoiceButton({
   state,
+  captureMode,
   onStartListening,
   onStopListening,
   onStopSpeaking,
+  onRequestAudioFile,
   disabled = false,
 }: VoiceButtonProps) {
-  const isListening = state === "listening";
-  const isSpeaking = state === "speaking";
+  const { t } = useI18n();
+  const isListening =
+    state === "listening";
+  const isProcessing =
+    state === "processing";
+  const isSpeaking =
+    state === "speaking";
+  const usesNativeRecorder =
+    captureMode === "file-upload";
 
   function handleClick() {
-    if (disabled) return;
+    if (
+      disabled ||
+      captureMode === "detecting"
+    ) {
+      return;
+    }
 
     if (isListening) {
       onStopListening();
@@ -33,27 +53,40 @@ export default function VoiceButton({
       return;
     }
 
-    onStartListening();
+    if (usesNativeRecorder) {
+      onRequestAudioFile();
+      return;
+    }
+
+    void onStartListening();
   }
 
   const label = isListening
-    ? "Detener micrófono"
+    ? t("chat.micStop")
     : isSpeaking
-      ? "Detener voz"
-      : "Hablar con IAURA";
+      ? t("chat.voiceStop")
+      : usesNativeRecorder
+        ? t("chat.recordAudio")
+        : t("chat.micStart");
 
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={disabled}
+      disabled={
+        disabled ||
+        isProcessing ||
+        captureMode === "detecting"
+      }
       aria-label={label}
       title={label}
       className={[
-        "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+        "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
         "border border-white/10 text-white transition",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400",
-        disabled
+        disabled ||
+        isProcessing ||
+        captureMode === "detecting"
           ? "cursor-not-allowed opacity-40"
           : "hover:border-purple-400/50 hover:bg-purple-500/10",
         isListening
@@ -62,10 +95,21 @@ export default function VoiceButton({
         isSpeaking
           ? "bg-purple-500/20 text-purple-300"
           : "",
+        isProcessing
+          ? "bg-cyan-500/15 text-cyan-200"
+          : "",
       ].join(" ")}
     >
       {isListening || isSpeaking ? (
-        <span className="text-lg font-bold">■</span>
+        <span
+          className="h-3.5 w-3.5 rounded-sm bg-current"
+          aria-hidden="true"
+        />
+      ) : isProcessing ? (
+        <span
+          className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent"
+          aria-hidden="true"
+        />
       ) : (
         <svg
           viewBox="0 0 24 24"

@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { isRequestAuthorized } from "@/core/auth/access";
 import {
   getLanguageDefinition,
   normalizeLocale,
@@ -94,6 +95,21 @@ async function generateOpenAIFallback(
 }
 
 export async function POST(request: Request) {
+  if (!isRequestAuthorized(request)) {
+    return NextResponse.json(
+      {
+        error: "IAURA private access required.",
+        code: "IAURA_ACCESS_REQUIRED",
+      },
+      {
+        status: 401,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+  }
+
   try {
     const {
       text,

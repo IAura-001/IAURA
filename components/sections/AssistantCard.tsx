@@ -1,364 +1,167 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 
-import Button from "@/components/ui/Button";
+import { AuraPresence } from "@/components/aura/AuraPresence";
 import Card from "@/components/ui/Card";
-import Input from "@/components/ui/Input";
+import { useI18n } from "@/core/i18n/I18nContext";
+import type { MessageKey } from "@/core/i18n/messages";
 
 type AssistantCardProps = {
-  modeName?: string;
-  modeIcon?: string;
-  onStart?: (mission: string) => void;
+  modeId?: string;
+  onStart?: (
+    mission: string
+  ) => void | Promise<void>;
 };
 
-type AuraPhase = "idle" | "awakening" | "ready";
-
-const particles = [
-  { left: "14%", top: "22%", delay: "0ms", duration: "1700ms" },
-  { left: "82%", top: "18%", delay: "180ms", duration: "2100ms" },
-  { left: "24%", top: "72%", delay: "320ms", duration: "1900ms" },
-  { left: "76%", top: "68%", delay: "120ms", duration: "2300ms" },
-  { left: "48%", top: "12%", delay: "440ms", duration: "1800ms" },
-  { left: "10%", top: "50%", delay: "260ms", duration: "2200ms" },
-  { left: "90%", top: "48%", delay: "520ms", duration: "2000ms" },
-  { left: "50%", top: "84%", delay: "80ms", duration: "2400ms" },
-];
+type AuraPhase = "idle" | "awakening";
 
 export default function AssistantCard({
-  modeName = "Aprender",
-  modeIcon = "✦",
+  modeId = "learn",
   onStart,
 }: AssistantCardProps) {
+  const { t } = useI18n();
   const [mission, setMission] = useState("");
-  const [phase, setPhase] = useState<AuraPhase>("idle");
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-
+  const [phase, setPhase] =
+    useState<AuraPhase>("idle");
+  const transitionTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(
+      null
+    );
   const isAwakening = phase === "awakening";
-  const isReady = phase === "ready";
+  const modeName = t(
+    `mode.${modeId}.name` as MessageKey
+  );
 
   useEffect(() => {
     return () => {
-      timersRef.current.forEach((timer) => clearTimeout(timer));
+      if (transitionTimerRef.current) {
+        clearTimeout(
+          transitionTimerRef.current
+        );
+      }
     };
   }, []);
 
-  function beginAura() {
-    if (isAwakening) return;
+  function beginAura(
+    event?: FormEvent<HTMLFormElement>
+  ) {
+    event?.preventDefault();
 
-    timersRef.current.forEach((timer) => clearTimeout(timer));
-    timersRef.current = [];
+    const cleanMission = mission.trim();
+
+    if (isAwakening || !cleanMission) {
+      return;
+    }
+
+    if (transitionTimerRef.current) {
+      clearTimeout(
+        transitionTimerRef.current
+      );
+    }
 
     setPhase("awakening");
-
-    const readyTimer = setTimeout(() => {
-      setPhase("ready");
-    }, 1900);
-
-    const startTimer = setTimeout(() => {
-      onStart?.(mission.trim());
-    }, 2600);
-
-    timersRef.current.push(readyTimer, startTimer);
-  }
-
-  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter") {
-      beginAura();
-    }
-  }
-
-  function resetAura() {
-    timersRef.current.forEach((timer) => clearTimeout(timer));
-    timersRef.current = [];
-    setPhase("idle");
+    transitionTimerRef.current = setTimeout(
+      () => {
+        setMission("");
+        setPhase("idle");
+        void onStart?.(cleanMission);
+      },
+      720
+    );
   }
 
   return (
     <Card
       glow
-      className={[
-        "relative overflow-hidden p-3 transition-all duration-700",
-        isAwakening ? "scale-[1.015]" : "",
-      ].join(" ")}
+      className="relative min-w-0 overflow-hidden border-purple-300/10 bg-black/20 p-2 shadow-[0_24px_90px_rgba(30,10,70,0.32)]"
     >
-      <div
-        className={[
-          "aura-panel relative overflow-hidden rounded-[24px] border bg-black/50 p-7 transition-all duration-700 sm:p-10",
-          isAwakening
-            ? "border-purple-400/40 shadow-[0_0_80px_rgba(139,92,246,0.18)]"
-            : "border-purple-400/10",
-        ].join(" ")}
-      >
-        {/* Luz ambiental */}
-        <div
-          aria-hidden="true"
-          className={[
-            "pointer-events-none absolute inset-0 transition-opacity duration-700",
-            isAwakening || isReady ? "opacity-100" : "opacity-0",
-          ].join(" ")}
-        >
-          <div className="aura-energy absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-500/20 blur-3xl" />
-
-          <div className="aura-ring absolute left-1/2 top-1/2 h-36 w-36 -translate-x-1/2 -translate-y-1/2 rounded-full border border-purple-300/40" />
-
-          <div className="aura-ring aura-ring-delayed absolute left-1/2 top-1/2 h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-full border border-blue-400/20" />
-
-          {particles.map((particle, index) => (
+      <div className="relative min-w-0 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[radial-gradient(circle_at_50%_26%,rgba(91,33,182,0.14),rgba(2,1,8,0.82)_62%)] px-4 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
+        <div className="flex items-center justify-between gap-4 px-1">
+          <div className="flex items-center gap-2.5">
             <span
-              key={index}
-              className="aura-particle absolute h-1 w-1 rounded-full bg-purple-200 shadow-[0_0_10px_rgba(216,180,254,0.9)]"
-              style={{
-                left: particle.left,
-                top: particle.top,
-                animationDelay: particle.delay,
-                animationDuration: particle.duration,
-              }}
+              aria-hidden="true"
+              className="h-1.5 w-1.5 rounded-full bg-violet-300 shadow-[0_0_14px_rgba(196,181,253,0.95)]"
             />
-          ))}
+            <span className="text-[10px] font-medium uppercase tracking-[0.34em] text-zinc-500">
+              Aura
+            </span>
+          </div>
+
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-zinc-400">
+            {modeName}
+          </span>
         </div>
 
-        <div
-          className={[
-            "relative z-10 transition-all duration-700",
-            isAwakening ? "opacity-40 blur-[1px]" : "opacity-100",
-          ].join(" ")}
+        <AuraPresence phase={phase} />
+
+        <form
+          onSubmit={beginAura}
+          className="relative mx-auto max-w-xl"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs tracking-[0.25em] text-zinc-500">
-                ACTIVE MODE
-              </p>
-
-              <h2 className="mt-2 text-2xl font-semibold">{modeName}</h2>
-            </div>
-
-            <div
-              className={[
-                "flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-blue-600 text-xl shadow-lg shadow-purple-900/40 transition-all duration-700",
-                isAwakening
-                  ? "rotate-180 scale-110 shadow-[0_0_35px_rgba(168,85,247,0.65)]"
-                  : "",
-              ].join(" ")}
+          <div className="group flex min-w-0 items-center gap-3 rounded-[22px] border border-white/10 bg-black/45 p-2 pl-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_45px_rgba(0,0,0,0.24)] backdrop-blur-2xl transition duration-300 focus-within:border-violet-300/35 focus-within:bg-black/55 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_36px_rgba(124,58,237,0.12)]">
+            <span
+              aria-hidden="true"
+              className="shrink-0 text-sm text-violet-300/70 transition group-focus-within:text-violet-200"
             >
-              {modeIcon}
-            </div>
-          </div>
+              ✦
+            </span>
 
-          <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-sm text-zinc-500">Aura</p>
-
-            <p className="mt-3 leading-7 text-zinc-200">
-              ¿Qué quieres construir hoy? No necesitas tener todas las
-              respuestas. Empezaremos desde donde estás.
-            </p>
-          </div>
-
-          <div className="mt-4">
-            <Input
-              placeholder="Escribe tu primera misión..."
+            <input
               value={mission}
-              onChange={(event) => setMission(event.target.value)}
-              onKeyDown={handleKeyDown}
+              onChange={(event) =>
+                setMission(event.target.value)
+              }
+              placeholder={t(
+                "assistant.placeholder"
+              )}
+              aria-label={t(
+                "assistant.placeholder"
+              )}
+              autoComplete="off"
+              enterKeyHint="send"
               disabled={isAwakening}
+              className="min-w-0 flex-1 bg-transparent py-3 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-60 sm:text-[15px]"
             />
-          </div>
 
-          <div className="mt-5">
-            <Button
-  fullWidth
-  onClick={beginAura}
-  disabled={isAwakening || !mission.trim()}
->
-  {isAwakening
-    ? "Despertando a Aura..."
-    : "Comenzar con Aura →"}
-</Button>
-          </div>
-
-          <p className="mt-5 text-center text-xs text-zinc-600">
-            Aura piensa contigo, no en tu lugar.
-          </p>
-        </div>
-
-        {/* Núcleo central de la animación */}
-        <div
-          aria-live="polite"
-          className={[
-            "pointer-events-none absolute inset-0 z-20 flex items-center justify-center transition-all duration-700",
-            isAwakening || isReady
-              ? "scale-100 opacity-100"
-              : "scale-75 opacity-0",
-          ].join(" ")}
-        >
-          <div className="flex flex-col items-center text-center">
-            <div
-              className={[
-                "relative flex h-24 w-24 items-center justify-center rounded-full border border-purple-300/30 bg-black/70 backdrop-blur-xl transition-all duration-700",
-                isAwakening
-                  ? "aura-core shadow-[0_0_60px_rgba(147,51,234,0.6)]"
-                  : "shadow-[0_0_35px_rgba(59,130,246,0.4)]",
-              ].join(" ")}
+            <button
+              type="submit"
+              disabled={
+                isAwakening || !mission.trim()
+              }
+              aria-label={t("assistant.start")}
+              title={t("assistant.start")}
+              className="group/send flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-violet-200/15 bg-gradient-to-br from-violet-500 to-blue-600 text-white shadow-[0_10px_28px_rgba(91,33,182,0.32)] transition duration-300 hover:scale-[1.04] hover:shadow-[0_12px_34px_rgba(99,102,241,0.42)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 disabled:cursor-not-allowed disabled:opacity-25"
             >
-              <div className="absolute inset-2 rounded-full border border-blue-400/30" />
-
-              <span className="aura-symbol relative text-3xl text-purple-100">
-                ✦
-              </span>
-            </div>
-
-            <p className="mt-7 text-xs tracking-[0.35em] text-purple-300">
-              {isReady ? "CONEXIÓN ESTABLECIDA" : "INICIANDO IAURA"}
-            </p>
-
-            <h3 className="mt-3 text-xl font-medium text-white">
-              {isReady ? "Aura está lista." : "Aura está despertando..."}
-            </h3>
-
-            <p className="mt-2 max-w-xs text-sm text-zinc-400">
-              {isReady
-                ? "Tu misión comienza ahora."
-                : "Preparando memoria, contexto y razonamiento."}
-            </p>
-
-            {isReady && (
-              <button
-                type="button"
-                onClick={resetAura}
-                className="pointer-events-auto mt-5 text-xs text-zinc-500 transition hover:text-purple-300"
-              >
-                Volver
-              </button>
-            )}
+              {isAwakening ? (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border border-white/40 border-t-white"
+                />
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-4 w-4 transition-transform duration-300 group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 19 19 5" />
+                  <path d="M8 5h11v11" />
+                </svg>
+              )}
+            </button>
           </div>
-        </div>
+        </form>
       </div>
-
-      <style jsx>{`
-        .aura-panel::before {
-          content: "";
-          position: absolute;
-          inset: -1px;
-          pointer-events: none;
-          background: linear-gradient(
-            120deg,
-            transparent 20%,
-            rgba(168, 85, 247, 0.12),
-            transparent 70%
-          );
-          transform: translateX(-100%);
-          animation: aura-scan 5s linear infinite;
-        }
-
-        .aura-energy {
-          animation: aura-energy 1.8s ease-in-out infinite;
-        }
-
-        .aura-core {
-          animation: aura-core 1.25s ease-in-out infinite;
-        }
-
-        .aura-symbol {
-          animation: aura-symbol 1.6s ease-in-out infinite;
-        }
-
-        .aura-ring {
-          animation: aura-ring 1.8s ease-out infinite;
-        }
-
-        .aura-ring-delayed {
-          animation-delay: 0.6s;
-        }
-
-        .aura-particle {
-          animation-name: aura-particle;
-          animation-timing-function: ease-in-out;
-          animation-iteration-count: infinite;
-        }
-
-        @keyframes aura-scan {
-          0% {
-            transform: translateX(-120%);
-          }
-
-          100% {
-            transform: translateX(120%);
-          }
-        }
-
-        @keyframes aura-energy {
-          0%,
-          100% {
-            opacity: 0.35;
-            transform: translate(-50%, -50%) scale(0.85);
-          }
-
-          50% {
-            opacity: 0.8;
-            transform: translate(-50%, -50%) scale(1.15);
-          }
-        }
-
-        @keyframes aura-core {
-          0%,
-          100% {
-            transform: scale(0.96);
-          }
-
-          50% {
-            transform: scale(1.08);
-          }
-        }
-
-        @keyframes aura-symbol {
-          0%,
-          100% {
-            opacity: 0.65;
-            transform: rotate(0deg) scale(0.9);
-          }
-
-          50% {
-            opacity: 1;
-            transform: rotate(180deg) scale(1.15);
-          }
-        }
-
-        @keyframes aura-ring {
-          0% {
-            opacity: 0.8;
-            transform: translate(-50%, -50%) scale(0.45);
-          }
-
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(1.45);
-          }
-        }
-
-        @keyframes aura-particle {
-          0%,
-          100% {
-            opacity: 0.15;
-            transform: translateY(8px) scale(0.7);
-          }
-
-          50% {
-            opacity: 1;
-            transform: translateY(-12px) scale(1.4);
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .aura-panel::before,
-          .aura-energy,
-          .aura-core,
-          .aura-symbol,
-          .aura-ring,
-          .aura-particle {
-            animation: none;
-          }
-        }
-      `}</style>
     </Card>
   );
 }

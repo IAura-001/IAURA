@@ -1,0 +1,781 @@
+import type { SupportedLocale } from "./languages";
+
+const esMessages = {
+  "app.tagline": "Construyendo futuros inteligentes",
+  "app.loading": "Cargando IAURA...",
+  "hero.eyebrow": "SISTEMA DE INTELIGENCIA PERSONAL",
+  "hero.greeting": "Hola, {name}.",
+  "hero.identity": "Soy Aura.",
+  "hero.intro":
+    "No estoy aquí para pensar por ti. Estoy aquí para pensar contigo, ayudarte a desarrollar tus capacidades y convertir tus ideas en resultados reales.",
+  "mode.learn.name": "Aprender",
+  "mode.learn.description":
+    "Aura te guía con preguntas, pistas y práctica.",
+  "mode.build.name": "Construir",
+  "mode.build.description":
+    "Convierte una idea en un proyecto ejecutable.",
+  "mode.founder.name": "Founder",
+  "mode.founder.description":
+    "Estrategia, decisiones y progreso para IAURA.",
+  "mode.solve.name": "Resolver",
+  "mode.solve.description":
+    "Obtén ayuda directa cuando necesitas avanzar rápido.",
+  "assistant.activeMode": "MODO ACTIVO",
+  "assistant.question":
+    "¿Qué quieres construir hoy? No necesitas tener todas las respuestas. Empezaremos desde donde estás.",
+  "assistant.placeholder": "Dile a Aura qué quieres crear...",
+  "assistant.awakening": "Despertando a Aura...",
+  "assistant.start": "Enviar intención a Aura",
+  "assistant.mantra": "Aura piensa contigo, no en tu lugar.",
+  "assistant.connecting": "INICIANDO IAURA",
+  "assistant.connected": "CONEXIÓN ESTABLECIDA",
+  "assistant.awakeningTitle": "Aura está despertando...",
+  "assistant.readyTitle": "Aura está lista.",
+  "assistant.awakeningSubtitle":
+    "Sincronizando memoria, contexto y razonamiento.",
+  "assistant.readySubtitle": "Tu misión comienza ahora.",
+  "assistant.back": "Volver",
+  "aura.state.idle": "Presencia activa",
+  "aura.state.listening": "Escuchándote",
+  "aura.state.processing": "Comprendiendo",
+  "aura.state.speaking": "Aura está hablando",
+  "aura.state.awakening": "Núcleo despertando",
+  "chat.placeholder": "Pregúntale cualquier cosa a IAURA...",
+  "chat.listening": "Escuchando... toca de nuevo para terminar",
+  "chat.processing": "Transcribiendo tu voz...",
+  "chat.send": "Enviar",
+  "chat.micStart": "Hablar con IAURA",
+  "chat.micStop": "Detener y enviar audio",
+  "chat.voiceStop": "Detener voz",
+  "chat.recordAudio": "Grabar audio",
+  "chat.voiceUnavailable":
+    "Este navegador no permite grabar audio. Prueba desde un enlace HTTPS.",
+  "chat.permissionDenied":
+    "No pude acceder al micrófono. Revisa el permiso del navegador e inténtalo otra vez.",
+  "chat.transcriptionFailed":
+    "No pude entender el audio. Inténtalo otra vez hablando un poco más cerca.",
+  "dashboard.eyebrow": "CENTRO DE COMANDO PERSONAL",
+  "dashboard.morning": "Buenos días",
+  "dashboard.afternoon": "Buenas tardes",
+  "dashboard.evening": "Buenas noches",
+  "dashboard.subtitle":
+    "Sigamos construyendo tu futuro, una misión a la vez.",
+  "profile.eyebrow": "PERFIL",
+  "profile.title": "Personaliza IAURA",
+  "profile.description":
+    "Elige cómo debe llamarte IAURA y el idioma de toda tu experiencia.",
+  "profile.namePlaceholder": "Tu nombre",
+  "profile.save": "Guardar perfil",
+  "profile.languageLabel": "Idioma de IAURA",
+  "profile.languageHint":
+    "Controla la interfaz, las respuestas, el micrófono y Aura Prime.",
+  "goals.eyebrow": "OBJETIVOS PERSONALES",
+  "goals.title": "Tus objetivos",
+  "goals.description":
+    "Define los resultados que quieres alcanzar con IAURA.",
+  "goals.placeholder": "Añade un objetivo",
+  "goals.add": "Añadir objetivo",
+  "goals.empty": "Todavía no has añadido objetivos.",
+  "goals.remove": "Eliminar",
+  "habits.eyebrow": "HÁBITOS DIARIOS",
+  "habits.title": "Tus hábitos",
+  "habits.description":
+    "Construye rutinas que IAURA pueda ayudarte a mantener.",
+  "habits.placeholder": "Añade un hábito",
+  "habits.add": "Añadir hábito",
+  "habits.empty": "Todavía no has añadido hábitos.",
+  "habits.remove": "Eliminar",
+  "intelligence.eyebrow": "INTELIGENCIA IAURA",
+  "intelligence.title": "Prioridades de hoy",
+  "intelligence.description":
+    "Según tus objetivos y hábitos, esto merece tu atención hoy.",
+  "intelligence.points": "{score} pts",
+  "intelligence.recommendation": "RECOMENDACIÓN DE IAURA",
+  "priority.firstGoal": "Añade tu primer objetivo",
+  "priority.dailyHabit": "Crea un hábito diario",
+  "priority.nextMission": "Completa tu próxima misión de IAURA",
+  "recommendation.goal":
+    "Crea tu primer objetivo para darle una dirección clara a IAURA.",
+  "recommendation.habit":
+    "Añade un hábito diario para empezar a construir constancia.",
+  "recommendation.momentum":
+    "Sigue avanzando. Tu perfil se fortalece cada día.",
+  "focus.eyebrow": "ENFOQUE DE HOY",
+  "focus.title": "Haz avanzar a IAURA",
+  "focus.item1": "Continúa construyendo IAURA",
+  "focus.item2": "Mantén limpia la arquitectura",
+  "focus.item3": "Completa una misión importante",
+  "progress.eyebrow": "PROGRESO FOUNDER",
+  "progress.title": "Construcción de IAURA",
+  "progress.completed":
+    "{completed} de {total} misiones completadas",
+  "level.eyebrow": "NIVEL FOUNDER",
+  "level.title": "Nivel {level}",
+  "level.next": "{progress} / 100 XP para el próximo nivel",
+  "level.action": "Completar acción +25 XP",
+  "memory.reset": "Reiniciar memoria de IAURA",
+  "stats.completed": "Completadas",
+  "stats.pending": "Pendientes",
+  "stats.total": "Total",
+  "performance.eyebrow": "RENDIMIENTO DEL SISTEMA",
+  "performance.title": "Diagnóstico de IAURA",
+  "performance.aiResponse": "Respuesta de IA",
+  "performance.decision": "Motor de decisiones",
+  "performance.messages": "Mensajes",
+  "performance.goals": "Objetivos en memoria",
+  "performance.habits": "Hábitos en memoria",
+  "performance.waiting": "Esperando",
+  "quote.eyebrow": "FRASE DEL DÍA",
+  "quote.1":
+    "El progreso pequeño de cada día produce resultados extraordinarios.",
+  "quote.2": "La disciplina supera a la motivación.",
+  "quote.3": "La ejecución crea impulso.",
+  "quote.4": "La constancia multiplica el éxito.",
+  "quote.5":
+    "Construye hoy lo que tu yo del futuro agradecerá.",
+  "missions.eyebrow": "COLA DE MISIONES",
+  "missions.title": "Misiones disponibles",
+  "missions.label": "Misión {id}",
+  "missions.001":
+    "Crear el componente Button reutilizable.",
+  "missions.002":
+    "Crear el componente Card reutilizable.",
+  "missions.003":
+    "Crear el componente Input reutilizable.",
+  "missions.004":
+    "Separar la página en componentes reutilizables.",
+  "missions.005":
+    "Crear los tipos principales de IAURA.",
+  "analysis.start": "Analizar mi progreso",
+  "analysis.loading": "Analizando...",
+  "analysis.title": "Análisis de IAURA",
+  "conversation.title": "CONVERSACIÓN CON IAURA",
+  "conversation.you": "Tú",
+  "conversation.assistantSubtitle": "Inteligencia contextual",
+  "conversation.userSubtitle": "Misión enviada",
+  "conversation.completed": "Respuesta completada",
+  "conversation.thinking": "IAURA está pensando",
+  "conversation.thinkingSubtitle":
+    "Analizando contexto, memoria e intención...",
+  "action.eyebrow": "CENTRO DE ACCIONES IAURA",
+  "action.title": "Acciones verificadas",
+  "action.subtitle": "Historial local, transparente y reversible.",
+  "action.undo": "Deshacer última acción",
+  "action.completed": "Completado",
+  "action.undone": "Deshecho",
+  "action.blocked":
+    "Deshacer se bloquea cuando existen cambios posteriores para proteger tu información.",
+  "project.active": "Proyecto activo",
+  "project.objective": "Objetivo",
+  "branding.title": "Estudio de marca",
+  "branding.project": "Proyecto",
+  "branding.name": "Nombre de marca",
+  "branding.slogan": "Eslogan",
+  "branding.style": "Estilo",
+  "branding.colors": "Colores",
+  "branding.sloganValue": "Construyendo el futuro.",
+  "branding.styleValue": "Minimalista • Futurista • Premium",
+  "branding.colorsValue": "Negro • Morado • Blanco",
+  "brand.identityMissionLabel": "Misión",
+  "brand.identityColorsLabel": "Colores",
+  "brand.identityFontLabel": "Tipografía",
+  "brand.identityContinue": "Continuar",
+  "brand.identitySlogan":
+    "Inteligencia que construye contigo",
+  "brand.identityMission":
+    "Convertir ideas en proyectos digitales completos mediante inteligencia artificial.",
+  "loading.dashboard": "Cargando panel de IAURA...",
+  "loading.analysis": "Cargando análisis...",
+  "loading.branding": "Cargando estudio de marca...",
+  "error.conversation":
+    "No pude completar la solicitud en este momento. Inténtalo nuevamente.",
+} as const;
+
+export type MessageKey = keyof typeof esMessages;
+export type MessageParams = Record<
+  string,
+  string | number
+>;
+
+const enMessages: Record<MessageKey, string> = {
+  "app.tagline": "Engineering intelligent futures",
+  "app.loading": "Loading IAURA...",
+  "hero.eyebrow": "PERSONAL INTELLIGENCE SYSTEM",
+  "hero.greeting": "Hello, {name}.",
+  "hero.identity": "I’m Aura.",
+  "hero.intro":
+    "I’m not here to think for you. I’m here to think with you, develop your capabilities and turn your ideas into real results.",
+  "mode.learn.name": "Learn",
+  "mode.learn.description":
+    "Aura guides you through questions, clues and practice.",
+  "mode.build.name": "Build",
+  "mode.build.description":
+    "Turn an idea into an executable project.",
+  "mode.founder.name": "Founder",
+  "mode.founder.description":
+    "Strategy, decisions and progress for IAURA.",
+  "mode.solve.name": "Solve",
+  "mode.solve.description":
+    "Get direct help when you need to move quickly.",
+  "assistant.activeMode": "ACTIVE MODE",
+  "assistant.question":
+    "What do you want to build today? You don’t need every answer. We’ll begin exactly where you are.",
+  "assistant.placeholder": "Tell Aura what you want to create...",
+  "assistant.awakening": "Awakening Aura...",
+  "assistant.start": "Send intention to Aura",
+  "assistant.mantra": "Aura thinks with you, not in your place.",
+  "assistant.connecting": "STARTING IAURA",
+  "assistant.connected": "CONNECTION ESTABLISHED",
+  "assistant.awakeningTitle": "Aura is awakening...",
+  "assistant.readyTitle": "Aura is ready.",
+  "assistant.awakeningSubtitle":
+    "Synchronizing memory, context and reasoning.",
+  "assistant.readySubtitle": "Your mission begins now.",
+  "assistant.back": "Back",
+  "aura.state.idle": "Active presence",
+  "aura.state.listening": "Listening to you",
+  "aura.state.processing": "Understanding",
+  "aura.state.speaking": "Aura is speaking",
+  "aura.state.awakening": "Core awakening",
+  "chat.placeholder": "Ask IAURA anything...",
+  "chat.listening": "Listening... tap again to finish",
+  "chat.processing": "Transcribing your voice...",
+  "chat.send": "Send",
+  "chat.micStart": "Talk to IAURA",
+  "chat.micStop": "Stop and send audio",
+  "chat.voiceStop": "Stop voice",
+  "chat.recordAudio": "Record audio",
+  "chat.voiceUnavailable":
+    "This browser cannot record audio. Try again from an HTTPS link.",
+  "chat.permissionDenied":
+    "I couldn’t access the microphone. Check the browser permission and try again.",
+  "chat.transcriptionFailed":
+    "I couldn’t understand the audio. Try again while speaking a little closer.",
+  "dashboard.eyebrow": "PERSONAL COMMAND CENTER",
+  "dashboard.morning": "Good morning",
+  "dashboard.afternoon": "Good afternoon",
+  "dashboard.evening": "Good evening",
+  "dashboard.subtitle":
+    "Let’s keep building your future, one mission at a time.",
+  "profile.eyebrow": "USER PROFILE",
+  "profile.title": "Personalize IAURA",
+  "profile.description":
+    "Choose what IAURA should call you and the language of your experience.",
+  "profile.namePlaceholder": "Your name",
+  "profile.save": "Save profile",
+  "profile.languageLabel": "IAURA language",
+  "profile.languageHint":
+    "Controls the interface, responses, microphone and Aura Prime.",
+  "goals.eyebrow": "PERSONAL GOALS",
+  "goals.title": "Your goals",
+  "goals.description":
+    "Define the outcomes you want to achieve with IAURA.",
+  "goals.placeholder": "Add a goal",
+  "goals.add": "Add goal",
+  "goals.empty": "You haven’t added any goals yet.",
+  "goals.remove": "Remove",
+  "habits.eyebrow": "DAILY HABITS",
+  "habits.title": "Your habits",
+  "habits.description":
+    "Build routines IAURA can help you maintain.",
+  "habits.placeholder": "Add a habit",
+  "habits.add": "Add habit",
+  "habits.empty": "You haven’t added any habits yet.",
+  "habits.remove": "Remove",
+  "intelligence.eyebrow": "IAURA INTELLIGENCE",
+  "intelligence.title": "Today’s priorities",
+  "intelligence.description":
+    "Based on your goals and habits, this deserves your attention today.",
+  "intelligence.points": "{score} pts",
+  "intelligence.recommendation": "IAURA RECOMMENDATION",
+  "priority.firstGoal": "Add your first goal",
+  "priority.dailyHabit": "Create a daily habit",
+  "priority.nextMission": "Complete your next IAURA mission",
+  "recommendation.goal":
+    "Create your first goal to give IAURA a clear direction.",
+  "recommendation.habit":
+    "Add a daily habit to start building consistency.",
+  "recommendation.momentum":
+    "Keep building momentum. Your profile grows stronger every day.",
+  "focus.eyebrow": "TODAY’S FOCUS",
+  "focus.title": "Move IAURA forward",
+  "focus.item1": "Continue building IAURA",
+  "focus.item2": "Keep the architecture clean",
+  "focus.item3": "Complete one meaningful mission",
+  "progress.eyebrow": "FOUNDER PROGRESS",
+  "progress.title": "Building IAURA",
+  "progress.completed":
+    "{completed} of {total} missions completed",
+  "level.eyebrow": "FOUNDER LEVEL",
+  "level.title": "Level {level}",
+  "level.next": "{progress} / 100 XP toward the next level",
+  "level.action": "Complete action +25 XP",
+  "memory.reset": "Reset IAURA memory",
+  "stats.completed": "Completed",
+  "stats.pending": "Pending",
+  "stats.total": "Total",
+  "performance.eyebrow": "SYSTEM PERFORMANCE",
+  "performance.title": "IAURA diagnostics",
+  "performance.aiResponse": "AI response",
+  "performance.decision": "Decision engine",
+  "performance.messages": "Messages",
+  "performance.goals": "Memory goals",
+  "performance.habits": "Memory habits",
+  "performance.waiting": "Waiting",
+  "quote.eyebrow": "DAILY QUOTE",
+  "quote.1":
+    "Small progress every day leads to extraordinary results.",
+  "quote.2": "Discipline beats motivation.",
+  "quote.3": "Execution creates momentum.",
+  "quote.4": "Consistency compounds success.",
+  "quote.5":
+    "Build today what your future self will thank you for.",
+  "missions.eyebrow": "MISSION QUEUE",
+  "missions.title": "Available missions",
+  "missions.label": "Mission {id}",
+  "missions.001": "Create the reusable Button component.",
+  "missions.002": "Create the reusable Card component.",
+  "missions.003": "Create the reusable Input component.",
+  "missions.004":
+    "Split the landing page into reusable components.",
+  "missions.005": "Create IAURA’s core application types.",
+  "analysis.start": "Analyze my progress",
+  "analysis.loading": "Analyzing...",
+  "analysis.title": "IAURA analysis",
+  "conversation.title": "IAURA CONVERSATION",
+  "conversation.you": "You",
+  "conversation.assistantSubtitle": "Contextual intelligence",
+  "conversation.userSubtitle": "Mission sent",
+  "conversation.completed": "Response completed",
+  "conversation.thinking": "IAURA is thinking",
+  "conversation.thinkingSubtitle":
+    "Analyzing context, memory and intent...",
+  "action.eyebrow": "IAURA ACTION CENTER",
+  "action.title": "Verified actions",
+  "action.subtitle": "Local, transparent and reversible history.",
+  "action.undo": "Undo last action",
+  "action.completed": "Completed",
+  "action.undone": "Undone",
+  "action.blocked":
+    "Undo is blocked when later changes exist, protecting your information.",
+  "project.active": "Active project",
+  "project.objective": "Objective",
+  "branding.title": "Branding studio",
+  "branding.project": "Project",
+  "branding.name": "Brand name",
+  "branding.slogan": "Slogan",
+  "branding.style": "Style",
+  "branding.colors": "Colors",
+  "branding.sloganValue": "Building the future.",
+  "branding.styleValue": "Minimal • Futuristic • Premium",
+  "branding.colorsValue": "Black • Purple • White",
+  "brand.identityMissionLabel": "Mission",
+  "brand.identityColorsLabel": "Colors",
+  "brand.identityFontLabel": "Typography",
+  "brand.identityContinue": "Continue",
+  "brand.identitySlogan":
+    "Intelligence that builds with you",
+  "brand.identityMission":
+    "Turn ideas into complete digital projects through artificial intelligence.",
+  "loading.dashboard": "Loading IAURA dashboard...",
+  "loading.analysis": "Loading analysis...",
+  "loading.branding": "Loading branding studio...",
+  "error.conversation":
+    "I couldn’t complete the request right now. Please try again.",
+};
+
+const ptMessages: Record<MessageKey, string> = {
+  ...enMessages,
+  "app.tagline": "Construindo futuros inteligentes",
+  "app.loading": "Carregando IAURA...",
+  "hero.eyebrow": "SISTEMA DE INTELIGÊNCIA PESSOAL",
+  "hero.greeting": "Olá, {name}.",
+  "hero.identity": "Sou Aura.",
+  "hero.intro":
+    "Não estou aqui para pensar por você. Estou aqui para pensar com você, desenvolver suas capacidades e transformar suas ideias em resultados reais.",
+  "mode.learn.name": "Aprender",
+  "mode.learn.description":
+    "Aura orienta você com perguntas, pistas e prática.",
+  "mode.build.name": "Construir",
+  "mode.build.description":
+    "Transforme uma ideia em um projeto executável.",
+  "mode.founder.description":
+    "Estratégia, decisões e progresso para a IAURA.",
+  "mode.solve.name": "Resolver",
+  "mode.solve.description":
+    "Receba ajuda direta quando precisar avançar rápido.",
+  "assistant.activeMode": "MODO ATIVO",
+  "assistant.question":
+    "O que você quer construir hoje? Você não precisa ter todas as respostas. Começaremos exatamente de onde você está.",
+  "assistant.placeholder": "Diga à Aura o que você quer criar...",
+  "assistant.awakening": "Despertando Aura...",
+  "assistant.start": "Enviar intenção à Aura",
+  "assistant.mantra": "Aura pensa com você, não no seu lugar.",
+  "assistant.connecting": "INICIANDO IAURA",
+  "assistant.connected": "CONEXÃO ESTABELECIDA",
+  "assistant.awakeningTitle": "Aura está despertando...",
+  "assistant.readyTitle": "Aura está pronta.",
+  "assistant.awakeningSubtitle":
+    "Sincronizando memória, contexto e raciocínio.",
+  "assistant.readySubtitle": "Sua missão começa agora.",
+  "assistant.back": "Voltar",
+  "aura.state.idle": "Presença ativa",
+  "aura.state.listening": "Ouvindo você",
+  "aura.state.processing": "Compreendendo",
+  "aura.state.speaking": "Aura está falando",
+  "aura.state.awakening": "Núcleo despertando",
+  "chat.placeholder": "Pergunte qualquer coisa à IAURA...",
+  "chat.listening": "Ouvindo... toque novamente para terminar",
+  "chat.processing": "Transcrevendo sua voz...",
+  "chat.send": "Enviar",
+  "chat.micStart": "Falar com IAURA",
+  "chat.micStop": "Parar e enviar áudio",
+  "chat.voiceStop": "Parar voz",
+  "chat.recordAudio": "Gravar áudio",
+  "chat.voiceUnavailable":
+    "Este navegador não consegue gravar áudio. Tente por um link HTTPS.",
+  "chat.permissionDenied":
+    "Não consegui acessar o microfone. Verifique a permissão do navegador e tente novamente.",
+  "chat.transcriptionFailed":
+    "Não consegui entender o áudio. Tente novamente falando um pouco mais perto.",
+  "dashboard.eyebrow": "CENTRO DE COMANDO PESSOAL",
+  "dashboard.morning": "Bom dia",
+  "dashboard.afternoon": "Boa tarde",
+  "dashboard.evening": "Boa noite",
+  "dashboard.subtitle":
+    "Vamos continuar construindo seu futuro, uma missão por vez.",
+  "profile.eyebrow": "PERFIL",
+  "profile.title": "Personalize a IAURA",
+  "profile.description":
+    "Escolha como a IAURA deve chamar você e o idioma da sua experiência.",
+  "profile.namePlaceholder": "Seu nome",
+  "profile.save": "Salvar perfil",
+  "profile.languageLabel": "Idioma da IAURA",
+  "profile.languageHint":
+    "Controla a interface, respostas, microfone e Aura Prime.",
+  "goals.eyebrow": "OBJETIVOS PESSOAIS",
+  "goals.title": "Seus objetivos",
+  "goals.description":
+    "Defina os resultados que deseja alcançar com a IAURA.",
+  "goals.placeholder": "Adicionar um objetivo",
+  "goals.add": "Adicionar objetivo",
+  "goals.empty": "Você ainda não adicionou objetivos.",
+  "goals.remove": "Remover",
+  "habits.eyebrow": "HÁBITOS DIÁRIOS",
+  "habits.title": "Seus hábitos",
+  "habits.description":
+    "Construa rotinas que a IAURA possa ajudar você a manter.",
+  "habits.placeholder": "Adicionar um hábito",
+  "habits.add": "Adicionar hábito",
+  "habits.empty": "Você ainda não adicionou hábitos.",
+  "habits.remove": "Remover",
+  "intelligence.title": "Prioridades de hoje",
+  "intelligence.description":
+    "Com base em seus objetivos e hábitos, isto merece sua atenção hoje.",
+  "intelligence.recommendation": "RECOMENDAÇÃO DA IAURA",
+  "priority.firstGoal": "Adicione seu primeiro objetivo",
+  "priority.dailyHabit": "Crie um hábito diário",
+  "priority.nextMission": "Conclua sua próxima missão da IAURA",
+  "recommendation.goal":
+    "Crie seu primeiro objetivo para dar uma direção clara à IAURA.",
+  "recommendation.habit":
+    "Adicione um hábito diário para começar a construir consistência.",
+  "recommendation.momentum":
+    "Continue avançando. Seu perfil fica mais forte a cada dia.",
+  "focus.eyebrow": "FOCO DE HOJE",
+  "focus.title": "Faça a IAURA avançar",
+  "focus.item1": "Continue construindo a IAURA",
+  "focus.item2": "Mantenha a arquitetura limpa",
+  "focus.item3": "Conclua uma missão importante",
+  "progress.eyebrow": "PROGRESSO FOUNDER",
+  "progress.title": "Construindo a IAURA",
+  "progress.completed":
+    "{completed} de {total} missões concluídas",
+  "level.title": "Nível {level}",
+  "level.next": "{progress} / 100 XP para o próximo nível",
+  "level.action": "Concluir ação +25 XP",
+  "memory.reset": "Reiniciar memória da IAURA",
+  "stats.completed": "Concluídas",
+  "stats.pending": "Pendentes",
+  "performance.eyebrow": "DESEMPENHO DO SISTEMA",
+  "performance.title": "Diagnóstico da IAURA",
+  "performance.aiResponse": "Resposta da IA",
+  "performance.decision": "Motor de decisões",
+  "performance.messages": "Mensagens",
+  "performance.goals": "Objetivos na memória",
+  "performance.habits": "Hábitos na memória",
+  "performance.waiting": "Aguardando",
+  "quote.eyebrow": "FRASE DO DIA",
+  "quote.1":
+    "Pequenos progressos diários levam a resultados extraordinários.",
+  "quote.2": "A disciplina supera a motivação.",
+  "quote.3": "A execução cria impulso.",
+  "quote.4": "A consistência multiplica o sucesso.",
+  "quote.5":
+    "Construa hoje aquilo que seu eu do futuro agradecerá.",
+  "missions.eyebrow": "FILA DE MISSÕES",
+  "missions.title": "Missões disponíveis",
+  "missions.label": "Missão {id}",
+  "missions.001": "Criar o componente Button reutilizável.",
+  "missions.002": "Criar o componente Card reutilizável.",
+  "missions.003": "Criar o componente Input reutilizável.",
+  "missions.004":
+    "Separar a página em componentes reutilizáveis.",
+  "missions.005": "Criar os principais tipos da IAURA.",
+  "analysis.start": "Analisar meu progresso",
+  "analysis.loading": "Analisando...",
+  "analysis.title": "Análise da IAURA",
+  "conversation.title": "CONVERSA COM A IAURA",
+  "conversation.you": "Você",
+  "conversation.assistantSubtitle": "Inteligência contextual",
+  "conversation.userSubtitle": "Missão enviada",
+  "conversation.completed": "Resposta concluída",
+  "conversation.thinking": "IAURA está pensando",
+  "conversation.thinkingSubtitle":
+    "Analisando contexto, memória e intenção...",
+  "action.eyebrow": "CENTRO DE AÇÕES IAURA",
+  "action.title": "Ações verificadas",
+  "action.subtitle": "Histórico local, transparente e reversível.",
+  "action.undo": "Desfazer última ação",
+  "action.completed": "Concluído",
+  "action.undone": "Desfeito",
+  "action.blocked":
+    "Desfazer é bloqueado quando existem alterações posteriores, protegendo suas informações.",
+  "project.active": "Projeto ativo",
+  "project.objective": "Objetivo",
+  "branding.title": "Estúdio de marca",
+  "branding.project": "Projeto",
+  "branding.name": "Nome da marca",
+  "branding.slogan": "Slogan",
+  "branding.style": "Estilo",
+  "branding.colors": "Cores",
+  "branding.sloganValue": "Construindo o futuro.",
+  "branding.styleValue": "Minimalista • Futurista • Premium",
+  "branding.colorsValue": "Preto • Roxo • Branco",
+  "brand.identityMissionLabel": "Missão",
+  "brand.identityColorsLabel": "Cores",
+  "brand.identityFontLabel": "Tipografia",
+  "brand.identityContinue": "Continuar",
+  "brand.identitySlogan":
+    "Inteligência que constrói com você",
+  "brand.identityMission":
+    "Transformar ideias em projetos digitais completos por meio da inteligência artificial.",
+  "loading.dashboard": "Carregando painel da IAURA...",
+  "loading.analysis": "Carregando análise...",
+  "loading.branding": "Carregando estúdio de marca...",
+  "error.conversation":
+    "Não consegui concluir a solicitação agora. Tente novamente.",
+};
+
+const frMessages: Record<MessageKey, string> = {
+  ...enMessages,
+  "app.tagline": "Construire des futurs intelligents",
+  "app.loading": "Chargement d’IAURA...",
+  "hero.eyebrow": "SYSTÈME D’INTELLIGENCE PERSONNELLE",
+  "hero.greeting": "Bonjour, {name}.",
+  "hero.identity": "Je suis Aura.",
+  "hero.intro":
+    "Je ne suis pas là pour penser à votre place. Je suis là pour penser avec vous, développer vos capacités et transformer vos idées en résultats réels.",
+  "mode.learn.name": "Apprendre",
+  "mode.learn.description":
+    "Aura vous guide avec des questions, des indices et de la pratique.",
+  "mode.build.name": "Construire",
+  "mode.build.description":
+    "Transformez une idée en projet exécutable.",
+  "mode.founder.description":
+    "Stratégie, décisions et progression pour IAURA.",
+  "mode.solve.name": "Résoudre",
+  "mode.solve.description":
+    "Obtenez une aide directe lorsque vous devez avancer rapidement.",
+  "assistant.activeMode": "MODE ACTIF",
+  "assistant.question":
+    "Que voulez-vous construire aujourd’hui ? Vous n’avez pas besoin d’avoir toutes les réponses. Nous commencerons exactement là où vous êtes.",
+  "assistant.placeholder": "Dites à Aura ce que vous voulez créer...",
+  "assistant.awakening": "Éveil d’Aura...",
+  "assistant.start": "Envoyer l’intention à Aura",
+  "assistant.mantra": "Aura pense avec vous, jamais à votre place.",
+  "assistant.connecting": "DÉMARRAGE D’IAURA",
+  "assistant.connected": "CONNEXION ÉTABLIE",
+  "assistant.awakeningTitle": "Aura s’éveille...",
+  "assistant.readyTitle": "Aura est prête.",
+  "assistant.awakeningSubtitle":
+    "Synchronisation de la mémoire, du contexte et du raisonnement.",
+  "assistant.readySubtitle": "Votre mission commence maintenant.",
+  "assistant.back": "Retour",
+  "aura.state.idle": "Présence active",
+  "aura.state.listening": "Je vous écoute",
+  "aura.state.processing": "Compréhension",
+  "aura.state.speaking": "Aura parle",
+  "aura.state.awakening": "Éveil du noyau",
+  "chat.placeholder": "Demandez quelque chose à IAURA...",
+  "chat.listening":
+    "Écoute en cours... touchez encore pour terminer",
+  "chat.processing": "Transcription de votre voix...",
+  "chat.send": "Envoyer",
+  "chat.micStart": "Parler à IAURA",
+  "chat.micStop": "Arrêter et envoyer l’audio",
+  "chat.voiceStop": "Arrêter la voix",
+  "chat.recordAudio": "Enregistrer l’audio",
+  "chat.voiceUnavailable":
+    "Ce navigateur ne peut pas enregistrer l’audio. Réessayez avec un lien HTTPS.",
+  "chat.permissionDenied":
+    "Je n’ai pas pu accéder au microphone. Vérifiez l’autorisation du navigateur puis réessayez.",
+  "chat.transcriptionFailed":
+    "Je n’ai pas compris l’audio. Réessayez en parlant un peu plus près.",
+  "dashboard.eyebrow": "CENTRE DE COMMANDE PERSONNEL",
+  "dashboard.morning": "Bonjour",
+  "dashboard.afternoon": "Bon après-midi",
+  "dashboard.evening": "Bonsoir",
+  "dashboard.subtitle":
+    "Continuons à construire votre avenir, une mission à la fois.",
+  "profile.eyebrow": "PROFIL",
+  "profile.title": "Personnalisez IAURA",
+  "profile.description":
+    "Choisissez comment IAURA doit vous appeler et la langue de votre expérience.",
+  "profile.namePlaceholder": "Votre nom",
+  "profile.save": "Enregistrer",
+  "profile.languageLabel": "Langue d’IAURA",
+  "profile.languageHint":
+    "Contrôle l’interface, les réponses, le micro et Aura Prime.",
+  "goals.eyebrow": "OBJECTIFS PERSONNELS",
+  "goals.title": "Vos objectifs",
+  "goals.description":
+    "Définissez les résultats que vous souhaitez atteindre avec IAURA.",
+  "goals.placeholder": "Ajouter un objectif",
+  "goals.add": "Ajouter",
+  "goals.empty": "Vous n’avez pas encore ajouté d’objectif.",
+  "goals.remove": "Supprimer",
+  "habits.eyebrow": "HABITUDES QUOTIDIENNES",
+  "habits.title": "Vos habitudes",
+  "habits.description":
+    "Construisez des routines qu’IAURA peut vous aider à maintenir.",
+  "habits.placeholder": "Ajouter une habitude",
+  "habits.add": "Ajouter",
+  "habits.empty": "Vous n’avez pas encore ajouté d’habitude.",
+  "habits.remove": "Supprimer",
+  "intelligence.title": "Priorités du jour",
+  "intelligence.description":
+    "D’après vos objectifs et habitudes, ceci mérite votre attention aujourd’hui.",
+  "intelligence.recommendation": "RECOMMANDATION D’IAURA",
+  "priority.firstGoal": "Ajoutez votre premier objectif",
+  "priority.dailyHabit": "Créez une habitude quotidienne",
+  "priority.nextMission": "Terminez votre prochaine mission IAURA",
+  "recommendation.goal":
+    "Créez votre premier objectif pour donner une direction claire à IAURA.",
+  "recommendation.habit":
+    "Ajoutez une habitude quotidienne pour développer votre régularité.",
+  "recommendation.momentum":
+    "Continuez à avancer. Votre profil devient plus fort chaque jour.",
+  "focus.eyebrow": "FOCUS DU JOUR",
+  "focus.title": "Faites avancer IAURA",
+  "focus.item1": "Continuez à construire IAURA",
+  "focus.item2": "Gardez une architecture propre",
+  "focus.item3": "Terminez une mission importante",
+  "progress.eyebrow": "PROGRESSION FOUNDER",
+  "progress.title": "Construction d’IAURA",
+  "progress.completed":
+    "{completed} mission(s) sur {total} terminée(s)",
+  "level.eyebrow": "NIVEAU FOUNDER",
+  "level.title": "Niveau {level}",
+  "level.next": "{progress} / 100 XP avant le niveau suivant",
+  "level.action": "Terminer une action +25 XP",
+  "memory.reset": "Réinitialiser la mémoire d’IAURA",
+  "stats.completed": "Terminées",
+  "stats.pending": "En attente",
+  "performance.eyebrow": "PERFORMANCE DU SYSTÈME",
+  "performance.title": "Diagnostic d’IAURA",
+  "performance.aiResponse": "Réponse IA",
+  "performance.decision": "Moteur de décision",
+  "performance.messages": "Messages",
+  "performance.goals": "Objectifs en mémoire",
+  "performance.habits": "Habitudes en mémoire",
+  "performance.waiting": "En attente",
+  "quote.eyebrow": "CITATION DU JOUR",
+  "quote.1":
+    "De petits progrès quotidiens produisent des résultats extraordinaires.",
+  "quote.2": "La discipline dépasse la motivation.",
+  "quote.3": "L’exécution crée l’élan.",
+  "quote.4": "La régularité multiplie le succès.",
+  "quote.5":
+    "Construisez aujourd’hui ce que votre futur vous remerciera d’avoir créé.",
+  "missions.eyebrow": "FILE DES MISSIONS",
+  "missions.title": "Missions disponibles",
+  "missions.label": "Mission {id}",
+  "missions.001": "Créer le composant Button réutilisable.",
+  "missions.002": "Créer le composant Card réutilisable.",
+  "missions.003": "Créer le composant Input réutilisable.",
+  "missions.004":
+    "Diviser la page en composants réutilisables.",
+  "missions.005": "Créer les principaux types d’IAURA.",
+  "analysis.start": "Analyser ma progression",
+  "analysis.loading": "Analyse en cours...",
+  "analysis.title": "Analyse d’IAURA",
+  "conversation.title": "CONVERSATION AVEC IAURA",
+  "conversation.you": "Vous",
+  "conversation.assistantSubtitle": "Intelligence contextuelle",
+  "conversation.userSubtitle": "Mission envoyée",
+  "conversation.completed": "Réponse terminée",
+  "conversation.thinking": "IAURA réfléchit",
+  "conversation.thinkingSubtitle":
+    "Analyse du contexte, de la mémoire et de l’intention...",
+  "action.eyebrow": "CENTRE D’ACTIONS IAURA",
+  "action.title": "Actions vérifiées",
+  "action.subtitle": "Historique local, transparent et réversible.",
+  "action.undo": "Annuler la dernière action",
+  "action.completed": "Terminée",
+  "action.undone": "Annulée",
+  "action.blocked":
+    "L’annulation est bloquée lorsqu’il existe des modifications ultérieures afin de protéger vos informations.",
+  "project.active": "Projet actif",
+  "project.objective": "Objectif",
+  "branding.title": "Studio de marque",
+  "branding.project": "Projet",
+  "branding.name": "Nom de marque",
+  "branding.slogan": "Slogan",
+  "branding.style": "Style",
+  "branding.colors": "Couleurs",
+  "branding.sloganValue": "Construire le futur.",
+  "branding.styleValue": "Minimaliste • Futuriste • Premium",
+  "branding.colorsValue": "Noir • Violet • Blanc",
+  "brand.identityMissionLabel": "Mission",
+  "brand.identityColorsLabel": "Couleurs",
+  "brand.identityFontLabel": "Typographie",
+  "brand.identityContinue": "Continuer",
+  "brand.identitySlogan":
+    "L’intelligence qui construit avec vous",
+  "brand.identityMission":
+    "Transformer les idées en projets numériques complets grâce à l’intelligence artificielle.",
+  "loading.dashboard": "Chargement du tableau de bord IAURA...",
+  "loading.analysis": "Chargement de l’analyse...",
+  "loading.branding": "Chargement du studio de marque...",
+  "error.conversation":
+    "Je n’ai pas pu terminer la demande maintenant. Réessayez.",
+};
+
+const messages: Record<
+  SupportedLocale,
+  Record<MessageKey, string>
+> = {
+  "es-419": esMessages,
+  "en-US": enMessages,
+  "pt-BR": ptMessages,
+  "fr-FR": frMessages,
+};
+
+export function translate(
+  locale: SupportedLocale,
+  key: MessageKey,
+  params: MessageParams = {}
+): string {
+  const template =
+    messages[locale]?.[key] ??
+    esMessages[key];
+
+  return template.replace(
+    /\{(\w+)\}/g,
+    (match, name: string) =>
+      params[name] === undefined
+        ? match
+        : String(params[name])
+  );
+}

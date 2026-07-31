@@ -1,3 +1,7 @@
+"use client";
+
+import { useI18n } from "@/core/i18n/I18nContext";
+
 type ProgressSummaryProps = {
   completed: number;
   total: number;
@@ -7,8 +11,11 @@ export default function ProgressSummary({
   completed,
   total,
 }: ProgressSummaryProps) {
+  const { t } = useI18n();
   const percentage =
-    total > 0 ? Math.round((completed / total) * 100) : 0;
+    total > 0
+      ? Math.round((completed / total) * 100)
+      : 0;
 
   return (
     <div className="lg:col-span-2">
@@ -16,15 +23,18 @@ export default function ProgressSummary({
         <div className="flex items-end justify-between gap-6">
           <div>
             <p className="text-xs tracking-[0.25em] text-zinc-500">
-              FOUNDER PROGRESS
+              {t("progress.eyebrow")}
             </p>
 
             <h2 className="mt-2 text-2xl font-semibold text-white">
-              Construcción de IAURA
+              {t("progress.title")}
             </h2>
 
             <p className="mt-2 text-sm text-zinc-500">
-              {completed} de {total} misiones completadas
+              {t("progress.completed", {
+                completed,
+                total,
+              })}
             </p>
           </div>
 

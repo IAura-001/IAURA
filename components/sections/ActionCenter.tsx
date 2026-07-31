@@ -1,8 +1,7 @@
 "use client";
 
-import type {
-  AuraActionHistoryEntry,
-} from "@/core/actions";
+import type { AuraActionHistoryEntry } from "@/core/actions";
+import { useI18n } from "@/core/i18n/I18nContext";
 
 interface ActionCenterProps {
   history: AuraActionHistoryEntry[];
@@ -10,8 +9,11 @@ interface ActionCenterProps {
   onUndoLast: () => void;
 }
 
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatTime(
+  value: string,
+  locale: string
+): string {
+  return new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
@@ -22,6 +24,8 @@ export function ActionCenter({
   canUndoLast,
   onUndoLast,
 }: ActionCenterProps) {
+  const { locale, t } = useI18n();
+
   if (history.length === 0) {
     return null;
   }
@@ -31,13 +35,15 @@ export function ActionCenter({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs tracking-[0.25em] text-emerald-300/60">
-            IAURA ACTION CENTER
+            {t("action.eyebrow")}
           </p>
+
           <h2 className="mt-2 text-xl font-semibold text-white">
-            Acciones verificadas
+            {t("action.title")}
           </h2>
+
           <p className="mt-1 text-sm text-zinc-500">
-            Historial local, transparente y reversible.
+            {t("action.subtitle")}
           </p>
         </div>
 
@@ -47,7 +53,7 @@ export function ActionCenter({
           disabled={!canUndoLast}
           className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-emerald-300/30 hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Deshacer última acción
+          {t("action.undo")}
         </button>
       </div>
 
@@ -67,12 +73,15 @@ export function ActionCenter({
                 ].join(" ")}
               >
                 {entry.status === "completed"
-                  ? "Completado"
-                  : "Deshecho"}
+                  ? t("action.completed")
+                  : t("action.undone")}
               </span>
 
               <time className="text-xs text-zinc-600">
-                {formatTime(entry.createdAt)}
+                {formatTime(
+                  entry.createdAt,
+                  locale
+                )}
               </time>
             </div>
 
@@ -102,7 +111,7 @@ export function ActionCenter({
             entry.status === "completed"
         ) && (
           <p className="mt-4 text-xs text-zinc-600">
-            Deshacer se bloquea cuando existen cambios posteriores para proteger tu información.
+            {t("action.blocked")}
           </p>
         )}
     </section>
