@@ -1,3 +1,4 @@
+import { assessAutonomy } from "../autonomy";
 import { buildBrainContext } from "../context/ContextBuilder";
 import { makeBrainDecision } from "../decision/DecisionEngine";
 import { validateBrainResult } from "../validator/ResponseValidator";
@@ -9,29 +10,30 @@ import type {
 
 export class Brain {
   analyze(input: BrainInput): BrainResult {
-    const context =
-      buildBrainContext(input);
+    const context = buildBrainContext(input);
 
-    const decision =
-      makeBrainDecision(context);
+    const decision = makeBrainDecision(context);
+    const autonomy = assessAutonomy(context);
 
-    const validated =
-      validateBrainResult(
-        context,
-        decision
-      );
-const prompt =
-  promptBuilder.build({
-    context,
-    decision,
-    history: input.history,
-  });
+    const validated = validateBrainResult(
+      context,
+      decision
+    );
+
+    const prompt = promptBuilder.build({
+      context,
+      decision,
+      autonomy,
+      history: input.history,
+    });
+
     return {
-  context,
-  decision,
-  prompt,
-  validated,
-};
+      context,
+      decision,
+      autonomy,
+      prompt,
+      validated,
+    };
   }
 }
 

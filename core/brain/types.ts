@@ -1,4 +1,6 @@
 import type { ConversationMessage } from "../conversation/ConversationMemory";
+import type { AutonomyAssessment } from "../autonomy";
+
 export type ThinkingMode =
   | "mentor"
   | "planner"
@@ -27,6 +29,7 @@ export interface BrainDecision {
 export interface BrainResult {
   context: BrainContext;
   decision: BrainDecision;
+  autonomy: AutonomyAssessment;
   prompt: string;
   validated: boolean;
 }
