@@ -14,6 +14,8 @@ import type { MessageKey } from "@/core/i18n/messages";
 
 type AssistantCardProps = {
   modeId?: string;
+  isAuraLive?: boolean;
+  onToggleAuraLive?: () => void;
   onStart?: (
     mission: string
   ) => void | Promise<void>;
@@ -23,6 +25,8 @@ type AuraPhase = "idle" | "awakening";
 
 export default function AssistantCard({
   modeId = "learn",
+  isAuraLive = false,
+  onToggleAuraLive,
   onStart,
 }: AssistantCardProps) {
   const { t } = useI18n();
@@ -98,7 +102,11 @@ export default function AssistantCard({
           </span>
         </div>
 
-        <AuraPresence phase={phase} />
+        <AuraPresence
+          phase={phase}
+          isLive={isAuraLive}
+          onToggleLive={onToggleAuraLive}
+        />
 
         <form
           onSubmit={beginAura}

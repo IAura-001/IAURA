@@ -26,6 +26,7 @@ import ProjectCard from "@/components/sections/ProjectCard";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -91,7 +92,12 @@ export default function Home() {
 const {
   speak,
   voiceMode,
+  setVoiceMode,
   setLanguage,
+  startListening,
+  cancelListening,
+  stopSpeaking,
+  unlockAudio,
 } = useVoiceContext();  
   const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -101,6 +107,11 @@ const {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
 const [isSending, setIsSending] = useState(false);
+const [isAuraLive, setIsAuraLive] =
+  useState(false);
+const auraLiveRef = useRef(false);
+const auraLiveRestartTimerRef =
+  useRef<number | null>(null);
 const {
   memory,
   isLoaded,
@@ -213,6 +224,87 @@ const handleAnalyze = () => {
     setIsAnalyzing(false);
   }, 700);
 };
+
+const stopAuraLive = useCallback(() => {
+  auraLiveRef.current = false;
+  setIsAuraLive(false);
+
+  if (
+    auraLiveRestartTimerRef.current !==
+    null
+  ) {
+    window.clearTimeout(
+      auraLiveRestartTimerRef.current
+    );
+    auraLiveRestartTimerRef.current = null;
+  }
+
+  cancelListening();
+  stopSpeaking();
+}, [cancelListening, stopSpeaking]);
+
+const scheduleAuraLiveListening =
+  useCallback(() => {
+    if (!auraLiveRef.current) {
+      return;
+    }
+
+    if (
+      auraLiveRestartTimerRef.current !==
+      null
+    ) {
+      window.clearTimeout(
+        auraLiveRestartTimerRef.current
+      );
+    }
+
+    auraLiveRestartTimerRef.current =
+      window.setTimeout(() => {
+        auraLiveRestartTimerRef.current =
+          null;
+
+        if (auraLiveRef.current) {
+          void startListening();
+        }
+      }, 350);
+  }, [startListening]);
+
+const toggleAuraLive = useCallback(() => {
+  if (auraLiveRef.current) {
+    stopAuraLive();
+    return;
+  }
+
+  if (isSending) {
+    return;
+  }
+
+  auraLiveRef.current = true;
+  setIsAuraLive(true);
+  setVoiceMode(true);
+  void unlockAudio();
+  void startListening();
+}, [
+  isSending,
+  setVoiceMode,
+  startListening,
+  stopAuraLive,
+  unlockAudio,
+]);
+
+useEffect(() => {
+  return () => {
+    if (
+      auraLiveRestartTimerRef.current !==
+      null
+    ) {
+      window.clearTimeout(
+        auraLiveRestartTimerRef.current
+      );
+    }
+  };
+}, []);
+
 const handleSend = useCallback(
   async (missionOverride?: string) => {
   const trimmedInput = missionOverride?.trim();
@@ -220,6 +312,8 @@ const handleSend = useCallback(
 if (!trimmedInput || isSending) {
   return;
 }
+const requestFromAuraLive =
+  auraLiveRef.current;
 const responseStartedAt = performance.now();
 
  
@@ -261,27 +355,60 @@ const content = [
 
     setMessages((prev) => [...prev, assistantMessage]);
 
-if (voiceMode) {
-  void speak(spokenContent).catch((error) => {
-    console.error(
-      "IAURA voice playback failed:",
-      error
-    );
-  });
+if (
+  voiceMode &&
+  (!requestFromAuraLive ||
+    auraLiveRef.current)
+) {
+  const playback = speak(spokenContent);
+
+  if (auraLiveRef.current) {
+    try {
+      await playback;
+    } catch (error) {
+      console.error(
+        "IAURA voice playback failed:",
+        error
+      );
+    }
+  } else {
+    void playback.catch((error) => {
+      console.error(
+        "IAURA voice playback failed:",
+        error
+      );
+    });
+  }
 }
   } catch (error) {
   console.error("IAURA conversation failed:", error);
 
+  const errorContent = translate(
+    memory.preferredLocale,
+    "error.conversation"
+  );
   const errorMessage: ChatMessage = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role: "assistant",
-    content: translate(
-      memory.preferredLocale,
-      "error.conversation"
-    ),
+    content: errorContent,
   };
 
   setMessages((prev) => [...prev, errorMessage]);
+
+  if (
+    voiceMode &&
+    auraLiveRef.current &&
+    requestFromAuraLive
+  ) {
+    try {
+      await speak(errorContent);
+    } catch (voiceError) {
+      console.error(
+        "IAURA voice playback failed:",
+        voiceError
+      );
+    }
+  }
 
   } finally {
   performanceMonitor.recordResponse(
@@ -289,9 +416,10 @@ if (voiceMode) {
   );
 
   setIsSending(false);
+  scheduleAuraLiveListening();
 }
 },
-[executeActions, isSending, memory.preferredLocale, prompt, voiceMode, speak]
+[executeActions, isSending, memory.preferredLocale, prompt, scheduleAuraLiveListening, voiceMode, speak]
 );
 
   
@@ -362,6 +490,8 @@ return (
 <AssistantCard
   modeId={activeMode.id}
   onStart={handleSend}
+  isAuraLive={isAuraLive}
+  onToggleAuraLive={toggleAuraLive}
 />
 <AIActionBar
   onAnalyze={handleAnalyze}

@@ -8,6 +8,8 @@ type AuraPhase = "idle" | "awakening";
 
 interface AuraPresenceProps {
   phase: AuraPhase;
+  isLive?: boolean;
+  onToggleLive?: () => void;
 }
 
 const particles = [
@@ -32,6 +34,8 @@ const waveHeights = [
 
 export function AuraPresence({
   phase,
+  isLive = false,
+  onToggleLive,
 }: AuraPresenceProps) {
   const { state } = useVoiceContext();
   const { t } = useI18n();
@@ -41,10 +45,13 @@ export function AuraPresence({
       : state;
   const statusKey =
     `aura.state.${visualState}` as MessageKey;
+  const actionLabel = isLive
+    ? t("aura.live.stop")
+    : t("aura.live.start");
 
   return (
     <div
-      className={`aura-presence aura-${visualState} relative mx-auto flex min-h-[268px] w-full max-w-[440px] items-center justify-center overflow-hidden sm:min-h-[310px]`}
+      className={`aura-presence aura-${visualState} ${isLive ? "aura-live" : ""} relative mx-auto flex min-h-[268px] w-full max-w-[440px] items-center justify-center overflow-hidden sm:min-h-[310px]`}
       aria-label={t(statusKey)}
     >
       <div
@@ -96,7 +103,15 @@ export function AuraPresence({
         <span />
       </div>
 
-      <div className="aura-core-shell relative z-10 flex h-32 w-32 items-center justify-center rounded-full sm:h-36 sm:w-36">
+      <button
+        type="button"
+        className="aura-core-shell relative z-10 flex h-32 w-32 touch-manipulation appearance-none items-center justify-center rounded-full outline-none transition-transform focus-visible:ring-2 focus-visible:ring-violet-200/80 active:scale-95 sm:h-36 sm:w-36"
+        aria-label={actionLabel}
+        aria-pressed={isLive}
+        title={actionLabel}
+        onClick={onToggleLive}
+        disabled={!onToggleLive}
+      >
         <div
           aria-hidden="true"
           className="aura-core-atmosphere absolute -inset-10 rounded-full"
@@ -120,7 +135,7 @@ export function AuraPresence({
         <span className="aura-glyph relative z-20 text-4xl font-light">
           ✦
         </span>
-      </div>
+      </button>
 
       <div
         aria-hidden="true"
@@ -137,10 +152,10 @@ export function AuraPresence({
         ))}
       </div>
 
-      <div className="absolute bottom-0 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/40 px-4 py-2 text-[9px] font-medium uppercase tracking-[0.26em] text-violet-200 backdrop-blur-xl sm:bottom-1 sm:text-[10px] sm:tracking-[0.28em]">
-        <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-current shadow-[0_0_10px_currentColor]" />
-        {t(statusKey)}
-      </div>
+      <span
+        aria-hidden="true"
+        className="aura-live-marker absolute bottom-3 left-1/2 z-30 h-1 w-8 -translate-x-1/2 rounded-full sm:bottom-4"
+      />
 
       <style jsx>{`
         .aura-presence {
@@ -148,6 +163,12 @@ export function AuraPresence({
           --aura-secondary: 59, 130, 246;
           --aura-accent: 216, 180, 254;
           isolation: isolate;
+        }
+
+        .aura-live {
+          --aura-primary: 124, 58, 237;
+          --aura-secondary: 34, 211, 238;
+          --aura-accent: 255, 255, 255;
         }
 
         .aura-listening {
@@ -297,6 +318,42 @@ export function AuraPresence({
           backdrop-filter: blur(16px);
           animation: aura-breathe 4.2s ease-in-out
             infinite;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .aura-core-shell:disabled {
+          cursor: default;
+        }
+
+        .aura-live .aura-core-shell {
+          box-shadow:
+            0 0 28px
+              rgba(var(--aura-primary), 0.52),
+            0 0 90px
+              rgba(var(--aura-secondary), 0.34),
+            inset 0 0 42px
+              rgba(var(--aura-primary), 0.24);
+        }
+
+        .aura-live-marker {
+          background: rgba(
+            var(--aura-accent),
+            0.35
+          );
+          box-shadow: 0 0 14px
+            rgba(var(--aura-primary), 0.5);
+          transition: all 300ms ease;
+        }
+
+        .aura-live .aura-live-marker {
+          width: 42px;
+          background: rgb(var(--aura-accent));
+          box-shadow:
+            0 0 12px
+              rgba(var(--aura-accent), 0.9),
+            0 0 28px
+              rgba(var(--aura-primary), 0.8);
         }
 
         .aura-core-atmosphere {

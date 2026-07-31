@@ -75,9 +75,13 @@ type SpeechRecognitionConstructor =
 interface VoiceWindow extends Window {
   SpeechRecognition?: SpeechRecognitionConstructor;
   webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  webkitAudioContext?: typeof AudioContext;
 }
 
 const MAX_RECORDING_MS = 30_000;
+const NO_SPEECH_TIMEOUT_MS = 10_000;
+const SILENCE_AFTER_SPEECH_MS = 1_150;
+const VOICE_ACTIVITY_THRESHOLD = 0.035;
 const VOICE_MODE_STORAGE_KEY =
   "iaura.voice.enabled";
 const VOICE_MODE_EVENT =
@@ -201,8 +205,18 @@ export function useVoice() {
   const streamRef =
     useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const discardRecordingRef =
+    useRef(false);
   const recordingTimerRef =
     useRef<number | null>(null);
+  const voiceActivityTimerRef =
+    useRef<number | null>(null);
+  const audioContextRef =
+    useRef<AudioContext | null>(null);
+  const audioSourceRef =
+    useRef<MediaStreamAudioSourceNode | null>(
+      null
+    );
 
   const setVoiceMode = useCallback(
     (enabled: boolean) => {
@@ -233,6 +247,27 @@ export function useVoice() {
     []
   );
 
+  const releaseVoiceActivity =
+    useCallback(() => {
+      if (
+        voiceActivityTimerRef.current !==
+        null
+      ) {
+        window.clearInterval(
+          voiceActivityTimerRef.current
+        );
+        voiceActivityTimerRef.current = null;
+      }
+
+      audioSourceRef.current?.disconnect();
+      audioSourceRef.current = null;
+
+      if (audioContextRef.current) {
+        void audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+    }, []);
+
   const releaseRecording = useCallback(() => {
     if (recordingTimerRef.current !== null) {
       window.clearTimeout(
@@ -241,13 +276,133 @@ export function useVoice() {
       recordingTimerRef.current = null;
     }
 
+    releaseVoiceActivity();
+
     streamRef.current
       ?.getTracks()
       .forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
     chunksRef.current = [];
-  }, []);
+  }, [releaseVoiceActivity]);
+
+  const startVoiceActivityDetection =
+    useCallback(
+      (
+        stream: MediaStream,
+        recorder: MediaRecorder
+      ) => {
+        const voiceWindow =
+          window as VoiceWindow;
+        const AudioContextConstructor =
+          window.AudioContext ??
+          voiceWindow.webkitAudioContext;
+
+        if (!AudioContextConstructor) {
+          return;
+        }
+
+        try {
+          releaseVoiceActivity();
+
+          const audioContext =
+            new AudioContextConstructor();
+
+          if (
+            audioContext.state ===
+            "suspended"
+          ) {
+            void audioContext.resume();
+          }
+
+          const analyser =
+            audioContext.createAnalyser();
+          const source =
+            audioContext.createMediaStreamSource(
+              stream
+            );
+
+          analyser.fftSize = 1024;
+          analyser.smoothingTimeConstant = 0.35;
+
+          const samples = new Float32Array(
+            analyser.fftSize
+          );
+          const recordingStartedAt =
+            performance.now();
+          let heardVoice = false;
+          let lastVoiceAt =
+            recordingStartedAt;
+
+          source.connect(analyser);
+
+          audioContextRef.current =
+            audioContext;
+          audioSourceRef.current = source;
+
+          voiceActivityTimerRef.current =
+            window.setInterval(() => {
+              if (
+                recorder.state !==
+                "recording"
+              ) {
+                return;
+              }
+
+              analyser.getFloatTimeDomainData(
+                samples
+              );
+
+              let energy = 0;
+
+              for (
+                let index = 0;
+                index < samples.length;
+                index += 1
+              ) {
+                energy += samples[index] ** 2;
+              }
+
+              const level = Math.sqrt(
+                energy / samples.length
+              );
+              const now = performance.now();
+
+              if (
+                level >=
+                VOICE_ACTIVITY_THRESHOLD
+              ) {
+                heardVoice = true;
+                lastVoiceAt = now;
+                return;
+              }
+
+              const silenceComplete =
+                heardVoice &&
+                now - lastVoiceAt >=
+                  SILENCE_AFTER_SPEECH_MS;
+              const noSpeechTimeout =
+                !heardVoice &&
+                now - recordingStartedAt >=
+                  NO_SPEECH_TIMEOUT_MS;
+
+              if (
+                silenceComplete ||
+                noSpeechTimeout
+              ) {
+                recorder.stop();
+              }
+            }, 80);
+        } catch (error) {
+          console.warn(
+            "IAURA voice activity detection unavailable:",
+            error
+          );
+          releaseVoiceActivity();
+        }
+      },
+      [releaseVoiceActivity]
+    );
 
   const transcribeAudio = useCallback(
     async (
@@ -514,6 +669,14 @@ export function useVoice() {
         };
 
         recorder.onstop = () => {
+          if (discardRecordingRef.current) {
+            discardRecordingRef.current =
+              false;
+            releaseRecording();
+            setState("idle");
+            return;
+          }
+
           const audio = new Blob(
             chunksRef.current,
             {
@@ -529,6 +692,11 @@ export function useVoice() {
         };
 
         recorder.start(250);
+        discardRecordingRef.current = false;
+        startVoiceActivityDetection(
+          stream,
+          recorder
+        );
         setVoiceError(null);
         setVoiceMode(true);
         setState("listening");
@@ -556,6 +724,7 @@ export function useVoice() {
     }, [
       releaseRecording,
       setVoiceMode,
+      startVoiceActivityDetection,
       transcribeAudio,
     ]);
 
@@ -612,6 +781,20 @@ export function useVoice() {
     }
 
     recognitionRef.current?.stop();
+  }, []);
+
+  const cancelListening = useCallback(() => {
+    if (
+      recorderRef.current?.state ===
+      "recording"
+    ) {
+      discardRecordingRef.current = true;
+      recorderRef.current.stop();
+      return;
+    }
+
+    recognitionRef.current?.abort();
+    setState("idle");
   }, []);
 
   const transcribeAudioFile = useCallback(
@@ -671,6 +854,7 @@ export function useVoice() {
     setLanguage,
     startListening,
     stopListening,
+    cancelListening,
     transcribeAudioFile,
     clearTranscript,
     clearVoiceError,
