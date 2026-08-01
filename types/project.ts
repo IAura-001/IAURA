@@ -20,26 +20,13 @@ export type BrandPersonality =
   | "serene"
   | "playful";
 
-export type BrandTypography =
-  | "modern"
-  | "editorial"
-  | "technical";
+export type BrandTypography = "modern" | "editorial" | "technical";
 
-export type BrandSymbol =
-  | "spark"
-  | "orbit"
-  | "monogram"
-  | "portal";
+export type BrandSymbol = "spark" | "orbit" | "monogram" | "portal";
 
-export type BrandIconContainer =
-  | "squircle"
-  | "circle"
-  | "none";
+export type BrandIconContainer = "squircle" | "circle" | "none";
 
-export type BrandSymbolWeight =
-  | "light"
-  | "regular"
-  | "bold";
+export type BrandSymbolWeight = "light" | "regular" | "bold";
 
 export interface BrandLogoSystem {
   symbol: BrandSymbol;
@@ -66,6 +53,36 @@ export interface BrandProfile {
   updatedAt: string;
 }
 
+export interface BrandingStudioMemory {
+  prompts: Record<string, string>;
+  generatedContent: Record<string, string>;
+  updatedAt: string;
+}
+
+export type LaunchAssetStatus = "draft" | "approved";
+
+export type LaunchAssetType =
+  | "Instagram teaser"
+  | "Instagram caption"
+  | "Reel script"
+  | "Announcement"
+  | "Other";
+
+export interface LaunchAsset {
+  id: string;
+  title: string;
+  type: LaunchAssetType;
+  status: LaunchAssetStatus;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LaunchStudioMemory {
+  assets: LaunchAsset[];
+  updatedAt: string;
+}
+
 export interface IAuraProject {
   id: string;
   name: string;
@@ -76,4 +93,6 @@ export interface IAuraProject {
   status: ProjectStatus;
   studios: ProjectStudios;
   branding?: BrandProfile;
+  brandingStudio?: BrandingStudioMemory;
+  launchStudio?: LaunchStudioMemory;
 }
