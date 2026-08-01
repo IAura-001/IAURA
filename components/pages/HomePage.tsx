@@ -25,7 +25,8 @@ import dynamic from "next/dynamic";
 import type { ChatMessage } from "@/types/chat";
 import type { BrandProfile } from "@/types/project";
 import ProjectCard from "@/components/sections/ProjectCard";
-import Workspace from "@/components/pages/Workspace";import {
+import Workspace from "@/components/pages/Workspace";
+import {
   useCallback,
   useEffect,
   useRef,
@@ -234,12 +235,25 @@ const handleAnalyze = () => {
   setIsAnalyzing(true);
   setShowAnalysis(false);
 
-  setTimeout(() => {
-    const newAnalysis = generateAIResponse(prompt);
+  window.setTimeout(async () => {
+    try {
+      const newAnalysis = await generateAIResponse(prompt);
 
-    setAnalysis(newAnalysis);
-    setShowAnalysis(true);
-    setIsAnalyzing(false);
+      setAnalysis(newAnalysis);
+      setShowAnalysis(true);
+    } catch (error) {
+      console.error(
+        "IAURA analysis generation failed:",
+        error
+      );
+
+      setAnalysis(
+        "IAURA no pudo generar el análisis."
+      );
+      setShowAnalysis(true);
+    } finally {
+      setIsAnalyzing(false);
+    }
   }, 700);
 };
 

@@ -3,14 +3,14 @@ import { NextResponse } from "next/server";
 import { isRequestAuthorized } from "@/core/auth/access";
 import { createOpenAIProvider } from "@/services/providers";
 
+export const runtime = "nodejs";
+
 interface ChatRequestBody {
   prompt?: unknown;
   instructions?: unknown;
 }
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   if (!isRequestAuthorized(request)) {
     return NextResponse.json(
       {
@@ -22,13 +22,12 @@ export async function POST(
         headers: {
           "Cache-Control": "no-store",
         },
-      }
+      },
     );
   }
 
   try {
-    const body =
-      (await request.json()) as ChatRequestBody;
+    const body = (await request.json()) as ChatRequestBody;
 
     if (
       typeof body.prompt !== "string" ||
@@ -36,12 +35,15 @@ export async function POST(
     ) {
       return NextResponse.json(
         {
-          error:
-            "A non-empty prompt is required.",
+          error: "A non-empty prompt is required.",
+          code: "IAURA_PROMPT_REQUIRED",
         },
         {
           status: 400,
-        }
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        },
       );
     }
 
@@ -51,22 +53,24 @@ export async function POST(
         ? body.instructions.trim()
         : undefined;
 
-    const provider =
-      createOpenAIProvider();
+    const provider = createOpenAIProvider();
 
-    const result =
-      await provider.generate({
-        prompt: body.prompt.trim(),
-        instructions,
-      });
+    const result = await provider.generate({
+      prompt: body.prompt.trim(),
+      instructions,
+    });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
   } catch (error) {
     console.error(
       "IAURA provider request failed:",
       error instanceof Error
-        ? error.name
-        : "UnknownError"
+        ? error.message
+        : "Unknown error",
     );
 
     return NextResponse.json(
@@ -77,7 +81,10 @@ export async function POST(
       },
       {
         status: 502,
-      }
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
     );
   }
 }
