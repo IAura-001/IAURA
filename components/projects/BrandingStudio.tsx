@@ -141,20 +141,16 @@ export default function BrandingStudio({
       ) {
         const saved = parsed as Partial<BrandingDraft>;
 
-        const prompts =
-          saved.prompts && typeof saved.prompts === "object"
-            ? saved.prompts
-            : {};
-
-        const generatedContent =
-          saved.generatedContent &&
-          typeof saved.generatedContent === "object"
-            ? sanitizeContentMap(saved.generatedContent)
-            : {};
-
         setDraft({
-          prompts,
-          generatedContent,
+          prompts:
+            saved.prompts && typeof saved.prompts === "object"
+              ? saved.prompts
+              : {},
+          generatedContent:
+            saved.generatedContent &&
+            typeof saved.generatedContent === "object"
+              ? sanitizeContentMap(saved.generatedContent)
+              : {},
           updatedAt:
             typeof saved.updatedAt === "string" ? saved.updatedAt : "",
         });
@@ -175,6 +171,19 @@ export default function BrandingStudio({
       prompts: {
         ...current.prompts,
         [selectedSection]: value,
+      },
+    }));
+
+    setFeedback("");
+    setError("");
+  }
+
+  function updateResult(value: string): void {
+    setDraft((current) => ({
+      ...current,
+      generatedContent: {
+        ...current.generatedContent,
+        [selectedSection]: sanitizeAuraResponse(value),
       },
     }));
 
@@ -227,6 +236,8 @@ No utilices markdown, asteriscos, numerales de encabezado ni símbolos decorativ
           [selectedSection]: cleanResponse,
         },
       }));
+
+      setFeedback("Propuesta generada. Revísala y guarda el borrador.");
     } catch (generationError) {
       console.error("IAURA branding generation failed:", generationError);
       setError("IAURA no pudo generar esta sección.");
@@ -261,142 +272,188 @@ No utilices markdown, asteriscos, numerales de encabezado ni símbolos decorativ
 
   if (!isLoaded) {
     return (
-      <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-8 text-zinc-400">
+      <section className="fixed inset-0 z-[100] grid place-items-center bg-[#05030b] text-zinc-400">
         Cargando Branding Studio...
       </section>
     );
   }
 
   return (
-    <section className="space-y-8">
-      <header className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.35em] text-violet-300">
-            Branding Studio
-          </p>
-
-          <h1 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-            {project.name}
-          </h1>
-
-          <p className="mt-4 max-w-2xl text-zinc-400">
-            {project.goal || "Construye la identidad completa del proyecto."}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="self-start rounded-xl border border-white/10 px-5 py-3 text-white transition hover:border-violet-400"
-        >
-          ← Volver
-        </button>
-      </header>
-
-      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="space-y-2">
-          {SECTIONS.map((section) => {
-            const hasResult = Boolean(draft.generatedContent[section.id]);
-
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => {
-                  setSelectedSection(section.id);
-                  setFeedback("");
-                  setError("");
-                }}
-                className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition ${
-                  selectedSection === section.id
-                    ? "border-violet-400 bg-violet-500/10 text-white"
-                    : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20"
-                }`}
-              >
-                <span>{section.label}</span>
-
-                {hasResult && (
-                  <span
-                    className="h-2 w-2 rounded-full bg-emerald-400"
-                    aria-label="Sección generada"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </aside>
-
-        <main className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:p-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
-              Área de trabajo
+    <section className="fixed inset-0 z-[100] overflow-y-auto bg-[#05030b]">
+      <div className="mx-auto min-h-screen w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
+        <header className="sticky top-0 z-20 mb-6 flex flex-col gap-5 rounded-3xl border border-white/10 bg-[#090611]/90 p-5 shadow-2xl backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.35em] text-violet-300">
+              Branding Studio
             </p>
 
-            <h2 className="mt-3 text-3xl font-bold text-white">
-              {activeSection.label}
-            </h2>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h1 className="truncate text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                {project.name}
+              </h1>
 
-            <p className="mt-3 text-zinc-400">
-              {activeSection.description}
+              <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-200">
+                {activeSection.label}
+              </span>
+            </div>
+
+            <p className="mt-2 max-w-3xl text-sm text-zinc-400 sm:text-base">
+              {project.goal || "Construye la identidad completa del proyecto."}
             </p>
           </div>
 
-          <textarea
-            value={activePrompt}
-            onChange={(event) => updatePrompt(event.target.value)}
-            placeholder={`Describe lo que necesitas para ${activeSection.label.toLowerCase()}...`}
-            className="mt-8 h-48 w-full resize-none rounded-2xl border border-white/10 bg-black/20 p-5 text-white outline-none placeholder:text-zinc-600 focus:border-violet-400"
-          />
-
-          <div className="mt-6 flex flex-wrap gap-4">
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={loading || !activePrompt.trim()}
-              className="rounded-2xl bg-violet-600 px-6 py-3 font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? "Generando..." : "Generar con IAURA"}
-            </button>
-
+          <div className="flex shrink-0 flex-wrap gap-3">
             <button
               type="button"
               onClick={handleSaveDraft}
-              className="rounded-2xl border border-white/10 px-6 py-3 text-white transition hover:border-violet-400"
+              className="rounded-xl bg-violet-600 px-5 py-3 font-medium text-white transition hover:bg-violet-500"
             >
               Guardar borrador
             </button>
-          </div>
 
-          {(feedback || error) && (
-            <p
-              className={`mt-4 text-sm ${
-                error ? "text-red-300" : "text-emerald-300"
-              }`}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-white/10 px-5 py-3 text-white transition hover:border-violet-400"
             >
-              {error || feedback}
-            </p>
-          )}
+              ← Volver
+            </button>
+          </div>
+        </header>
 
-          {activeResult && (
-            <div className="mt-8 rounded-2xl border border-white/10 bg-black/20 p-6">
-              <div className="flex items-center justify-between gap-4">
-                <h3 className="text-lg font-semibold text-white">
-                  Resultado
-                </h3>
+        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="h-fit space-y-2 rounded-3xl border border-white/10 bg-white/[0.03] p-3 lg:sticky lg:top-[170px]">
+            {SECTIONS.map((section) => {
+              const hasResult = Boolean(draft.generatedContent[section.id]);
 
-                {draft.updatedAt && (
-                  <span className="text-xs text-zinc-500">
-                    Borrador guardado
-                  </span>
-                )}
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSection(section.id);
+                    setFeedback("");
+                    setError("");
+                  }}
+                  className={`flex w-full items-center justify-between rounded-2xl border px-4 py-4 text-left transition ${
+                    selectedSection === section.id
+                      ? "border-violet-400 bg-violet-500/15 text-white"
+                      : "border-transparent text-zinc-300 hover:border-white/10 hover:bg-white/[0.04]"
+                  }`}
+                >
+                  <span className="font-medium">{section.label}</span>
+
+                  {hasResult && (
+                    <span
+                      className="h-2.5 w-2.5 rounded-full bg-emerald-400"
+                      aria-label="Sección generada"
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </aside>
+
+          <main className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-7 lg:p-8">
+            <div className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
+                  Área de trabajo
+                </p>
+
+                <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">
+                  {activeSection.label}
+                </h2>
+
+                <p className="mt-3 max-w-3xl text-zinc-400">
+                  {activeSection.description}
+                </p>
               </div>
 
-              <div className="mt-4 whitespace-pre-wrap text-zinc-300">
-                {activeResult}
-              </div>
+              {draft.updatedAt && (
+                <p className="text-xs text-zinc-500">
+                  Último guardado:{" "}
+                  {new Date(draft.updatedAt).toLocaleString("es")}
+                </p>
+              )}
             </div>
-          )}
-        </main>
+
+            <div className="mt-7 grid gap-6 xl:grid-cols-2">
+              <section className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-5 sm:p-6">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
+                    Instrucción
+                  </p>
+
+                  <h3 className="mt-2 text-xl font-semibold text-white">
+                    Dile a IAURA qué debe construir
+                  </h3>
+                </div>
+
+                <textarea
+                  value={activePrompt}
+                  onChange={(event) => updatePrompt(event.target.value)}
+                  placeholder={`Describe lo que necesitas para ${activeSection.label.toLowerCase()}...`}
+                  className="mt-5 min-h-[360px] w-full resize-y rounded-2xl border border-white/10 bg-[#07040d] p-5 leading-7 text-white outline-none placeholder:text-zinc-600 focus:border-violet-400"
+                />
+
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={loading || !activePrompt.trim()}
+                  className="mt-5 w-full rounded-2xl bg-violet-600 px-6 py-4 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading ? "Generando..." : "Generar con IAURA"}
+                </button>
+              </section>
+
+              <section className="min-w-0 rounded-3xl border border-white/10 bg-black/20 p-5 sm:p-6">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
+                    Resultado
+                  </p>
+
+                  <h3 className="mt-2 text-xl font-semibold text-white">
+                    Propuesta editable
+                  </h3>
+                </div>
+
+                {activeResult ? (
+                  <textarea
+                    value={activeResult}
+                    onChange={(event) => updateResult(event.target.value)}
+                    className="mt-5 min-h-[420px] w-full resize-y rounded-2xl border border-white/10 bg-[#07040d] p-5 leading-7 text-zinc-200 outline-none focus:border-violet-400"
+                  />
+                ) : (
+                  <div className="mt-5 grid min-h-[420px] place-items-center rounded-2xl border border-dashed border-white/10 bg-[#07040d] p-8 text-center">
+                    <div>
+                      <p className="text-lg font-medium text-zinc-300">
+                        Todavía no hay una propuesta
+                      </p>
+
+                      <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-500">
+                        Escribe una instrucción clara y genera el primer
+                        resultado para esta sección.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </section>
+            </div>
+
+            {(feedback || error) && (
+              <p
+                className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${
+                  error
+                    ? "border-red-400/20 bg-red-500/10 text-red-300"
+                    : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                }`}
+              >
+                {error || feedback}
+              </p>
+            )}
+          </main>
+        </div>
       </div>
     </section>
   );
