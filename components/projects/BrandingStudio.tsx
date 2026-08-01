@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   generateAIResponse,
   sanitizeAuraResponse,
-} from "@/services/ai";
+} from "../../services/ai";
 import type { IAuraProject } from "@/types/project";
 
 interface BrandingStudioProps {
