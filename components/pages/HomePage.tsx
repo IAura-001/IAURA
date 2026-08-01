@@ -25,7 +25,7 @@ import dynamic from "next/dynamic";
 import type { ChatMessage } from "@/types/chat";
 import type { BrandProfile } from "@/types/project";
 import ProjectCard from "@/components/sections/ProjectCard";
-import {
+import Workspace from "@/components/pages/Workspace";import {
   useCallback,
   useEffect,
   useRef,
@@ -510,7 +510,9 @@ return (
   modes={MODES}
   selectedMode={selectedMode}
   onSelect={setSelectedMode}
-/>
+/><div className="mt-8">
+  <Workspace />
+</div>
         </div>
 
 <AssistantCard

@@ -60,7 +60,9 @@ export class ProjectEngine {
     projectStorage.save(this.getProjects());
   }
 
-  createProject(input: CreateProjectInput): IAuraProject {
+  createProject(
+    input: CreateProjectInput,
+  ): IAuraProject {
     const name = input.name.trim();
 
     if (!name) {
@@ -72,12 +74,15 @@ export class ProjectEngine {
     const project: IAuraProject = {
       id: createProjectId(),
       name,
-      description: input.description?.trim() ?? "",
+      description:
+        input.description?.trim() ?? "",
       goal: input.goal?.trim() ?? "",
       createdAt: now,
       updatedAt: now,
       status: "planning",
-      studios: { ...DEFAULT_STUDIOS },
+      studios: {
+        ...DEFAULT_STUDIOS,
+      },
     };
 
     this.projects.set(project.id, project);
@@ -91,11 +96,15 @@ export class ProjectEngine {
     return Array.from(this.projects.values());
   }
 
-  getProject(projectId: string): IAuraProject | null {
+  getProject(
+    projectId: string,
+  ): IAuraProject | null {
     return this.projects.get(projectId) ?? null;
   }
 
-  setCurrentProject(project: IAuraProject): void {
+  setCurrentProject(
+    project: IAuraProject,
+  ): void {
     this.projects.set(project.id, project);
     this.currentProjectId = project.id;
     this.persist();
@@ -106,7 +115,10 @@ export class ProjectEngine {
       return null;
     }
 
-    return this.projects.get(this.currentProjectId) ?? null;
+    return (
+      this.projects.get(this.currentProjectId) ??
+      null
+    );
   }
 
   hasCurrentProject(): boolean {
@@ -117,7 +129,8 @@ export class ProjectEngine {
     projectId: string,
     updates: UpdateProjectInput,
   ): IAuraProject {
-    const currentProject = this.projects.get(projectId);
+    const currentProject =
+      this.projects.get(projectId);
 
     if (!currentProject) {
       throw new Error(
@@ -128,11 +141,15 @@ export class ProjectEngine {
     const updatedProject: IAuraProject = {
       ...currentProject,
       ...updates,
-      name: updates.name?.trim() || currentProject.name,
+      name:
+        updates.name?.trim() ||
+        currentProject.name,
       description:
         updates.description?.trim() ??
         currentProject.description,
-      goal: updates.goal?.trim() ?? currentProject.goal,
+      goal:
+        updates.goal?.trim() ??
+        currentProject.goal,
       studios: {
         ...currentProject.studios,
         ...updates.studios,
@@ -140,16 +157,23 @@ export class ProjectEngine {
       updatedAt: new Date().toISOString(),
     };
 
-    this.projects.set(projectId, updatedProject);
+    this.projects.set(
+      projectId,
+      updatedProject,
+    );
+
     this.persist();
 
     return updatedProject;
   }
 
   deleteProject(projectId: string): boolean {
-    const deleted = this.projects.delete(projectId);
+    const deleted =
+      this.projects.delete(projectId);
 
-    if (this.currentProjectId === projectId) {
+    if (
+      this.currentProjectId === projectId
+    ) {
       this.currentProjectId = null;
     }
 
@@ -165,4 +189,5 @@ export class ProjectEngine {
   }
 }
 
-export const projectEngine = new ProjectEngine();
+export const projectEngine =
+  new ProjectEngine();
