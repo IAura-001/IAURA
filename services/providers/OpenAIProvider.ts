@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { IAURA_SYSTEM_PROMPT } from "@/core/personality/systemPrompt";
+import { IAURA_SYSTEM_PROMPT } from "@/core/personality";
 import {
   IAURA_RESPONSE_SCHEMA,
   parseAuraAssistantPlan,
