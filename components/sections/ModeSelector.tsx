@@ -24,7 +24,7 @@ export default function ModeSelector({
   const { t } = useI18n();
 
   return (
-    <div className="mt-10 grid gap-3 sm:grid-cols-2">
+    <div className="mt-6 grid grid-cols-2 gap-2.5">
       {modes.map((mode) => {
         const selected = selectedMode === mode.id;
 
@@ -33,21 +33,26 @@ export default function ModeSelector({
             key={mode.id}
             type="button"
             onClick={() => onSelect(mode.id)}
-            className={`rounded-2xl border p-5 text-left transition duration-200 ${
+            aria-pressed={selected}
+            className={`min-h-16 rounded-2xl border p-3.5 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 sm:min-h-24 sm:p-4 ${
               selected
-                ? "border-purple-400/60 bg-purple-500/15 shadow-[0_0_35px_rgba(139,92,246,0.15)]"
-                : "border-white/10 bg-white/[0.03] hover:border-purple-400/30 hover:bg-white/[0.05]"
+                ? "border-violet-300/35 bg-violet-400/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                : "border-white/[0.07] bg-white/[0.025] hover:border-violet-300/20 hover:bg-white/[0.04]"
             }`}
           >
-            <span className="text-2xl text-purple-300">{mode.icon}</span>
+            <div className="flex items-center gap-2.5">
+              <span className="text-base text-violet-300/85" aria-hidden="true">
+                {mode.icon}
+              </span>
 
-            <h2 className="mt-4 font-semibold">
-              {t(
-                `mode.${mode.id}.name` as MessageKey
-              )}
-            </h2>
+              <h3 className="text-sm font-medium text-zinc-100">
+                {t(
+                  `mode.${mode.id}.name` as MessageKey
+                )}
+              </h3>
+            </div>
 
-            <p className="mt-2 text-sm leading-6 text-zinc-500">
+            <p className="sr-only text-xs leading-5 text-zinc-500 sm:not-sr-only sm:mt-2 sm:block">
               {t(
                 `mode.${mode.id}.description` as MessageKey
               )}

@@ -13,14 +13,13 @@ import { useVoiceContext } from "@/core/context/VoiceContext";
 import { formatActionReceipt } from "@/core/actions";
 import { theme } from "@/config/theme";
 import AssistantCard from "@/components/sections/AssistantCard";
-import AuraPresenceV2 from "@/components/aura/AuraPresenceV2";
 import { ActionCenter } from "@/components/sections/ActionCenter";
 import Hero from "@/components/sections/Hero";
 import ModeSelector from "@/components/sections/ModeSelector";
-import Navbar from "@/components/sections/Navbar";
 import { AIActionBar } from "@/components/sections/AIActionBar";
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
+import VaeoraWorkspaceShell from "@/components/vaeora/VaeoraWorkspaceShell";
 import dynamic from "next/dynamic";
 import type { ChatMessage } from "@/types/chat";
 import type { BrandProfile } from "@/types/project";
@@ -483,127 +482,152 @@ if (!isLoaded) {
 
 return (
   <I18nProvider locale={memory.preferredLocale}>
-  <main
-    className="relative min-h-screen overflow-hidden px-4 text-white sm:px-6"
-    style={{ backgroundColor: theme.colors.background }}
-  >
-      <div className="absolute left-[-150px] top-[-150px] h-[420px] w-[420px] rounded-full bg-purple-700/20 blur-[130px]" />
+    <VaeoraWorkspaceShell
+      locale={memory.preferredLocale}
+      userName={memory.userName}
+      presence={
+        <>
+          <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(420px,1.18fr)]">
+            <section className="order-2 min-w-0 rounded-[30px] border border-white/[0.07] bg-[#09090f] p-5 sm:p-7 xl:order-1">
+              <Hero name={memory.userName} />
 
-      <div className="absolute bottom-[-180px] right-[-120px] h-[400px] w-[400px] rounded-full bg-blue-600/15 blur-[130px]" />
+              <ModeSelector
+                modes={MODES}
+                selectedMode={selectedMode}
+                onSelect={setSelectedMode}
+              />
+            </section>
 
-      <Navbar />
-      <div className="relative z-10 mx-auto mt-8 w-full max-w-5xl overflow-hidden rounded-3xl border border-white/10">
-  <AuraPresenceV2 />
-</div>
+            <div className="order-1 min-w-0 space-y-5 xl:order-2">
+              <AssistantCard
+                modeId={activeMode.id}
+                onStart={handleSend}
+                isAuraLive={isAuraLive}
+                onToggleAuraLive={toggleAuraLive}
+              />
 
-      <section className="relative z-10 mx-auto grid min-h-[calc(100vh-120px)] w-full min-w-0 max-w-6xl grid-cols-[minmax(0,1fr)] items-center gap-14 py-12 [&>*]:min-w-0 lg:grid-cols-2">
-        <div>
-          <Hero name={memory.userName} />
+              <section className="min-w-0 space-y-5 rounded-[28px] border border-white/[0.07] bg-[#09090f] p-4 sm:p-6">
+                <Conversation
+                  messages={messages}
+                  isThinking={isSending}
+                  project={activeProject}
+                  onOpenBranding={
+                    activeProject
+                      ? () => setOpenStudio("branding")
+                      : undefined
+                  }
+                />
 
-<div className="mt-8">
-  {activeProject && (
-  <div className="mt-8">
-    <ProjectCard
-  project={activeProject}
-  onOpenStudio={(studio) => {
-    setOpenStudio(studio);
-  }}
-/>{activeProject && openStudio === "branding" && (
-  <BrandingStudio
-    key={activeProject.id}
-    project={activeProject}
-    onSave={handleSaveBranding}
-    onClose={() => setOpenStudio(null)}
-  />
-)}
-  </div>
-)}
-</div>
+                <ChatInput
+                  onSend={handleSend}
+                  isSending={isSending}
+                />
+              </section>
+            </div>
+          </div>
 
-<ModeSelector
-  modes={MODES}
-  selectedMode={selectedMode}
-  onSelect={setSelectedMode}
-/><div className="mt-8">
-  <Workspace />
-</div>
+          <div className="mt-6">
+            <ActionCenter
+              history={actionHistory}
+              canUndoLast={canUndoLast}
+              onUndoLast={() => {
+                undoLast();
+              }}
+            />
+          </div>
+        </>
+      }
+      projects={
+        <>
+          <div
+            className={[
+              "grid min-w-0 items-start gap-6",
+              activeProject
+                ? "xl:grid-cols-[minmax(300px,0.72fr)_minmax(0,1.28fr)]"
+                : "grid-cols-1",
+            ].join(" ")}
+          >
+            {activeProject && (
+              <div className="min-w-0">
+                <ProjectCard
+                  project={activeProject}
+                  onOpenStudio={(studio) => {
+                    setOpenStudio(studio);
+                  }}
+                />
+              </div>
+            )}
+
+            <section className="min-w-0 rounded-[30px] border border-white/[0.07] bg-[#09090f] p-4 sm:p-6">
+              <Workspace />
+            </section>
+          </div>
+
+          {activeProject && openStudio === "branding" && (
+            <BrandingStudio
+              key={activeProject.id}
+              project={activeProject}
+              onSave={handleSaveBranding}
+              onClose={() => setOpenStudio(null)}
+            />
+          )}
+        </>
+      }
+      intelligence={
+        <div className="min-w-0 space-y-6">
+          <section className="min-w-0 rounded-[28px] border border-white/[0.07] bg-[#09090f] p-5 sm:p-6">
+            <AIActionBar
+              onAnalyze={handleAnalyze}
+              isLoading={isAnalyzing}
+            />
+
+            {showAnalysis && (
+              <div className="mt-5">
+                <AIAnalysisPanel analysis={analysis} />
+              </div>
+            )}
+          </section>
+
+          <section className="grid min-w-0 gap-5 [&>*]:min-w-0 md:grid-cols-2">
+            <DashboardPanel
+              name={memory.userName}
+              preferredLocale={memory.preferredLocale}
+              goals={goals}
+              onSaveName={(name) =>
+                updateMemory({
+                  userName: name,
+                })
+              }
+              onLanguageChange={(preferredLocale) =>
+                updateMemory({
+                  preferredLocale,
+                })
+              }
+              onAddGoal={handleAddGoal}
+              onRemoveGoal={handleRemoveGoal}
+              habits={habits}
+              onAddHabit={handleAddHabit}
+              onRemoveHabit={handleRemoveHabit}
+              priorities={intelligencePriorities}
+              recommendation={recommendation}
+              completedCount={completedMissions.length}
+              totalMissions={MISSIONS.length}
+              experience={memory.experience}
+              onEarnXP={() => addExperience(25)}
+              onResetMemory={resetMemory}
+              messageCount={messages.length}
+              goalsCount={memory.goals.length}
+              habitsCount={memory.habits.length}
+              missions={pendingMissions}
+              completedMissionIds={memory.completedMissionIds ?? []}
+              onMissionComplete={(missionId) =>
+                markMissionComplete(missionId, 25)
+              }
+            />
+          </section>
         </div>
-
-<AssistantCard
-  modeId={activeMode.id}
-  onStart={handleSend}
-  isAuraLive={isAuraLive}
-  onToggleAuraLive={toggleAuraLive}
-/>
-<AIActionBar
-  onAnalyze={handleAnalyze}
-  isLoading={isAnalyzing}
-/>
-{showAnalysis && (
-  <AIAnalysisPanel analysis={analysis} />
-)}
-<Conversation
-  messages={messages}
-  isThinking={isSending}
-  project={activeProject}
-  onOpenBranding={
-    activeProject
-      ? () => setOpenStudio("branding")
-      : undefined
-  }
-/>
-
-<ChatInput
-  onSend={handleSend}
-  isSending={isSending}
-/>
-<ActionCenter
-  history={actionHistory}
-  canUndoLast={canUndoLast}
-  onUndoLast={() => {
-    undoLast();
-  }}
-/>
-<DashboardPanel
-  name={memory.userName}
-  preferredLocale={memory.preferredLocale}
-  goals={goals}
-  onSaveName={(name) =>
-    updateMemory({
-      userName: name,
-    })
-  }
-  onLanguageChange={(preferredLocale) =>
-    updateMemory({
-      preferredLocale,
-    })
-  }
-  onAddGoal={handleAddGoal}
-  onRemoveGoal={handleRemoveGoal}
-  habits={habits}
-  onAddHabit={handleAddHabit}
-  onRemoveHabit={handleRemoveHabit}
-  priorities={intelligencePriorities}
-  recommendation={recommendation}
-  completedCount={completedMissions.length}
-  totalMissions={MISSIONS.length}
-  experience={memory.experience}
-  onEarnXP={() => addExperience(25)}
-  onResetMemory={resetMemory}
-  messageCount={messages.length}
-  goalsCount={memory.goals.length}
-  habitsCount={memory.habits.length}
-  missions={pendingMissions}
-  completedMissionIds={memory.completedMissionIds ?? []}
-  onMissionComplete={(missionId) =>
-    markMissionComplete(missionId, 25)
-  }
-/>
-
-    
-      
-      </section>
-    </main>
+      }
+    />
   </I18nProvider>
   );
 }
