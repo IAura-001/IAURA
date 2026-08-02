@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-
+import { IAURA_SYSTEM_PROMPT } from "@/core/personality/systemPrompt";
 import {
   IAURA_RESPONSE_SCHEMA,
   parseAuraAssistantPlan,
@@ -46,7 +46,12 @@ export class OpenAIProvider implements AIProvider {
     try {
       const response = await this.client.responses.create({
         model: this.model,
-        instructions: request.instructions,
+        instructions: [
+  IAURA_SYSTEM_PROMPT,
+  request.instructions,
+]
+  .filter(Boolean)
+  .join("\n\n"),
         input: request.prompt,
         text: {
           verbosity: "medium",
