@@ -6,6 +6,12 @@ import {
 import { isRequestAuthorized } from "@/core/auth/access";
 
 export function proxy(request: NextRequest) {
+  if (
+    request.nextUrl.pathname === "/api/access"
+  ) {
+    return NextResponse.next();
+  }
+
   if (isRequestAuthorized(request)) {
     return NextResponse.next();
   }
@@ -36,6 +42,7 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!access|api/access|_next/static|_next/image|favicon.ico|icon.svg|.*\\..*).*)",
+    "/iaura/:path*",
+    "/api/:path*",
   ],
 };

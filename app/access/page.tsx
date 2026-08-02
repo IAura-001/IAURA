@@ -42,7 +42,7 @@ export default function AccessPage() {
         throw new Error("ACCESS_DENIED");
       }
 
-      window.location.assign("/");
+      window.location.assign("/iaura");
     } catch {
       setError(
         "Esa clave no abre este espacio. Inténtalo de nuevo."

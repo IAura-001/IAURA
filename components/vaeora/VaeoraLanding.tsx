@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 import styles from "./VaeoraLanding.module.css";
 
@@ -296,6 +297,11 @@ export default function VaeoraLanding() {
           <p className={styles.status}>Coming into focus.</p>
           <h1 id="vaeora-title" className={styles.wordmark}>VAEORA</h1>
           <p className={styles.tagline}>Where intelligence takes shape.</p>
+          <Link className={styles.entry} href="/iaura">
+            <span>Enter</span>
+            <span className={styles.entryLine} aria-hidden="true" />
+            <span aria-hidden="true">↗</span>
+          </Link>
         </div>
       </section>
     </main>
