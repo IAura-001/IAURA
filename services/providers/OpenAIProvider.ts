@@ -15,9 +15,7 @@ interface OpenAIProviderConfig {
   model: string;
 }
 
-export class OpenAIProvider
-  implements AIProvider
-{
+export class OpenAIProvider implements AIProvider {
   readonly name = "openai";
 
   private readonly client: OpenAI;
@@ -28,15 +26,11 @@ export class OpenAIProvider
     model,
   }: OpenAIProviderConfig) {
     if (!apiKey.trim()) {
-      throw new Error(
-        "OPENAI_API_KEY is required."
-      );
+      throw new Error("OPENAI_API_KEY is required.");
     }
 
     if (!model.trim()) {
-      throw new Error(
-        "OPENAI_MODEL is required."
-      );
+      throw new Error("OPENAI_MODEL is required.");
     }
 
     this.client = new OpenAI({
@@ -49,11 +43,10 @@ export class OpenAIProvider
   async generate(
     request: AIRequest
   ): Promise<AIResponse> {
-    const response =
-      await this.client.responses.create({
+    try {
+      const response = await this.client.responses.create({
         model: this.model,
-        instructions:
-          request.instructions,
+        instructions: request.instructions,
         input: request.prompt,
         text: {
           verbosity: "medium",
@@ -63,41 +56,57 @@ export class OpenAIProvider
             description:
               "IAURA response plus safe local actions.",
             strict: true,
-            schema:
-              IAURA_RESPONSE_SCHEMA,
+            schema: IAURA_RESPONSE_SCHEMA,
           },
         },
       });
 
-    const plan = parseAuraAssistantPlan(
-      response.output_text
-    );
+      const plan = parseAuraAssistantPlan(
+        response.output_text
+      );
 
-    return {
-      ...plan,
-      provider: this.name,
-      model: this.model,
-    };
+      return {
+        ...plan,
+        provider: this.name,
+        model: this.model,
+      };
+    } catch (error: unknown) {
+      console.error("========== OPENAI ERROR ==========");
+      console.error(error);
+
+      if (error && typeof error === "object") {
+        const details = error as {
+          status?: unknown;
+          code?: unknown;
+          type?: unknown;
+          message?: unknown;
+          response?: {
+            data?: unknown;
+          };
+        };
+
+        console.error("Status:", details.status);
+        console.error("Code:", details.code);
+        console.error("Type:", details.type);
+        console.error("Message:", details.message);
+        console.error("Body:", details.response?.data);
+      }
+
+      throw error;
+    }
   }
 }
 
 export function createOpenAIProvider(): OpenAIProvider {
-  const apiKey =
-    process.env.OPENAI_API_KEY;
-
-  const model =
-    process.env.OPENAI_MODEL;
+  const apiKey = process.env.OPENAI_API_KEY;
+  const model = process.env.OPENAI_MODEL;
 
   if (!apiKey) {
-    throw new Error(
-      "OPENAI_API_KEY is missing."
-    );
+    throw new Error("OPENAI_API_KEY is missing.");
   }
 
   if (!model) {
-    throw new Error(
-      "OPENAI_MODEL is missing."
-    );
+    throw new Error("OPENAI_MODEL is missing.");
   }
 
   return new OpenAIProvider({
