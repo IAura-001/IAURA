@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isRequestAuthorized } from "@/core/auth/access";
 import { createOpenAIProvider } from "@/services/providers";
+import { reasonAboutRequest } from "@/core/reasoning";
 
 export const runtime = "nodejs";
 
@@ -48,17 +49,26 @@ export async function POST(request: Request) {
     }
 
     const instructions =
-      typeof body.instructions === "string" &&
-      body.instructions.trim()
-        ? body.instructions.trim()
-        : undefined;
+  typeof body.instructions === "string" &&
+  body.instructions.trim()
+    ? body.instructions.trim()
+    : undefined;
+
+const reasoning = reasonAboutRequest(body.prompt.trim(), {
+  context: instructions,
+});
 
     const provider = createOpenAIProvider();
 
     const result = await provider.generate({
-      prompt: body.prompt.trim(),
-      instructions,
-    });
+  prompt: body.prompt.trim(),
+  instructions: [
+    instructions,
+    reasoning.instructions,
+  ]
+    .filter(Boolean)
+    .join("\n\n"),
+});
 
     return NextResponse.json(result, {
       headers: {
