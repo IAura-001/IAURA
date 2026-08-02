@@ -119,50 +119,54 @@ export default function LaunchStudio({
   );
 
   useEffect(() => {
-    setIsLoaded(false);
-    setFeedback("");
-    setError("");
+    const timeoutId = window.setTimeout(() => {
+      setIsLoaded(false);
+      setFeedback("");
+      setError("");
 
-    try {
-      const raw = window.localStorage.getItem(getStorageKey(project.id));
+      try {
+        const raw = window.localStorage.getItem(getStorageKey(project.id));
 
-      if (!raw) {
+        if (!raw) {
+          const teaser02 = createTeaser02();
+          const seededAssets = [teaser02];
+
+          setAssets(seededAssets);
+          setSelectedAssetId(teaser02.id);
+          saveLibrary(project.id, seededAssets);
+          return;
+        }
+
+        const parsed: unknown = JSON.parse(raw);
+
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "assets" in parsed &&
+          Array.isArray((parsed as Partial<LaunchLibrary>).assets)
+        ) {
+          const savedAssets = (parsed as LaunchLibrary).assets;
+          setAssets(savedAssets);
+          setSelectedAssetId(savedAssets[0]?.id ?? "");
+        } else {
+          const teaser02 = createTeaser02();
+          const seededAssets = [teaser02];
+
+          setAssets(seededAssets);
+          setSelectedAssetId(teaser02.id);
+          saveLibrary(project.id, seededAssets);
+        }
+      } catch {
         const teaser02 = createTeaser02();
-        const seededAssets = [teaser02];
-
-        setAssets(seededAssets);
+        setAssets([teaser02]);
         setSelectedAssetId(teaser02.id);
-        saveLibrary(project.id, seededAssets);
-        return;
+        setError("No se pudo cargar la biblioteca anterior.");
+      } finally {
+        setIsLoaded(true);
       }
+    }, 0);
 
-      const parsed: unknown = JSON.parse(raw);
-
-      if (
-        typeof parsed === "object" &&
-        parsed !== null &&
-        "assets" in parsed &&
-        Array.isArray((parsed as Partial<LaunchLibrary>).assets)
-      ) {
-        const savedAssets = (parsed as LaunchLibrary).assets;
-        setAssets(savedAssets);
-        setSelectedAssetId(savedAssets[0]?.id ?? "");
-      } else {
-        const teaser02 = createTeaser02();
-        const seededAssets = [teaser02];
-
-        setAssets(seededAssets);
-        setSelectedAssetId(teaser02.id);
-        saveLibrary(project.id, seededAssets);
-      }
-    } catch {
-      const teaser02 = createTeaser02();
-      setAssets([teaser02]);
-      setSelectedAssetId(teaser02.id);
-      setError("No se pudo cargar la biblioteca anterior.");
-    } finally {
-      setIsLoaded(true);
-    }
+    return () => window.clearTimeout(timeoutId);
   }, [project.id]);
 
   function updateSelectedAsset(

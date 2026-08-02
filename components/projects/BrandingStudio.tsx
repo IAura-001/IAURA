@@ -117,52 +117,56 @@ export default function BrandingStudio({
   );
 
   useEffect(() => {
-    setIsLoaded(false);
-    setSelectedSection("naming");
-    setFeedback("");
-    setError("");
+    const timeoutId = window.setTimeout(() => {
+      setIsLoaded(false);
+      setSelectedSection("naming");
+      setFeedback("");
+      setError("");
 
-    try {
-      const raw = window.localStorage.getItem(getStorageKey(project.id));
+      try {
+        const raw = window.localStorage.getItem(getStorageKey(project.id));
 
-      if (!raw) {
+        if (!raw) {
+          setDraft(emptyDraft());
+          setIsLoaded(true);
+          return;
+        }
+
+        const parsed: unknown = JSON.parse(raw);
+
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "prompts" in parsed &&
+          "generatedContent" in parsed
+        ) {
+          const saved = parsed as Partial<BrandingDraft>;
+
+          setDraft({
+            prompts:
+              saved.prompts && typeof saved.prompts === "object"
+                ? saved.prompts
+                : {},
+            generatedContent:
+              saved.generatedContent &&
+              typeof saved.generatedContent === "object"
+                ? sanitizeContentMap(saved.generatedContent)
+                : {},
+            updatedAt:
+              typeof saved.updatedAt === "string" ? saved.updatedAt : "",
+          });
+        } else {
+          setDraft(emptyDraft());
+        }
+      } catch {
         setDraft(emptyDraft());
+        setError("No se pudo cargar el borrador guardado.");
+      } finally {
         setIsLoaded(true);
-        return;
       }
+    }, 0);
 
-      const parsed: unknown = JSON.parse(raw);
-
-      if (
-        typeof parsed === "object" &&
-        parsed !== null &&
-        "prompts" in parsed &&
-        "generatedContent" in parsed
-      ) {
-        const saved = parsed as Partial<BrandingDraft>;
-
-        setDraft({
-          prompts:
-            saved.prompts && typeof saved.prompts === "object"
-              ? saved.prompts
-              : {},
-          generatedContent:
-            saved.generatedContent &&
-            typeof saved.generatedContent === "object"
-              ? sanitizeContentMap(saved.generatedContent)
-              : {},
-          updatedAt:
-            typeof saved.updatedAt === "string" ? saved.updatedAt : "",
-        });
-      } else {
-        setDraft(emptyDraft());
-      }
-    } catch {
-      setDraft(emptyDraft());
-      setError("No se pudo cargar el borrador guardado.");
-    } finally {
-      setIsLoaded(true);
-    }
+    return () => window.clearTimeout(timeoutId);
   }, [project.id]);
 
   function updatePrompt(value: string): void {

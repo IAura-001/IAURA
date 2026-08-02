@@ -19,15 +19,19 @@ export default function ProjectList({
     useState<string | null>(null);
 
   useEffect(() => {
-    const storedProjects = projectEngine.getProjects();
-    const currentProject = projectEngine.getCurrentProject();
+    const timeoutId = window.setTimeout(() => {
+      const storedProjects = projectEngine.getProjects();
+      const currentProject = projectEngine.getCurrentProject();
 
-    setProjects(storedProjects);
-    setActiveProjectId(currentProject?.id ?? null);
+      setProjects(storedProjects);
+      setActiveProjectId(currentProject?.id ?? null);
 
-    if (currentProject) {
-      onProjectSelected(currentProject);
-    }
+      if (currentProject) {
+        onProjectSelected(currentProject);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [refreshKey, onProjectSelected]);
 
   function handleSelectProject(project: IAuraProject) {
