@@ -41,6 +41,7 @@ import type {
 import {
   validateCreativeCopyContent,
 } from "@/core/creative/validation";
+import { isAbortError } from "@/utils/abort";
 
 export const DEFAULT_CREATIVE_MODEL = "gpt-5.6-terra";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
@@ -204,6 +205,7 @@ export class OpenAICreativeProvider {
       };
     } catch (error) {
       if (error instanceof CreativeProviderError) throw error;
+      if (signal?.aborted || isAbortError(error)) throw error;
       throw mapOpenAIError(error);
     }
   }
@@ -272,6 +274,7 @@ export class OpenAICreativeProvider {
       };
     } catch (error) {
       if (error instanceof CreativeProviderError) throw error;
+      if (signal?.aborted || isAbortError(error)) throw error;
       throw mapOpenAIError(error);
     }
   }

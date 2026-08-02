@@ -9,16 +9,60 @@ export function createCreativeAssetId(): string {
   return `asset_${globalThis.crypto.randomUUID()}`;
 }
 
+const CREATIVE_ALLOWED_ORIGINS_ENV = "VAEORA_ALLOWED_ORIGINS";
+
+export function normalizeCreativeOrigin(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+
+    if (
+      (url.protocol !== "http:" && url.protocol !== "https:") ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      (url.pathname !== "/" && url.pathname !== "")
+    ) {
+      return null;
+    }
+
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function configuredCreativeOrigins(): Set<string> {
+  const configured = process.env[CREATIVE_ALLOWED_ORIGINS_ENV] ?? "";
+
+  return new Set(
+    configured
+      .split(",")
+      .map(normalizeCreativeOrigin)
+      .filter((origin): origin is string => Boolean(origin)),
+  );
+}
+
+function isDevelopmentLoopback(origin: string): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+
+  const hostname = new URL(origin).hostname;
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]"
+  );
+}
+
 export function assertCreativeSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
 
   if (!origin) return;
 
-  let normalizedOrigin: string;
+  const normalizedOrigin = normalizeCreativeOrigin(origin);
+  const requestOrigin = normalizeCreativeOrigin(new URL(request.url).origin);
 
-  try {
-    normalizedOrigin = new URL(origin).origin;
-  } catch {
+  if (!normalizedOrigin || !requestOrigin) {
     throw new CreativeRequestError(
       403,
       "VAEORA_ORIGIN_REJECTED",
@@ -26,7 +70,11 @@ export function assertCreativeSameOrigin(request: Request): void {
     );
   }
 
-  if (normalizedOrigin !== new URL(request.url).origin) {
+  if (
+    normalizedOrigin !== requestOrigin &&
+    !configuredCreativeOrigins().has(normalizedOrigin) &&
+    !isDevelopmentLoopback(normalizedOrigin)
+  ) {
     throw new CreativeRequestError(
       403,
       "VAEORA_ORIGIN_REJECTED",

@@ -2,6 +2,7 @@ import type {
   CreativeApiErrorCode,
   CreativeApiErrorResponse,
 } from "./types";
+import { isAbortError } from "@/utils/abort";
 
 export type CreativeProviderFailureKind =
   | "configuration"
@@ -109,6 +110,17 @@ export function toCreativePublicError(
   error: unknown,
   requestId: string,
 ): CreativePublicError {
+  if (isAbortError(error)) {
+    return {
+      status: 499,
+      body: {
+        error: "Creative generation was cancelled.",
+        code: "VAEORA_REQUEST_CANCELLED",
+        requestId,
+      },
+    };
+  }
+
   if (error instanceof CreativeRequestError) {
     return {
       status: error.status,
@@ -172,3 +184,5 @@ export function describeCreativeFailure(
     name: error instanceof Error ? error.name : "UnknownError",
   };
 }
+
+export { isAbortError as isCreativeCancellation };

@@ -11,26 +11,29 @@ describe("IAURA voice capture selection", () => {
     expect(
       detectVoiceCaptureMode({
         isMobile: true,
+        isSecureContext: true,
         canRecord: true,
         hasSpeechRecognition: true,
       })
     ).toBe("media-recorder");
   });
 
-  it("uses the native phone recorder on insecure links", () => {
+  it("never opens a native media picker on insecure links", () => {
     expect(
       detectVoiceCaptureMode({
         isMobile: true,
+        isSecureContext: false,
         canRecord: false,
         hasSpeechRecognition: true,
       })
-    ).toBe("file-upload");
+    ).toBe("secure-context-required");
   });
 
   it("keeps browser recognition on desktop", () => {
     expect(
       detectVoiceCaptureMode({
         isMobile: false,
+        isSecureContext: true,
         canRecord: false,
         hasSpeechRecognition: true,
       })

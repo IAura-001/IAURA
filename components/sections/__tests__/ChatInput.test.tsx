@@ -3,13 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { I18nProvider } from "@/core/i18n/I18nContext";
+import type { VoiceCaptureMode, VoiceError } from "@/hooks/useVoice";
 
 const voiceMock = vi.hoisted(() => ({
   state: "idle" as const,
   transcript: "",
   voiceMode: true,
-  captureMode: "browser-speech" as const,
-  voiceError: null,
+  captureMode: "speech-recognition" as VoiceCaptureMode,
+  voiceError: null as VoiceError,
   setVoiceMode: vi.fn(),
   startListening: vi.fn(),
   stopListening: vi.fn(),
@@ -43,6 +44,8 @@ function renderInput(
 describe("ChatInput interaction feedback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    voiceMock.captureMode = "speech-recognition";
+    voiceMock.voiceError = null;
     vi.stubGlobal(
       "matchMedia",
       vi.fn(() => ({
@@ -56,6 +59,27 @@ describe("ChatInput interaction feedback", () => {
         dispatchEvent: vi.fn(),
       })),
     );
+  });
+
+  it("never opens the audio picker when an insecure context needs HTTPS", async () => {
+    voiceMock.captureMode = "secure-context-required";
+    voiceMock.voiceError = "unavailable";
+    const user = userEvent.setup();
+    const { container } = renderInput();
+    const audioInput = container.querySelector<HTMLInputElement>(
+      'input[type="file"][accept="audio/*"]',
+    );
+    const pickerClick = vi.spyOn(audioInput!, "click");
+
+    await user.click(
+      screen.getByRole("button", { name: "Hablar con IAURA" }),
+    );
+
+    expect(voiceMock.startListening).toHaveBeenCalledOnce();
+    expect(pickerClick).not.toHaveBeenCalled();
+    expect(audioInput).not.toHaveAttribute("capture");
+    expect(screen.getByRole("alert")).toHaveTextContent("HTTPS");
+    expect(screen.getByRole("textbox")).toBeEnabled();
   });
 
   it("focuses the ready microphone for a voice deep link without activating it", async () => {

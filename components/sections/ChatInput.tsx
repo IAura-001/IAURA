@@ -313,7 +313,6 @@ function ChatInputComponent({
           ref={audioInputRef}
           type="file"
           accept="audio/*"
-          capture
           onChange={handleAudioFile}
           className="hidden"
           tabIndex={-1}

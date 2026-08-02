@@ -66,12 +66,16 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error(
-      "IAURA provider request failed:",
-      error instanceof Error
-        ? error.message
-        : "Unknown error",
-    );
+  console.error("========== OPENAI ERROR ==========");
+  console.error(error);
+  console.error(
+    JSON.stringify(
+      error,
+      Object.getOwnPropertyNames(error),
+      2
+    )
+  );
+  console.error("================================");
 
     return NextResponse.json(
       {

@@ -167,6 +167,24 @@ function createTransport(): {
 }
 
 describe("OpenAICreativeProvider", () => {
+  it("preserves intentional cancellation instead of mapping it to a provider failure", async () => {
+    const { transport, createResponse } = createTransport();
+    const controller = new AbortController();
+    controller.abort();
+    createResponse.mockRejectedValue(
+      new DOMException("cancelled", "AbortError"),
+    );
+    const provider = new OpenAICreativeProvider({
+      transport,
+      creativeModel: "gpt-5.6-terra",
+      imageModel: "gpt-image-2",
+    });
+
+    await expect(
+      provider.generateCopy(copyRequest, controller.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("uses strict structured output for copy", async () => {
     const { transport, createResponse } = createTransport();
     createResponse.mockResolvedValue({

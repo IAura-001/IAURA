@@ -236,6 +236,7 @@ export type CreativeApiErrorCode =
   | "VAEORA_CREATIVE_NOT_CONFIGURED"
   | "VAEORA_EMPTY_RESULT"
   | "VAEORA_PROVIDER_TIMEOUT"
+  | "VAEORA_REQUEST_CANCELLED"
   | "VAEORA_PROVIDER_ERROR";
 
 export interface CreativeApiErrorResponse {

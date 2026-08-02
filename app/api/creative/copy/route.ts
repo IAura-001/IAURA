@@ -7,6 +7,7 @@ import {
 import {
   CreativeRequestError,
   describeCreativeFailure,
+  isCreativeCancellation,
   toCreativePublicError,
 } from "@/core/creative/errors";
 import {
@@ -121,10 +122,16 @@ export async function POST(request: Request) {
   } catch (error) {
     const publicError = toCreativePublicError(error, requestId);
 
-    console.error("VAEORA creative copy request failed:", {
-      requestId,
-      ...describeCreativeFailure(error),
-    });
+    if (isCreativeCancellation(error)) {
+      if (process.env.NODE_ENV !== "production") {
+        console.info("VAEORA creative copy request cancelled:", { requestId });
+      }
+    } else {
+      console.error("VAEORA creative copy request failed:", {
+        requestId,
+        ...describeCreativeFailure(error),
+      });
+    }
 
     return NextResponse.json(publicError.body, {
       status: publicError.status,

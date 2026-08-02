@@ -5,6 +5,7 @@ import {
   type SupportedLocale,
 } from "@/core/i18n/languages";
 import { splitSpeechText } from "@/core/voice/speechChunks";
+import { isAbortError } from "@/utils/abort";
 
 const SILENT_AUDIO_DATA_URL =
   "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAACAgICA";
@@ -90,6 +91,14 @@ export class NeuralVoiceProvider implements VoiceProvider {
         }
 
         await this.playAudioBlob(audioBlob);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted && !isAbortError(error)) {
+        throw error;
+      }
+
+      if (process.env.NODE_ENV !== "production") {
+        console.info("IAURA neural voice request cancelled.");
       }
     } finally {
       if (

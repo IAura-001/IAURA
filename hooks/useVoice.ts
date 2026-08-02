@@ -221,6 +221,7 @@ export function useVoice() {
     useRef<MediaStreamAudioSourceNode | null>(
       null
     );
+  const speechOperationRef = useRef(0);
 
   const setVoiceMode = useCallback(
     (enabled: boolean) => {
@@ -531,6 +532,7 @@ export function useVoice() {
     const detectedMode =
       detectVoiceCaptureMode({
         isMobile,
+        isSecureContext: window.isSecureContext,
         canRecord,
         hasSpeechRecognition:
           Boolean(SpeechRecognition),
@@ -641,6 +643,15 @@ export function useVoice() {
   const startMediaRecording =
     useCallback(async () => {
       if (
+        !window.isSecureContext
+      ) {
+        setCaptureMode("secure-context-required");
+        setVoiceError("unavailable");
+        setState("idle");
+        return;
+      }
+
+      if (
         !navigator.mediaDevices
           ?.getUserMedia ||
         typeof MediaRecorder ===
@@ -671,6 +682,7 @@ export function useVoice() {
                   noiseSuppression: true,
                   autoGainControl: true,
                 },
+                video: false,
               }
             );
         const mimeType =
@@ -752,12 +764,26 @@ export function useVoice() {
       } catch (error) {
         continuousListeningRef.current =
           false;
-        console.error(
-          "IAURA microphone access failed:",
-          error
-        );
+        const errorName =
+          error instanceof DOMException
+            ? error.name
+            : "UnknownError";
+        const isPermissionError =
+          errorName === "NotAllowedError" ||
+          errorName === "SecurityError";
+        const isInterrupted =
+          errorName === "AbortError";
+
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("IAURA microphone access ended:", {
+            name: errorName,
+            intentional: isInterrupted,
+          });
+        }
         setVoiceError(
-          "permission-denied"
+          isPermissionError
+            ? "permission-denied"
+            : "unavailable"
         );
         setState("idle");
         releaseRecording(false);
@@ -774,6 +800,15 @@ export function useVoice() {
       void voiceEngine.unlock();
       setVoiceError(null);
       setVoiceMode(true);
+
+      if (
+        captureMode ===
+        "secure-context-required"
+      ) {
+        setVoiceError("unavailable");
+        setState("idle");
+        return;
+      }
 
       if (
         captureMode ===
@@ -893,6 +928,7 @@ export function useVoice() {
       .replaceAll("I.A.U.R.A", "Aura")
       .replaceAll("IAURA", "Aura");
 
+    const operation = ++speechOperationRef.current;
     setState("speaking");
 
     try {
@@ -902,11 +938,14 @@ export function useVoice() {
         language
       );
     } finally {
-      setState("idle");
+      if (speechOperationRef.current === operation) {
+        setState("idle");
+      }
     }
   }
 
   function stopSpeaking() {
+    speechOperationRef.current += 1;
     voiceEngine.stop();
     setState("idle");
   }

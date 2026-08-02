@@ -207,4 +207,20 @@ describe("POST /api/creative/copy", () => {
     expect(text).toContain("VAEORA_RATE_LIMITED");
     expect(text).not.toContain("provider-request");
   });
+
+  it("treats an intentional abort as cancellation without critical logging", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    mocks.generateCopy.mockRejectedValue(
+      new DOMException("cancelled", "AbortError"),
+    );
+
+    const response = await POST(jsonRequest(JSON.stringify(validBody)));
+
+    expect(response.status).toBe(499);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "VAEORA_REQUEST_CANCELLED",
+    });
+    expect(errorLog).not.toHaveBeenCalled();
+  });
 });
