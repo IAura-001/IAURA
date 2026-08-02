@@ -39,13 +39,46 @@ export default function AccessPage() {
       );
 
       if (!response.ok) {
-        throw new Error("ACCESS_DENIED");
+        if (response.status === 429) {
+          const retryAfter = Number(response.headers.get("Retry-After"));
+          const waitMinutes = Number.isFinite(retryAfter)
+            ? Math.max(1, Math.ceil(retryAfter / 60))
+            : null;
+          setError(
+            waitMinutes
+              ? `Demasiados intentos. Espera ${waitMinutes} min antes de volver a probar.`
+              : "Demasiados intentos. Espera un momento antes de volver a probar.",
+          );
+        } else if (response.status === 503) {
+          setError(
+            "El acceso privado todavía no está configurado en este entorno.",
+          );
+        } else {
+          setError(
+            "Esa clave no abre este espacio. Inténtalo de nuevo.",
+          );
+        }
+        setIsEntering(false);
+        return;
       }
 
-      window.location.assign("/iaura");
+      const requestedPath = new URLSearchParams(
+        window.location.search,
+      ).get("next");
+      const isSafeIauraPath = Boolean(
+        requestedPath === "/iaura" ||
+          requestedPath?.startsWith("/iaura?") ||
+          requestedPath?.startsWith("/iaura/"),
+      );
+      const nextPath =
+        requestedPath && isSafeIauraPath
+          ? requestedPath
+          : "/iaura";
+
+      window.location.assign(nextPath);
     } catch {
       setError(
-        "Esa clave no abre este espacio. Inténtalo de nuevo."
+        "No se pudo contactar a IAURA. Revisa la conexión e inténtalo otra vez."
       );
       setIsEntering(false);
     }
@@ -104,6 +137,7 @@ export default function AccessPage() {
             autoComplete="current-password"
             autoFocus
             value={accessKey}
+            disabled={isEntering}
             onChange={(event) =>
               setAccessKey(event.target.value)
             }
@@ -123,7 +157,9 @@ export default function AccessPage() {
             disabled={
               !accessKey.trim() || isEntering
             }
-            className="flex h-14 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 text-sm font-semibold shadow-[0_16px_45px_rgba(109,40,217,0.28)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-busy={isEntering}
+            data-state={isEntering ? "loading" : error ? "error" : "idle"}
+            className="flex h-14 w-full touch-manipulation items-center justify-center rounded-2xl border border-purple-300/20 bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 text-sm font-semibold shadow-[0_16px_45px_rgba(109,40,217,0.28)] transition duration-200 hover:brightness-110 active:scale-[0.975] active:brightness-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09050f] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 motion-reduce:transition-none"
           >
             {isEntering
               ? "Abriendo IAURA..."

@@ -3,13 +3,34 @@ import {
   type NextRequest,
 } from "next/server";
 
-import { isRequestAuthorized } from "@/core/auth/access";
+import {
+  hasValidAccessConfiguration,
+  isRequestAuthorized,
+} from "@/core/auth/access";
 
 export function proxy(request: NextRequest) {
   if (
     request.nextUrl.pathname === "/api/access"
   ) {
     return NextResponse.next();
+  }
+
+  if (
+    request.nextUrl.pathname.startsWith("/api/creative/") &&
+    !hasValidAccessConfiguration()
+  ) {
+    return NextResponse.json(
+      {
+        error: "IAURA private access is not configured.",
+        code: "IAURA_ACCESS_NOT_CONFIGURED",
+      },
+      {
+        status: 503,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
   }
 
   if (isRequestAuthorized(request)) {
@@ -35,9 +56,13 @@ export function proxy(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(
-    new URL("/access", request.url)
+  const accessUrl = new URL("/access", request.url);
+  accessUrl.searchParams.set(
+    "next",
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
   );
+
+  return NextResponse.redirect(accessUrl);
 }
 
 export const config = {

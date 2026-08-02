@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/core/i18n/I18nContext";
+import type { Ref } from "react";
 import type {
   VoiceCaptureMode,
   VoiceState,
@@ -14,6 +15,8 @@ interface VoiceButtonProps {
   onStopSpeaking: () => void;
   onRequestAudioFile: () => void;
   disabled?: boolean;
+  buttonRef?: Ref<HTMLButtonElement>;
+  descriptionId?: string;
 }
 
 export default function VoiceButton({
@@ -24,6 +27,8 @@ export default function VoiceButton({
   onStopSpeaking,
   onRequestAudioFile,
   disabled = false,
+  buttonRef,
+  descriptionId,
 }: VoiceButtonProps) {
   const { t } = useI18n();
   const isListening =
@@ -32,6 +37,8 @@ export default function VoiceButton({
     state === "processing";
   const isSpeaking =
     state === "speaking";
+  const isDetecting =
+    captureMode === "detecting";
   const usesNativeRecorder =
     captureMode === "file-upload";
 
@@ -61,7 +68,9 @@ export default function VoiceButton({
     void onStartListening();
   }
 
-  const label = isListening
+  const label = isDetecting
+    ? t("chat.micDetecting")
+    : isListening
     ? t("chat.micStop")
     : isSpeaking
       ? t("chat.voiceStop")
@@ -71,6 +80,7 @@ export default function VoiceButton({
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       onClick={handleClick}
       disabled={
@@ -79,18 +89,34 @@ export default function VoiceButton({
         captureMode === "detecting"
       }
       aria-label={label}
+      aria-describedby={descriptionId}
+      aria-pressed={isListening || isSpeaking}
+      aria-busy={isProcessing || isDetecting}
+      data-state={
+        isDetecting
+          ? "detecting"
+          : isProcessing
+            ? "processing"
+            : isListening
+              ? "listening"
+              : isSpeaking
+                ? "speaking"
+                : disabled
+                  ? "disabled"
+                  : "ready"
+      }
       title={label}
       className={[
-        "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
+        "flex h-12 w-12 shrink-0 touch-manipulation items-center justify-center rounded-xl",
         "border border-white/10 text-white transition",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400",
+        "active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 motion-reduce:transform-none motion-reduce:transition-none",
         disabled ||
         isProcessing ||
         captureMode === "detecting"
           ? "cursor-not-allowed opacity-40"
           : "hover:border-purple-400/50 hover:bg-purple-500/10",
         isListening
-          ? "animate-pulse bg-red-500/20 text-red-300"
+          ? "animate-pulse bg-red-500/20 text-red-300 motion-reduce:animate-none"
           : "",
         isSpeaking
           ? "bg-purple-500/20 text-purple-300"
@@ -105,9 +131,9 @@ export default function VoiceButton({
           className="h-3.5 w-3.5 rounded-sm bg-current"
           aria-hidden="true"
         />
-      ) : isProcessing ? (
+      ) : isProcessing || isDetecting ? (
         <span
-          className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent"
+          className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none"
           aria-hidden="true"
         />
       ) : (

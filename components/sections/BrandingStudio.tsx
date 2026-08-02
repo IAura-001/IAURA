@@ -3,8 +3,11 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   BRAND_PALETTE_PRESETS,
@@ -29,6 +32,18 @@ interface BrandingStudioProps {
   project: IAuraProject;
   onClose: () => void;
   onSave: (profile: BrandProfile) => void;
+}
+
+function subscribeClientSnapshot(): () => void {
+  return () => undefined;
+}
+
+function getClientSnapshot(): boolean {
+  return true;
+}
+
+function getServerSnapshot(): boolean {
+  return false;
 }
 
 const PERSONALITY_OPTIONS: readonly {
@@ -127,6 +142,7 @@ export default function BrandingStudio({
   onSave,
 }: BrandingStudioProps) {
   const { t } = useI18n();
+  const backButtonRef = useRef<HTMLButtonElement>(null);
   const [profile, setProfile] = useState<BrandProfile>(() =>
     createBrandProfile(project, {
       slogan: t("brand.identitySlogan"),
@@ -138,11 +154,17 @@ export default function BrandingStudio({
   >(project.branding ? "saved" : "editing");
   const [paletteCopied, setPaletteCopied] =
     useState(false);
+  const canUsePortal = useSyncExternalStore(
+    subscribeClientSnapshot,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
 
     document.body.style.overflow = "hidden";
+    backButtonRef.current?.focus({ preventScroll: true });
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -290,17 +312,37 @@ export default function BrandingStudio({
     setSaveState("saved");
   }
 
-  return (
+  const studio = (
     <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="brand-system-studio-title"
       aria-label={t("branding.title")}
-      className="fixed inset-0 z-[80] overflow-y-auto bg-[#05030a]/95 text-white backdrop-blur-2xl"
+      className="fixed inset-0 z-[200] h-[100dvh] touch-pan-y overflow-y-scroll overscroll-y-contain bg-[#05030a]/95 text-white [scrollbar-gutter:stable] backdrop-blur-2xl"
     >
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute left-[-12rem] top-[-10rem] h-[28rem] w-[28rem] rounded-full bg-purple-700/20 blur-[130px]" />
         <div className="absolute bottom-[-14rem] right-[-10rem] h-[32rem] w-[32rem] rounded-full bg-blue-600/15 blur-[150px]" />
       </div>
 
-      <div className="relative mx-auto min-h-screen w-full max-w-6xl px-4 py-5 sm:px-7 sm:py-8">
+      <div className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#05030a]/88 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-2xl sm:px-7">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
+          <button
+            ref={backButtonRef}
+            type="button"
+            onClick={onClose}
+            className="inline-flex min-h-11 touch-manipulation items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm font-medium text-white/75 transition hover:border-purple-300/35 hover:bg-purple-400/[0.08] hover:text-white active:scale-[0.975] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/75 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05030a] motion-reduce:transform-none motion-reduce:transition-none"
+          >
+            <span aria-hidden="true">←</span>
+            {t("assistant.back")}
+          </button>
+          <span className="truncate font-mono text-[0.62rem] uppercase tracking-[0.2em] text-white/35">
+            Brand system · {project.name}
+          </span>
+        </div>
+      </div>
+
+      <div className="relative mx-auto min-h-full w-full max-w-6xl px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5 sm:px-7 sm:pt-8">
         <header className="mb-8 flex items-start justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <div className="mb-3 flex flex-wrap items-center gap-3 text-[0.68rem] uppercase tracking-[0.28em] text-purple-200/70">
@@ -308,7 +350,10 @@ export default function BrandingStudio({
               <span className="h-1 w-1 rounded-full bg-purple-400" />
               <span>{project.name}</span>
             </div>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h1
+              id="brand-system-studio-title"
+              className="text-3xl font-semibold tracking-tight sm:text-4xl"
+            >
               {t("branding.title")}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55 sm:text-base">
@@ -320,7 +365,7 @@ export default function BrandingStudio({
             type="button"
             onClick={onClose}
             aria-label={t("branding.close")}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-xl text-white/70 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+            className="grid h-11 w-11 shrink-0 touch-manipulation place-items-center rounded-full border border-white/10 bg-white/[0.05] text-xl text-white/70 transition hover:border-white/25 hover:bg-white/10 hover:text-white active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/75 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05030a] motion-reduce:transform-none motion-reduce:transition-none"
           >
             ×
           </button>
@@ -785,4 +830,6 @@ export default function BrandingStudio({
       </div>
     </section>
   );
+
+  return canUsePortal ? createPortal(studio, document.body) : studio;
 }

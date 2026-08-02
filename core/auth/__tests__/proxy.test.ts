@@ -14,10 +14,13 @@ import {
 import { config, proxy } from "@/proxy";
 
 const authMock = vi.hoisted(() => ({
+  hasValidAccessConfiguration: vi.fn(),
   isRequestAuthorized: vi.fn(),
 }));
 
 vi.mock("@/core/auth/access", () => ({
+  hasValidAccessConfiguration:
+    authMock.hasValidAccessConfiguration,
   isRequestAuthorized:
     authMock.isRequestAuthorized,
 }));
@@ -53,7 +56,9 @@ describe("VAEORA and IAURA route boundaries", () => {
 
 describe("IAURA authorization behavior", () => {
   beforeEach(() => {
+    authMock.hasValidAccessConfiguration.mockReset();
     authMock.isRequestAuthorized.mockReset();
+    authMock.hasValidAccessConfiguration.mockReturnValue(true);
   });
 
   it("allows the public access endpoint to establish a session", () => {
@@ -81,7 +86,21 @@ describe("IAURA authorization behavior", () => {
 
     expect(response.status).toBe(307);
     expect(getRedirectUrl(response)).toBe(
-      "https://vaeora.test/access"
+      "https://vaeora.test/access?next=%2Fiaura"
+    );
+  });
+
+  it("preserves a validated IAURA deep link through private access", () => {
+    authMock.isRequestAuthorized.mockReturnValue(false);
+
+    const response = proxy(
+      new NextRequest(
+        "https://vaeora.test/iaura?view=projects&intent=branding",
+      ),
+    );
+
+    expect(getRedirectUrl(response)).toBe(
+      "https://vaeora.test/access?next=%2Fiaura%3Fview%3Dprojects%26intent%3Dbranding",
     );
   });
 
@@ -89,6 +108,8 @@ describe("IAURA authorization behavior", () => {
     "/api/chat",
     "/api/voice",
     "/api/transcribe",
+    "/api/creative/copy",
+    "/api/creative/image",
   ])("returns JSON 401 for unauthorized %s", async (path) => {
     authMock.isRequestAuthorized.mockReturnValue(false);
 
@@ -104,6 +125,26 @@ describe("IAURA authorization behavior", () => {
       error: "IAURA private access required.",
       code: "IAURA_ACCESS_REQUIRED",
     });
+  });
+
+  it("returns 503 for creative APIs when access is not configured", async () => {
+    authMock.hasValidAccessConfiguration.mockReturnValue(false);
+
+    const response = proxy(
+      new NextRequest("https://vaeora.test/api/creative/image")
+    );
+
+    expect(response.status).toBe(503);
+    expect(
+      response.headers.get("cache-control")
+    ).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      error: "IAURA private access is not configured.",
+      code: "IAURA_ACCESS_NOT_CONFIGURED",
+    });
+    expect(
+      authMock.isRequestAuthorized
+    ).not.toHaveBeenCalled();
   });
 
   it("allows an authorized protected request", () => {

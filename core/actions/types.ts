@@ -1,4 +1,5 @@
 import type { Memory } from "@/types/memory";
+import type { ProjectKind } from "@/types/project";
 
 export const IAURA_ACTION_TYPES = [
   "add_goal",
@@ -13,18 +14,69 @@ export const IAURA_ACTION_TYPES = [
 export type IAuraActionType =
   (typeof IAURA_ACTION_TYPES)[number];
 
+export const AURA_EXPERIENCE_KINDS = [
+  "personal-goal",
+  "project",
+  "brand",
+  "creative",
+  "learning",
+  "wellbeing",
+  "decision",
+  "general",
+] as const;
+
+export type AuraExperienceKind =
+  (typeof AURA_EXPERIENCE_KINDS)[number];
+
+export const AURA_EXPERIENCE_SURFACES = [
+  "none",
+  "presence",
+  "projects",
+  "intelligence",
+  "creative-direction",
+  "creative-image",
+  "creative-website",
+  "creative-library",
+  "launch",
+] as const;
+
+export type AuraExperienceSurface =
+  (typeof AURA_EXPERIENCE_SURFACES)[number];
+
+export interface AuraExperiencePhase {
+  title: string;
+  description: string;
+}
+
+export interface AuraExperienceChoice {
+  label: string;
+  description: string;
+  prompt: string;
+}
+
+export interface AuraExperience {
+  kind: AuraExperienceKind;
+  title: string;
+  summary: string;
+  phases: AuraExperiencePhase[];
+  choices: AuraExperienceChoice[];
+  recommendedSurface: AuraExperienceSurface;
+}
+
 export interface PlannedAuraAction {
   type: IAuraActionType;
   value: string;
   description: string;
   goal: string;
   missionId: string;
+  projectKind?: ProjectKind;
   reason: string;
 }
 
 export interface AuraAssistantPlan {
   content: string;
   actions: PlannedAuraAction[];
+  experience: AuraExperience;
 }
 
 export interface ActionExecutionItem {

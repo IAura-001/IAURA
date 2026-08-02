@@ -96,6 +96,43 @@ describe("ActionExecutor", () => {
     ).toBe("2026-07-30T12:00:00.000Z");
   });
 
+  it("does not force personal and wellbeing work into branding", () => {
+    const result = executeAuraActions(
+      {
+        ...DEFAULT_MEMORY,
+        projects: [],
+      },
+      [
+        action("create_project", "Dormir mejor", {
+          projectKind: "wellbeing",
+          goal: "Construir una rutina de sueño sostenible.",
+        }),
+      ],
+    );
+
+    expect(result.memory.activeProject?.kind).toBe("wellbeing");
+    expect(result.memory.activeProject?.studios.branding).toBe(false);
+    expect(result.memory.activeProject?.studios.marketing).toBe(false);
+  });
+
+  it("keeps the complete creative system available for business projects", () => {
+    const result = executeAuraActions(
+      {
+        ...DEFAULT_MEMORY,
+        projects: [],
+      },
+      [
+        action("create_project", "Mita", {
+          projectKind: "business",
+        }),
+      ],
+    );
+
+    expect(result.memory.activeProject?.kind).toBe("business");
+    expect(result.memory.activeProject?.studios.branding).toBe(true);
+    expect(result.memory.activeProject?.studios.website).toBe(true);
+  });
+
   it("awards mission XP only once", () => {
     const first = executeAuraActions(
       {

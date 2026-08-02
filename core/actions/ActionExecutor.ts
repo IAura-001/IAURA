@@ -73,6 +73,10 @@ function createProject(
   action: PlannedAuraAction,
   createdAt: string
 ): IAuraProject {
+  const kind = action.projectKind ?? "general";
+  const isBrandProject = kind === "business";
+  const isCreativeProject = kind === "creative";
+
   return {
     id: `${Date.now()}-${Math.random()
       .toString(36)
@@ -87,12 +91,13 @@ function createProject(
     createdAt,
     updatedAt: createdAt,
     status: "planning",
+    kind,
     studios: {
-      branding: true,
-      website: true,
+      branding: isBrandProject || isCreativeProject,
+      website: isBrandProject,
       app: false,
-      marketing: true,
-      documents: true,
+      marketing: isBrandProject,
+      documents: isBrandProject || kind === "learning",
     },
   };
 }

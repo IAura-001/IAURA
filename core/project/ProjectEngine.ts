@@ -3,14 +3,17 @@ import type {
   BrandingStudioMemory,
   IAuraProject,
   LaunchStudioMemory,
+  ProjectKind,
   ProjectStatus,
   ProjectStudios,
 } from "./types";
+import type { CreativeStudioMemory } from "@/types/creative-studio";
 
 export interface CreateProjectInput {
   name: string;
   description?: string;
   goal?: string;
+  kind?: ProjectKind;
 }
 
 export interface UpdateProjectInput {
@@ -18,9 +21,11 @@ export interface UpdateProjectInput {
   description?: string;
   goal?: string;
   status?: ProjectStatus;
+  kind?: ProjectKind;
   studios?: Partial<ProjectStudios>;
   brandingStudio?: BrandingStudioMemory;
   launchStudio?: LaunchStudioMemory;
+  creativeStudio?: CreativeStudioMemory;
 }
 
 const DEFAULT_STUDIOS: ProjectStudios = {
@@ -47,6 +52,7 @@ function createProjectId(): string {
 export class ProjectEngine {
   private projects = new Map<string, IAuraProject>();
   private currentProjectId: string | null = null;
+  private lastPersistenceSucceeded = true;
 
   constructor() {
     const storedProjects = projectStorage.load();
@@ -59,7 +65,11 @@ export class ProjectEngine {
   }
 
   private persist(): void {
-    projectStorage.save(this.getProjects());
+    this.lastPersistenceSucceeded = projectStorage.save(this.getProjects());
+  }
+
+  didLastPersistenceSucceed(): boolean {
+    return this.lastPersistenceSucceeded;
   }
 
   createProject(input: CreateProjectInput): IAuraProject {
@@ -79,6 +89,7 @@ export class ProjectEngine {
       createdAt: now,
       updatedAt: now,
       status: "planning",
+      kind: input.kind ?? "general",
       studios: { ...DEFAULT_STUDIOS },
     };
 
@@ -166,6 +177,28 @@ export class ProjectEngine {
       studios: {
         marketing: true,
       },
+    });
+  }
+
+  updateCreativeStudio(
+    projectId: string,
+    creativeStudio: CreativeStudioMemory,
+  ): IAuraProject {
+    const activatedStudios: Partial<ProjectStudios> = {
+      branding: true,
+    };
+
+    if (creativeStudio.outputs["website-copy"]) {
+      activatedStudios.website = true;
+    }
+
+    if (creativeStudio.outputs["social-kit"]) {
+      activatedStudios.marketing = true;
+    }
+
+    return this.updateProject(projectId, {
+      creativeStudio,
+      studios: activatedStudios,
     });
   }
 

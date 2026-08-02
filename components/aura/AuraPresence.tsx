@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 import { useVoiceContext } from "@/core/context/VoiceContext";
 import { useI18n } from "@/core/i18n/I18nContext";
 import type { MessageKey } from "@/core/i18n/messages";
@@ -39,6 +41,7 @@ export function AuraPresence({
 }: AuraPresenceProps) {
   const { state } = useVoiceContext();
   const { t } = useI18n();
+  const statusId = useId();
   const visualState =
     phase === "awakening"
       ? "awakening"
@@ -48,6 +51,11 @@ export function AuraPresence({
   const actionLabel = isLive
     ? t("aura.live.stop")
     : t("aura.live.start");
+  const liveStatus = !onToggleLive
+    ? t("aura.live.unavailable")
+    : isLive
+      ? t("aura.live.active")
+      : t("aura.live.ready");
 
   return (
     <div
@@ -105,9 +113,11 @@ export function AuraPresence({
 
       <button
         type="button"
-        className="aura-core-shell relative z-10 flex h-32 w-32 touch-manipulation appearance-none items-center justify-center rounded-full outline-none transition-transform focus-visible:ring-2 focus-visible:ring-violet-200/80 active:scale-95 sm:h-36 sm:w-36"
+        className="aura-core-shell relative z-10 flex h-32 w-32 touch-manipulation appearance-none items-center justify-center rounded-full outline-none transition-transform focus-visible:ring-2 focus-visible:ring-violet-200/80 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transform-none motion-reduce:transition-none sm:h-36 sm:w-36"
         aria-label={actionLabel}
+        aria-describedby={statusId}
         aria-pressed={isLive}
+        data-state={!onToggleLive ? "disabled" : isLive ? "active" : "ready"}
         title={actionLabel}
         onClick={onToggleLive}
         disabled={!onToggleLive}
@@ -136,6 +146,15 @@ export function AuraPresence({
           ✦
         </span>
       </button>
+
+      <span
+        id={statusId}
+        role="status"
+        className="absolute left-1/2 top-3 z-30 inline-flex min-h-7 -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-white/10 bg-black/45 px-3 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-zinc-300 backdrop-blur-md sm:top-4"
+      >
+        <span aria-hidden="true">{isLive ? "◆" : "◇"}</span>
+        {liveStatus}
+      </span>
 
       <div
         aria-hidden="true"

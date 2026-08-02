@@ -1,8 +1,18 @@
+import type { CreativeStudioMemory } from "@/types/creative-studio";
+
 export type ProjectStatus =
   | "planning"
   | "building"
   | "launching"
   | "completed";
+
+export type ProjectKind =
+  | "general"
+  | "personal"
+  | "business"
+  | "creative"
+  | "learning"
+  | "wellbeing";
 
 export interface ProjectStudios {
   branding: boolean;
@@ -91,8 +101,10 @@ export interface IAuraProject {
   createdAt: string;
   updatedAt: string;
   status: ProjectStatus;
+  kind?: ProjectKind;
   studios: ProjectStudios;
   branding?: BrandProfile;
   brandingStudio?: BrandingStudioMemory;
   launchStudio?: LaunchStudioMemory;
+  creativeStudio?: CreativeStudioMemory;
 }

@@ -8,9 +8,29 @@ import {
   hasValidAccessConfiguration,
   matchesAccessKey,
 } from "@/core/auth/access";
+import {
+  clearAccessFailures,
+  getAccessAttemptStatus,
+  recordAccessFailure,
+} from "@/core/auth/accessAttempts";
 
 interface AccessRequestBody {
   accessKey?: unknown;
+}
+
+function tooManyAttemptsResponse(retryAfter?: number) {
+  return NextResponse.json(
+    {
+      error: "Too many access attempts. Try again later.",
+    },
+    {
+      status: 429,
+      headers: {
+        "Cache-Control": "no-store",
+        "Retry-After": String(retryAfter ?? 1),
+      },
+    }
+  );
 }
 
 export async function POST(
@@ -39,12 +59,22 @@ export async function POST(
     body =
       (await request.json()) as AccessRequestBody;
   } catch {
+    const attemptStatus = getAccessAttemptStatus(request);
+
+    if (!attemptStatus.allowed) {
+      return tooManyAttemptsResponse(attemptStatus.retryAfter);
+    }
+
+    recordAccessFailure(request);
     return NextResponse.json(
       {
         error: "Invalid access request.",
       },
       {
         status: 400,
+        headers: {
+          "Cache-Control": "no-store",
+        },
       }
     );
   }
@@ -55,41 +85,50 @@ export async function POST(
       : "";
 
   if (
-    !accessKey ||
-    !matchesAccessKey(accessKey, secret)
+    accessKey &&
+    matchesAccessKey(accessKey, secret)
   ) {
-    return NextResponse.json(
-      {
-        error: "Invalid access key.",
-      },
-      {
-        status: 401,
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
+    clearAccessFailures(request);
+
+    const response = NextResponse.json({
+      authenticated: true,
+    });
+
+    response.cookies.set({
+      name: ACCESS_COOKIE_NAME,
+      value: createAccessToken(secret),
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: ACCESS_SESSION_SECONDS,
+      priority: "high",
+    });
+    response.headers.set(
+      "Cache-Control",
+      "no-store"
     );
+
+    return response;
   }
 
-  const response = NextResponse.json({
-    authenticated: true,
-  });
+  const attemptStatus = getAccessAttemptStatus(request);
 
-  response.cookies.set({
-    name: ACCESS_COOKIE_NAME,
-    value: createAccessToken(secret),
-    httpOnly: true,
-    secure:
-      process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: ACCESS_SESSION_SECONDS,
-    priority: "high",
-  });
-  response.headers.set(
-    "Cache-Control",
-    "no-store"
+  if (!attemptStatus.allowed) {
+    return tooManyAttemptsResponse(attemptStatus.retryAfter);
+  }
+
+  recordAccessFailure(request);
+  return NextResponse.json(
+    {
+      error: "Invalid access key.",
+    },
+    {
+      status: 401,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    }
   );
-
-  return response;
 }

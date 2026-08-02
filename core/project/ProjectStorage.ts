@@ -3,30 +3,37 @@ import type { IAuraProject } from "./types";
 const STORAGE_KEY = "iaura.projects";
 
 function canUseStorage(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.localStorage !== "undefined"
-  );
+  if (typeof window === "undefined") return false;
+
+  try {
+    return typeof window.localStorage !== "undefined";
+  } catch {
+    return false;
+  }
 }
 
 export class ProjectStorage {
-  save(projects: IAuraProject[]): void {
-    if (!canUseStorage()) return;
+  save(projects: IAuraProject[]): boolean {
+    if (!canUseStorage()) return false;
 
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(projects),
-    );
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(projects),
+      );
+      return true;
+    } catch {
+      // Keep the in-memory project usable when browser storage is unavailable.
+      return false;
+    }
   }
 
   load(): IAuraProject[] {
     if (!canUseStorage()) return [];
 
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-
-    if (!raw) return [];
-
     try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
       const parsed: unknown = JSON.parse(raw);
 
       return Array.isArray(parsed)
@@ -40,7 +47,11 @@ export class ProjectStorage {
   clear(): void {
     if (!canUseStorage()) return;
 
-    window.localStorage.removeItem(STORAGE_KEY);
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // The in-memory engine remains usable when browser storage is blocked.
+    }
   }
 }
 

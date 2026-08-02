@@ -31,6 +31,7 @@ ${
   memory.activeProject
     ? [
         `Name: ${memory.activeProject.name}`,
+        `Kind: ${memory.activeProject.kind ?? "general"}`,
         `Goal: ${memory.activeProject.goal}`,
         `Status: ${memory.activeProject.status}`,
       ].join("\n")

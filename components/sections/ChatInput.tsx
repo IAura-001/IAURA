@@ -2,6 +2,7 @@
 
 import {
   memo,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -19,7 +20,14 @@ interface ChatInputProps {
     message?: string
   ) => void | Promise<void>;
   isSending?: boolean;
+  voiceEntryRequested?: boolean;
 }
+
+type SubmissionFeedback =
+  | "idle"
+  | "sending"
+  | "success"
+  | "error";
 
 function getVoiceErrorKey(
   voiceError: VoiceError
@@ -39,12 +47,23 @@ function getVoiceErrorKey(
 function ChatInputComponent({
   onSend,
   isSending = false,
+  voiceEntryRequested = false,
 }: ChatInputProps) {
   const { t } = useI18n();
   const [value, setValue] = useState("");
+  const [submissionFeedback, setSubmissionFeedback] =
+    useState<SubmissionFeedback>("idle");
   const lastTranscriptRef = useRef("");
+  const feedbackTimerRef =
+    useRef<number | null>(null);
   const audioInputRef =
     useRef<HTMLInputElement>(null);
+  const voiceButtonRef =
+    useRef<HTMLButtonElement>(null);
+  const voiceEntryHintRef =
+    useRef<HTMLParagraphElement>(null);
+  const hasFocusedVoiceEntryRef =
+    useRef(false);
 
   const {
     state,
@@ -61,6 +80,27 @@ function ChatInputComponent({
     clearVoiceError,
     unlockAudio,
   } = useVoiceContext();
+  const isSubmissionBusy =
+    isSending || submissionFeedback === "sending";
+
+  const scheduleFeedbackReset = useCallback(() => {
+    if (feedbackTimerRef.current) {
+      window.clearTimeout(feedbackTimerRef.current);
+    }
+
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setSubmissionFeedback("idle");
+      feedbackTimerRef.current = null;
+    }, 2400);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) {
+        window.clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const trimmedTranscript =
@@ -68,7 +108,7 @@ function ChatInputComponent({
 
     if (
       !trimmedTranscript ||
-      isSending ||
+      isSubmissionBusy ||
       trimmedTranscript ===
         lastTranscriptRef.current
     ) {
@@ -80,17 +120,60 @@ function ChatInputComponent({
     setValue(trimmedTranscript);
 
     void (async () => {
-      await onSend(trimmedTranscript);
-      setValue("");
-      clearTranscript();
-      lastTranscriptRef.current = "";
+      setSubmissionFeedback("sending");
+
+      try {
+        await onSend(trimmedTranscript);
+        setValue("");
+        clearTranscript();
+        lastTranscriptRef.current = "";
+        setSubmissionFeedback("success");
+        scheduleFeedbackReset();
+      } catch {
+        setSubmissionFeedback("error");
+      }
     })();
   }, [
     clearTranscript,
-    isSending,
+    isSubmissionBusy,
     onSend,
+    scheduleFeedbackReset,
     transcript,
   ]);
+
+  useEffect(() => {
+    if (
+      !voiceEntryRequested ||
+      hasFocusedVoiceEntryRef.current
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const voiceReady =
+        captureMode !== "detecting" &&
+        !isSubmissionBusy;
+      const focusTarget = voiceReady
+        ? voiceButtonRef.current
+        : voiceEntryHintRef.current;
+
+      focusTarget?.focus({ preventScroll: true });
+      focusTarget?.scrollIntoView?.({
+        block: "center",
+        behavior: window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches
+          ? "auto"
+          : "smooth",
+      });
+
+      if (voiceReady && voiceButtonRef.current) {
+        hasFocusedVoiceEntryRef.current = true;
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [captureMode, isSubmissionBusy, voiceEntryRequested]);
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
@@ -100,12 +183,20 @@ function ChatInputComponent({
 
     const trimmedValue = value.trim();
 
-    if (!trimmedValue || isSending) {
+    if (!trimmedValue || isSubmissionBusy) {
       return;
     }
 
-    await onSend(trimmedValue);
-    setValue("");
+    setSubmissionFeedback("sending");
+
+    try {
+      await onSend(trimmedValue);
+      setValue("");
+      setSubmissionFeedback("success");
+      scheduleFeedbackReset();
+    } catch {
+      setSubmissionFeedback("error");
+    }
   }
 
   async function handleAudioFile(
@@ -139,6 +230,8 @@ function ChatInputComponent({
           type="button"
           role="switch"
           aria-checked={voiceMode}
+          data-state={voiceMode ? "active" : "inactive"}
+          disabled={isSubmissionBusy}
           aria-label={
             voiceMode
               ? t("chat.voiceOn")
@@ -149,8 +242,8 @@ function ChatInputComponent({
             setVoiceMode(!voiceMode);
           }}
           className={[
-            "group inline-flex items-center gap-2 rounded-full border px-3 py-1.5",
-            "text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400",
+            "group inline-flex min-h-11 touch-manipulation items-center gap-2 rounded-full border px-3 py-2",
+            "text-xs font-medium transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transform-none motion-reduce:transition-none",
             voiceMode
               ? "border-purple-400/30 bg-purple-500/10 text-purple-100"
               : "border-white/10 bg-white/[0.03] text-zinc-400",
@@ -194,19 +287,26 @@ function ChatInputComponent({
 
       <form
         onSubmit={handleSubmit}
+        aria-busy={isSubmissionBusy}
         className="flex gap-3"
       >
         <input
           value={value}
-          onChange={(event) =>
-            setValue(event.target.value)
-          }
+          onChange={(event) => {
+            setValue(event.target.value);
+            if (
+              submissionFeedback === "success" ||
+              submissionFeedback === "error"
+            ) {
+              setSubmissionFeedback("idle");
+            }
+          }}
           placeholder={placeholder}
           aria-label={t("chat.placeholder")}
           autoComplete="off"
           enterKeyHint="send"
-          disabled={isSending}
-          className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none transition focus:border-purple-400/70 focus:ring-2 focus:ring-purple-500/20"
+          disabled={isSubmissionBusy}
+          className="min-h-12 min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none transition focus-visible:border-purple-400/70 focus-visible:ring-2 focus-visible:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none"
         />
 
         <input
@@ -220,6 +320,12 @@ function ChatInputComponent({
         />
 
         <VoiceButton
+          buttonRef={voiceButtonRef}
+          descriptionId={
+            voiceEntryRequested
+              ? "iaura-voice-entry-hint"
+              : undefined
+          }
           state={state}
           captureMode={captureMode}
           onStartListening={startListening}
@@ -229,19 +335,57 @@ function ChatInputComponent({
             clearVoiceError();
             audioInputRef.current?.click();
           }}
-          disabled={isSending}
+          disabled={isSubmissionBusy}
         />
 
         <button
           type="submit"
           disabled={
-            !value.trim() || isSending
+            !value.trim() || isSubmissionBusy
           }
-          className="rounded-xl bg-purple-600 px-5 py-3 font-semibold transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-busy={isSubmissionBusy}
+          data-state={submissionFeedback}
+          className="inline-flex min-h-12 min-w-[6.75rem] touch-manipulation items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 font-semibold transition hover:bg-purple-500 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/80 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none"
         >
-          {isSending ? "…" : t("chat.send")}
+          {isSubmissionBusy ? (
+            <>
+              <span
+                aria-hidden="true"
+                className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none"
+              />
+              <span>{t("chat.sending")}</span>
+            </>
+          ) : (
+            t("chat.send")
+          )}
         </button>
       </form>
+
+      <div aria-live="polite" className="min-h-5 px-1 text-xs">
+        {submissionFeedback === "success" ? (
+          <p className="text-emerald-200">
+            <span aria-hidden="true">✓ </span>
+            {t("chat.sent")}
+          </p>
+        ) : submissionFeedback === "error" ? (
+          <p role="alert" className="text-amber-300">
+            <span aria-hidden="true">! </span>
+            {t("chat.sendFailed")}
+          </p>
+        ) : null}
+      </div>
+
+      {voiceEntryRequested ? (
+        <p
+          ref={voiceEntryHintRef}
+          id="iaura-voice-entry-hint"
+          role="status"
+          tabIndex={-1}
+          className="rounded-xl border border-violet-300/15 bg-violet-500/[0.06] px-3 py-2 text-xs leading-5 text-violet-100/75 outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+        >
+          {t("chat.voiceEntryHint")}
+        </p>
+      ) : null}
 
       {errorKey ? (
         <p

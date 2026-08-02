@@ -6,7 +6,9 @@ import {
   generateAIResponse,
   sanitizeAuraResponse,
 } from "../../services/ai";
+import { projectEngine } from "@/core/project/ProjectEngine";
 import type { IAuraProject } from "@/types/project";
+import { useFullscreenStudioLayer } from "./useFullscreenStudioLayer";
 
 interface BrandingStudioProps {
   project: IAuraProject;
@@ -103,6 +105,8 @@ export default function BrandingStudio({
   const [isLoaded, setIsLoaded] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+  const { backButtonRef, renderFullscreenStudio } =
+    useFullscreenStudioLayer(onClose, isLoaded);
 
   const activeSection = useMemo(
     () =>
@@ -127,7 +131,16 @@ export default function BrandingStudio({
         const raw = window.localStorage.getItem(getStorageKey(project.id));
 
         if (!raw) {
-          setDraft(emptyDraft());
+          setDraft(
+            project.brandingStudio
+              ? {
+                  ...project.brandingStudio,
+                  generatedContent: sanitizeContentMap(
+                    project.brandingStudio.generatedContent,
+                  ),
+                }
+              : emptyDraft(),
+          );
           setIsLoaded(true);
           return;
         }
@@ -167,7 +180,7 @@ export default function BrandingStudio({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [project.id]);
+  }, [project.brandingStudio, project.id]);
 
   function updatePrompt(value: string): void {
     setDraft((current) => ({
@@ -265,6 +278,7 @@ No utilices markdown, asteriscos, numerales de encabezado ni símbolos decorativ
         getStorageKey(project.id),
         JSON.stringify(savedDraft),
       );
+      projectEngine.updateBrandingStudio(project.id, savedDraft);
 
       setDraft(savedDraft);
       setFeedback("Borrador guardado.");
@@ -275,16 +289,26 @@ No utilices markdown, asteriscos, numerales de encabezado ni símbolos decorativ
   }
 
   if (!isLoaded) {
-    return (
-      <section className="fixed inset-0 z-[100] grid place-items-center bg-[#05030b] text-zinc-400">
-        Cargando Branding Studio...
-      </section>
+    return renderFullscreenStudio(
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Cargando Branding Studio"
+        className="fixed inset-0 z-[200] grid h-[100dvh] place-items-center bg-[#05030b] text-zinc-400"
+      >
+        <p role="status">Cargando Branding Studio...</p>
+      </section>,
     );
   }
 
-  return (
-    <section className="fixed inset-0 z-[100] overflow-y-auto bg-[#05030b]">
-      <div className="mx-auto min-h-screen w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
+  return renderFullscreenStudio(
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="legacy-branding-studio-title"
+      className="fixed inset-0 z-[200] h-[100dvh] touch-pan-y overflow-y-scroll overscroll-y-contain bg-[#05030b] [scrollbar-gutter:stable]"
+    >
+      <div className="mx-auto min-h-full w-full max-w-[1600px] px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pb-6 lg:px-8 lg:pb-8">
         <header className="sticky top-0 z-20 mb-6 flex flex-col gap-5 rounded-3xl border border-white/10 bg-[#090611]/90 p-5 shadow-2xl backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.35em] text-violet-300">
@@ -292,7 +316,10 @@ No utilices markdown, asteriscos, numerales de encabezado ni símbolos decorativ
             </p>
 
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <h1 className="truncate text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              <h1
+                id="legacy-branding-studio-title"
+                className="truncate text-3xl font-bold tracking-tight text-white sm:text-4xl"
+              >
                 {project.name}
               </h1>
 
@@ -316,9 +343,10 @@ No utilices markdown, asteriscos, numerales de encabezado ni símbolos decorativ
             </button>
 
             <button
+              ref={backButtonRef}
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-white/10 px-5 py-3 text-white transition hover:border-violet-400"
+              className="min-h-11 touch-manipulation rounded-xl border border-white/10 px-5 py-3 text-white transition hover:border-violet-400 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05030b] motion-reduce:transform-none motion-reduce:transition-none"
             >
               ← Volver
             </button>

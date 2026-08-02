@@ -52,9 +52,13 @@ function readCookie(
       cookie.trim().split("=");
 
     if (cookieName === name) {
-      return decodeURIComponent(
-        valueParts.join("=")
-      );
+      try {
+        return decodeURIComponent(
+          valueParts.join("=")
+        );
+      } catch {
+        return null;
+      }
     }
   }
 
@@ -110,8 +114,11 @@ export function verifyAccessToken(
   secret: string,
   now = Date.now()
 ): boolean {
-  const [version, expiresAtRaw, signature] =
-    token.split(".");
+  const parts = token.split(".");
+
+  if (parts.length !== 3) return false;
+
+  const [version, expiresAtRaw, signature] = parts;
 
   if (
     version !== TOKEN_VERSION ||

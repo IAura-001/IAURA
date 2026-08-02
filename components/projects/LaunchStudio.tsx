@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { projectEngine } from "@/core/project/ProjectEngine";
 import type { IAuraProject } from "@/types/project";
+import { useFullscreenStudioLayer } from "./useFullscreenStudioLayer";
 
 interface LaunchStudioProps {
   project: IAuraProject;
@@ -101,6 +103,7 @@ function saveLibrary(projectId: string, assets: LaunchAsset[]): void {
     getStorageKey(projectId),
     JSON.stringify(library),
   );
+  projectEngine.updateLaunchStudio(projectId, library);
 }
 
 export default function LaunchStudio({
@@ -112,6 +115,8 @@ export default function LaunchStudio({
   const [isLoaded, setIsLoaded] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+  const { backButtonRef, renderFullscreenStudio } =
+    useFullscreenStudioLayer(onClose, isLoaded);
 
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
@@ -126,6 +131,12 @@ export default function LaunchStudio({
 
       try {
         const raw = window.localStorage.getItem(getStorageKey(project.id));
+
+        if (!raw && project.launchStudio?.assets.length) {
+          setAssets(project.launchStudio.assets);
+          setSelectedAssetId(project.launchStudio.assets[0]?.id ?? "");
+          return;
+        }
 
         if (!raw) {
           const teaser02 = createTeaser02();
@@ -167,7 +178,7 @@ export default function LaunchStudio({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [project.id]);
+  }, [project.id, project.launchStudio?.assets]);
 
   function updateSelectedAsset(
     updates: Partial<Omit<LaunchAsset, "id" | "createdAt">>,
@@ -265,23 +276,36 @@ export default function LaunchStudio({
   }
 
   if (!isLoaded) {
-    return (
-      <section className="fixed inset-0 z-[100] grid place-items-center bg-[#05030b] text-zinc-400">
-        Cargando Launch Studio...
-      </section>
+    return renderFullscreenStudio(
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Cargando Launch Studio"
+        className="fixed inset-0 z-[200] grid h-[100dvh] place-items-center bg-[#05030b] text-zinc-400"
+      >
+        <p role="status">Cargando Launch Studio...</p>
+      </section>,
     );
   }
 
-  return (
-    <section className="fixed inset-0 z-[100] overflow-y-auto bg-[#05030b]">
-      <div className="mx-auto min-h-screen w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
+  return renderFullscreenStudio(
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="launch-studio-title"
+      className="fixed inset-0 z-[200] h-[100dvh] touch-pan-y overflow-y-scroll overscroll-y-contain bg-[#05030b] [scrollbar-gutter:stable]"
+    >
+      <div className="mx-auto min-h-full w-full max-w-[1600px] px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pb-6 lg:px-8 lg:pb-8">
         <header className="sticky top-0 z-20 mb-6 flex flex-col gap-5 rounded-3xl border border-white/10 bg-[#090611]/90 p-5 shadow-2xl backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.35em] text-violet-300">
               Launch Studio
             </p>
 
-            <h1 className="mt-2 truncate text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h1
+              id="launch-studio-title"
+              className="mt-2 truncate text-3xl font-bold tracking-tight text-white sm:text-4xl"
+            >
               {project.name}
             </h1>
 
@@ -300,9 +324,10 @@ export default function LaunchStudio({
             </button>
 
             <button
+              ref={backButtonRef}
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-white/10 px-5 py-3 text-white transition hover:border-violet-400"
+              className="min-h-11 touch-manipulation rounded-xl border border-white/10 px-5 py-3 text-white transition hover:border-violet-400 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05030b] motion-reduce:transform-none motion-reduce:transition-none"
             >
               ← Volver
             </button>

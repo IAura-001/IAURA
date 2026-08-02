@@ -12,10 +12,14 @@ import type { SupportedLocale } from "@/core/i18n/languages";
 
 import styles from "./VaeoraWorkspaceShell.module.css";
 
-type WorkspaceView =
+export type WorkspaceView =
   | "presence"
   | "projects"
   | "intelligence";
+
+export type WorkspaceEntryIntent =
+  | "voice"
+  | "branding";
 
 interface WorkspaceViewCopy {
   label: string;
@@ -34,6 +38,9 @@ interface WorkspaceCopy {
 interface VaeoraWorkspaceShellProps {
   locale: SupportedLocale;
   userName: string;
+  initialView?: WorkspaceView;
+  activeView?: WorkspaceView;
+  onViewChange?: (view: WorkspaceView) => void;
   presence: ReactNode;
   projects: ReactNode;
   intelligence: ReactNode;
@@ -163,12 +170,16 @@ const WORKSPACE_COPY: Record<SupportedLocale, WorkspaceCopy> = {
 export default function VaeoraWorkspaceShell({
   locale,
   userName,
+  initialView = "presence",
+  activeView: controlledActiveView,
+  onViewChange,
   presence,
   projects,
   intelligence,
 }: VaeoraWorkspaceShellProps) {
-  const [activeView, setActiveView] =
-    useState<WorkspaceView>("presence");
+  const [internalActiveView, setInternalActiveView] =
+    useState<WorkspaceView>(initialView);
+  const activeView = controlledActiveView ?? internalActiveView;
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const copy = WORKSPACE_COPY[locale];
   const content: Record<WorkspaceView, ReactNode> = {
@@ -178,7 +189,10 @@ export default function VaeoraWorkspaceShell({
   };
 
   function selectView(view: WorkspaceView, focus = false) {
-    setActiveView(view);
+    if (controlledActiveView === undefined) {
+      setInternalActiveView(view);
+    }
+    onViewChange?.(view);
 
     if (focus) {
       const index = VIEW_ORDER.indexOf(view);
@@ -245,6 +259,7 @@ export default function VaeoraWorkspaceShell({
                     tabIndex={selected ? 0 : -1}
                     className={styles.tab}
                     data-active={selected ? "true" : "false"}
+                    data-state={selected ? "active" : "inactive"}
                     onClick={() => selectView(view)}
                     onKeyDown={(event) => handleTabKeyDown(event, index)}
                   >
@@ -252,6 +267,12 @@ export default function VaeoraWorkspaceShell({
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <span>{copy.views[view].label}</span>
+                    <span
+                      className={styles.tabSelection}
+                      aria-hidden="true"
+                    >
+                      ✓
+                    </span>
                   </button>
                 );
               })}

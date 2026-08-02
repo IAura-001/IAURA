@@ -84,6 +84,77 @@ function formatApprovedLaunchAssets(
 ${assets.join("\n")}`;
 }
 
+function formatCreativeStudio(project: IAuraProject): string {
+  const studio = project.creativeStudio;
+
+  if (!studio) return "";
+
+  const approvedAssets = studio.assets
+    .filter(
+      (asset) =>
+        asset.status === "approved" &&
+        asset.brandRevisionId === studio.brandRevisionId,
+    )
+    .slice(0, 8)
+    .map(
+      (asset) =>
+        `${asset.title} (${asset.kind}, ${asset.width}x${asset.height}): ${compactText(
+          asset.altText || asset.prompt,
+          320,
+        )}`,
+    );
+  const importedBranding = Object.entries(
+    studio.legacyImport?.brandingContent ?? {},
+  )
+    .filter(([, content]) => content.trim().length > 0)
+    .slice(0, 8)
+    .map(
+      ([sectionId, content]) =>
+        `${sectionId}: ${compactText(content)}`,
+    );
+  const outputs = Object.entries(studio.outputs)
+    .filter(
+      ([, record]) =>
+        record?.brandRevisionId === studio.brandRevisionId,
+    )
+    .slice(0, 3)
+    .map(([deliverable, record]) => {
+      if (!record) return "";
+
+      let serialized = "";
+      try {
+        serialized = JSON.stringify(record.data);
+      } catch {
+        serialized = "Contenido estructurado disponible";
+      }
+
+      return `${deliverable}: ${compactText(serialized)}`;
+    })
+    .filter(Boolean);
+  const preservedPreviousCount =
+    studio.assets.filter(
+      (asset) =>
+        asset.status === "approved" &&
+        asset.brandRevisionId !== studio.brandRevisionId,
+    ).length +
+    Object.values(studio.outputs).filter(
+      (record) =>
+        record && record.brandRevisionId !== studio.brandRevisionId,
+    ).length;
+
+  return `VAEORA Creative Studio
+Marca: ${compactText(studio.brief.brandName)}
+Audiencia: ${compactText(studio.brief.audience)}
+Oferta: ${compactText(studio.brief.offer)}
+Personalidad: ${compactText(studio.brief.personality)}
+Dirección visual: ${compactText(studio.brief.visualDirection)}
+Revisión de marca: ${studio.brandRevisionId}
+${importedBranding.length > 0 ? `Branding anterior importado\n${importedBranding.join("\n")}` : ""}
+${outputs.length > 0 ? `Sistemas generados\n${outputs.join("\n")}` : ""}
+${approvedAssets.length > 0 ? `Assets visuales aprobados\n${approvedAssets.join("\n")}` : ""}
+${preservedPreviousCount > 0 ? `Referencias de revisiones anteriores preservadas fuera del contexto activo: ${preservedPreviousCount}` : ""}`.trim();
+}
+
 export function buildProjectMemoryContext(
   project: IAuraProject | null,
 ): string {
@@ -95,12 +166,14 @@ export function buildProjectMemoryContext(
 Nombre: ${compactText(project.name)}
 Descripción: ${compactText(project.description)}
 Objetivo: ${compactText(project.goal)}
+Tipo: ${project.kind ?? "general"}
 Estado: ${project.status}`;
 
   const context = [
     projectIdentity,
     formatBrandProfile(project),
     formatBrandingMemory(project),
+    formatCreativeStudio(project),
     formatApprovedLaunchAssets(project),
   ]
     .filter(Boolean)

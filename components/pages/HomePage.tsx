@@ -10,20 +10,29 @@ import { buildPrompt } from "@/utils/prompt";
 import { MISSIONS } from "@/constants/missions";
 import { performanceMonitor } from "@/core/performance";
 import { useVoiceContext } from "@/core/context/VoiceContext";
-import { formatActionReceipt } from "@/core/actions";
+import {
+  formatActionReceipt,
+  type AuraExperienceSurface,
+} from "@/core/actions";
 import { theme } from "@/config/theme";
 import AssistantCard from "@/components/sections/AssistantCard";
 import { ActionCenter } from "@/components/sections/ActionCenter";
 import Hero from "@/components/sections/Hero";
-import ModeSelector from "@/components/sections/ModeSelector";
+import AuraStartingPoints from "@/components/sections/AuraStartingPoints";
 import { AIActionBar } from "@/components/sections/AIActionBar";
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
-import VaeoraWorkspaceShell from "@/components/vaeora/VaeoraWorkspaceShell";
+import VaeoraWorkspaceShell, {
+  type WorkspaceEntryIntent,
+  type WorkspaceView,
+} from "@/components/vaeora/VaeoraWorkspaceShell";
 import dynamic from "next/dynamic";
 import type { ChatMessage } from "@/types/chat";
-import type { BrandProfile } from "@/types/project";
-import ProjectCard from "@/components/sections/ProjectCard";
+import type { IAuraProject } from "@/types/project";
+import type {
+  CreativeStudioArea,
+  CreativeStudioRequest,
+} from "@/types/creative-studio";
 import Workspace from "@/components/pages/Workspace";
 import {
   useCallback,
@@ -32,7 +41,6 @@ import {
   useState,
 } from "react";
 
-import { MODES } from "@/constants/modes";
 import { useAuraActions } from "@/hooks/useAuraActions";
 import { useMemory } from "@/hooks/useMemory";
 import { cleanAIText } from "@/utils/formatText";
@@ -79,18 +87,15 @@ const AIAnalysisPanel = dynamic(
   }
 );
 
-const BrandingStudio = dynamic(
-  () =>
-    import(
-      "@/components/sections/BrandingStudio"
-    ),
-  {
-    loading: () => (
-      <LocalizedLoading messageKey="loading.branding" />
-    ),
-  }
-);
-export default function Home() {
+interface HomePageProps {
+  initialView?: WorkspaceView;
+  entryIntent?: WorkspaceEntryIntent;
+}
+
+export default function Home({
+  initialView = "presence",
+  entryIntent,
+}: HomePageProps) {
 const {
   speak,
   voiceMode,
@@ -102,10 +107,12 @@ const {
   stopSpeaking,
   unlockAudio,
 } = useVoiceContext();  
-  const [selectedMode, setSelectedMode] = useState("learn");
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysis, setAnalysis] = useState("");
-  const [openStudio, setOpenStudio] = useState<string | null>(null);
+  const [activeWorkspaceView, setActiveWorkspaceView] =
+    useState<WorkspaceView>(initialView);
+  const [creativeStudioRequest, setCreativeStudioRequest] =
+    useState<CreativeStudioRequest>();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
@@ -115,6 +122,7 @@ const [isAuraLive, setIsAuraLive] =
 const auraLiveRef = useRef(false);
 const auraLiveRestartTimerRef =
   useRef<number | null>(null);
+const workspaceRequestIdRef = useRef(0);
 const {
   memory,
   isLoaded,
@@ -148,23 +156,58 @@ useEffect(() => {
 
 const activeProject = memory.activeProject;
 
-const handleSaveBranding = useCallback(
-  (branding: BrandProfile) => {
-    if (!memory.activeProject) return;
+const openCreativeStudio = useCallback(
+  (area: CreativeStudioArea | "launch") => {
+    workspaceRequestIdRef.current += 1;
+    const id = workspaceRequestIdRef.current;
+    setActiveWorkspaceView("projects");
+    setCreativeStudioRequest({ id, area });
+  },
+  [],
+);
 
+const openExperienceSurface = useCallback(
+  (surface: AuraExperienceSurface) => {
+    switch (surface) {
+      case "presence":
+        setActiveWorkspaceView("presence");
+        return;
+      case "projects":
+        setActiveWorkspaceView("projects");
+        return;
+      case "intelligence":
+        setActiveWorkspaceView("intelligence");
+        return;
+      case "creative-direction":
+        openCreativeStudio("direction");
+        return;
+      case "creative-image":
+        openCreativeStudio("image");
+        return;
+      case "creative-website":
+        openCreativeStudio("website");
+        return;
+      case "creative-library":
+        openCreativeStudio("library");
+        return;
+      case "launch":
+        openCreativeStudio("launch");
+        return;
+      default:
+        return;
+    }
+  },
+  [openCreativeStudio],
+);
+
+const handleWorkspaceProjectSelected = useCallback(
+  (project: IAuraProject) => {
     updateMemory({
-      activeProject: {
-        ...memory.activeProject,
-        branding,
-        updatedAt: branding.updatedAt,
-      },
+      activeProject: project,
     });
   },
-  [memory.activeProject, updateMemory]
+  [updateMemory],
 );
-const activeMode =
-  MODES.find((mode) => mode.id === selectedMode) ?? MODES[0];
-
 const completedMissionIds = memory.completedMissionIds ?? [];
 
 const completedMissions = MISSIONS.filter((mission) =>
@@ -382,6 +425,7 @@ const content = [
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       role: "assistant",
       content,
+      experience: response.experience,
     };
 
     setMessages((prev) => [...prev, assistantMessage]);
@@ -485,22 +529,23 @@ return (
     <VaeoraWorkspaceShell
       locale={memory.preferredLocale}
       userName={memory.userName}
+      initialView={initialView}
+      activeView={activeWorkspaceView}
+      onViewChange={setActiveWorkspaceView}
       presence={
         <>
           <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(420px,1.18fr)]">
             <section className="order-2 min-w-0 rounded-[30px] border border-white/[0.07] bg-[#09090f] p-5 sm:p-7 xl:order-1">
               <Hero name={memory.userName} />
 
-              <ModeSelector
-                modes={MODES}
-                selectedMode={selectedMode}
-                onSelect={setSelectedMode}
+              <AuraStartingPoints
+                disabled={isSending}
+                onSelect={handleSend}
               />
             </section>
 
             <div className="order-1 min-w-0 space-y-5 xl:order-2">
               <AssistantCard
-                modeId={activeMode.id}
                 onStart={handleSend}
                 isAuraLive={isAuraLive}
                 onToggleAuraLive={toggleAuraLive}
@@ -513,14 +558,18 @@ return (
                   project={activeProject}
                   onOpenBranding={
                     activeProject
-                      ? () => setOpenStudio("branding")
+                      ? () => openCreativeStudio("direction")
                       : undefined
                   }
+                  onChoose={handleSend}
+                  onOpenSurface={openExperienceSurface}
+                  isBusy={isSending}
                 />
 
                 <ChatInput
                   onSend={handleSend}
                   isSending={isSending}
+                  voiceEntryRequested={entryIntent === "voice"}
                 />
               </section>
             </div>
@@ -538,40 +587,17 @@ return (
         </>
       }
       projects={
-        <>
-          <div
-            className={[
-              "grid min-w-0 items-start gap-6",
-              activeProject
-                ? "xl:grid-cols-[minmax(300px,0.72fr)_minmax(0,1.28fr)]"
-                : "grid-cols-1",
-            ].join(" ")}
-          >
-            {activeProject && (
-              <div className="min-w-0">
-                <ProjectCard
-                  project={activeProject}
-                  onOpenStudio={(studio) => {
-                    setOpenStudio(studio);
-                  }}
-                />
-              </div>
-            )}
-
-            <section className="min-w-0 rounded-[30px] border border-white/[0.07] bg-[#09090f] p-4 sm:p-6">
-              <Workspace />
-            </section>
-          </div>
-
-          {activeProject && openStudio === "branding" && (
-            <BrandingStudio
-              key={activeProject.id}
-              project={activeProject}
-              onSave={handleSaveBranding}
-              onClose={() => setOpenStudio(null)}
-            />
-          )}
-        </>
+        <section className="min-w-0 rounded-[30px] border border-white/[0.07] bg-[#09090f] p-4 sm:p-6">
+          <Workspace
+            entryIntent={entryIntent}
+            preferredLocale={memory.preferredLocale}
+            initialProject={activeProject}
+            studioRequest={creativeStudioRequest}
+            onProjectSelected={handleWorkspaceProjectSelected}
+            onContinueWithAura={() => setActiveWorkspaceView("presence")}
+            onOpenIntelligence={() => setActiveWorkspaceView("intelligence")}
+          />
+        </section>
       }
       intelligence={
         <div className="min-w-0 space-y-6">

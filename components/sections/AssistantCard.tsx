@@ -10,10 +10,8 @@ import {
 import { AuraPresence } from "@/components/aura/AuraPresence";
 import Card from "@/components/ui/Card";
 import { useI18n } from "@/core/i18n/I18nContext";
-import type { MessageKey } from "@/core/i18n/messages";
 
 type AssistantCardProps = {
-  modeId?: string;
   isAuraLive?: boolean;
   onToggleAuraLive?: () => void;
   onStart?: (
@@ -23,13 +21,35 @@ type AssistantCardProps = {
 
 type AuraPhase = "idle" | "awakening";
 
+const handsFreeCopy = {
+  "es-419": {
+    label: "Manos libres",
+    ready: "Toca el núcleo una vez y habla con naturalidad.",
+    active: "Aura escucha, responde y vuelve a escucharte automáticamente.",
+  },
+  "en-US": {
+    label: "Hands-free",
+    ready: "Touch the core once and speak naturally.",
+    active: "Aura listens, responds and starts listening again automatically.",
+  },
+  "pt-BR": {
+    label: "Mãos livres",
+    ready: "Toque o núcleo uma vez e fale naturalmente.",
+    active: "Aura escuta, responde e volta a ouvir automaticamente.",
+  },
+  "fr-FR": {
+    label: "Mains libres",
+    ready: "Touchez le noyau une fois et parlez naturellement.",
+    active: "Aura écoute, répond puis recommence automatiquement à vous écouter.",
+  },
+} as const;
+
 export default function AssistantCard({
-  modeId = "learn",
   isAuraLive = false,
   onToggleAuraLive,
   onStart,
 }: AssistantCardProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [mission, setMission] = useState("");
   const [phase, setPhase] =
     useState<AuraPhase>("idle");
@@ -38,9 +58,9 @@ export default function AssistantCard({
       null
     );
   const isAwakening = phase === "awakening";
-  const modeName = t(
-    `mode.${modeId}.name` as MessageKey
-  );
+  const liveModeLabel = isAuraLive
+    ? t("aura.live.active")
+    : t("aura.live.ready");
 
   useEffect(() => {
     return () => {
@@ -98,7 +118,7 @@ export default function AssistantCard({
           </div>
 
           <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-zinc-400">
-            {modeName}
+            {liveModeLabel}
           </span>
         </div>
 
@@ -107,6 +127,23 @@ export default function AssistantCard({
           isLive={isAuraLive}
           onToggleLive={onToggleAuraLive}
         />
+
+        <div
+          role="status"
+          className="mx-auto mb-4 flex max-w-xl items-center justify-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-center text-[11px] leading-5 text-zinc-500"
+        >
+          <span aria-hidden="true" className={isAuraLive ? "text-cyan-300" : "text-violet-300"}>
+            {isAuraLive ? "◆" : "◇"}
+          </span>
+          <span>
+            <strong className="font-medium text-zinc-300">
+              {handsFreeCopy[locale].label} ·{" "}
+            </strong>
+            {isAuraLive
+              ? handsFreeCopy[locale].active
+              : handsFreeCopy[locale].ready}
+          </span>
+        </div>
 
         <form
           onSubmit={beginAura}

@@ -8,7 +8,9 @@ import {
 } from "react";
 import type { ChatMessage } from "@/types/chat";
 import type { IAuraProject } from "@/types/project";
+import type { AuraExperienceSurface } from "@/core/actions";
 import { BrandIdentityCard } from "../cards/BrandIdentityCard";
+import AuraExperienceCard from "./AuraExperienceCard";
 import { useI18n } from "@/core/i18n/I18nContext";
 import {
   BRAND_PALETTE_PRESETS,
@@ -20,15 +22,24 @@ interface ConversationProps {
   isThinking?: boolean;
   project?: IAuraProject | null;
   onOpenBranding?: () => void;
+  onChoose?: (prompt: string) => void | Promise<void>;
+  onOpenSurface?: (surface: AuraExperienceSurface) => void;
+  isBusy?: boolean;
 }
 
 interface AnimatedMessageProps {
   message: ChatMessage;
+  onChoose?: (prompt: string) => void | Promise<void>;
+  onOpenSurface?: (surface: AuraExperienceSurface) => void;
+  isBusy?: boolean;
 }
 
 const AnimatedMessage = memo(
   function AnimatedMessage({
     message,
+    onChoose,
+    onOpenSurface,
+    isBusy = false,
   }: AnimatedMessageProps) {
     const { t } = useI18n();
     const isAssistant =
@@ -136,10 +147,21 @@ const AnimatedMessage = memo(
         {isAssistant &&
           visibleContent.length ===
             message.content.length && (
-            <div className="mt-4 flex items-center gap-2 text-xs text-zinc-600">
-              <span className="h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
-              {t("conversation.completed")}
-            </div>
+            <>
+              <div className="mt-4 flex items-center gap-2 text-xs text-zinc-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
+                {t("conversation.completed")}
+              </div>
+
+              {message.experience ? (
+                <AuraExperienceCard
+                  experience={message.experience}
+                  disabled={isBusy}
+                  onChoose={onChoose}
+                  onOpenSurface={onOpenSurface}
+                />
+              ) : null}
+            </>
           )}
       </article>
     );
@@ -194,6 +216,9 @@ export function Conversation({
   isThinking = false,
   project,
   onOpenBranding,
+  onChoose,
+  onOpenSurface,
+  isBusy = false,
 }: ConversationProps) {
   const { t } = useI18n();
   const branding = project?.branding;
@@ -221,6 +246,9 @@ export function Conversation({
         <AnimatedMessage
           key={message.id}
           message={message}
+          onChoose={onChoose}
+          onOpenSurface={onOpenSurface}
+          isBusy={isBusy}
         />
       ))}
 

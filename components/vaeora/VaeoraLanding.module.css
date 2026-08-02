@@ -1,25 +1,891 @@
-.landing { position: relative; min-height: 100vh; min-height: 100svh; overflow: hidden; isolation: isolate; background: radial-gradient(circle at 68% 49%, rgba(48,41,112,.13), transparent 35%), linear-gradient(145deg,#020205 0%,#06060b 54%,#030306 100%); color: #f3f1f7; }
-.landing::after { position: absolute; inset: 0; z-index: 3; pointer-events: none; content: ""; background: radial-gradient(circle at center,transparent 36%,rgba(0,0,0,.5) 120%); }
-.ambient,.manifestationGlow,.disturbance,.phenomenon { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.ambient { z-index: 0; opacity: 0; background: radial-gradient(ellipse 34% 46% at 69% 49%,rgba(88,69,218,.18),transparent 72%),radial-gradient(ellipse 23% 30% at 78% 39%,rgba(48,92,215,.11),transparent 74%),radial-gradient(ellipse 20% 27% at 61% 60%,rgba(75,50,182,.09),transparent 76%); animation: ambient-form 2.8s .45s ease-out forwards, ambient-breathe 14s 3.25s ease-in-out infinite alternate; will-change: opacity, transform; }
-.manifestationGlow { z-index: 1; opacity: 0; background: radial-gradient(ellipse 24% 34% at 70% 49%,rgba(123,105,255,.3),rgba(66,75,224,.11) 44%,transparent 73%); animation: manifestation-bloom 2.8s cubic-bezier(.2,.68,.24,1) forwards; }
-.disturbance { z-index: 1; inset: 48% auto auto 67%; width: 3px; height: 3px; border-radius: 50%; background: #918fff; box-shadow: 0 0 14px 5px rgba(105,101,255,.38); opacity: 0; animation: disturbance 1.8s .22s ease-in-out forwards; }
-.phenomenon { z-index: 2; inset: 0 0 0 34%; width: 66%; opacity: 1; }
-.hero { position: relative; z-index: 4; display: flex; align-items: center; width: min(100%,1440px); min-height: 100vh; min-height: 100svh; margin: 0 auto; padding: max(2rem,env(safe-area-inset-top)) max(6vw,env(safe-area-inset-right)) max(2rem,env(safe-area-inset-bottom)) max(6vw,env(safe-area-inset-left)); }
-.identity { width: min(40rem,52vw); opacity: 0; transform: translateY(8px); animation: identity-in 1.3s 1.55s ease-out forwards; }
-.status { margin: 0 0 1.4rem; color: rgba(210,207,224,.42); font-family: var(--font-geist-mono),monospace; font-size: clamp(.58rem,.64vw,.72rem); font-weight: 400; letter-spacing: .22em; text-transform: uppercase; }
-.wordmark { margin: 0; font-family: var(--font-geist-sans),sans-serif; font-size: clamp(4rem,9vw,9.5rem); font-weight: 270; line-height: .84; letter-spacing: .12em; text-shadow: 0 0 28px rgba(174,169,255,.05); }
-.tagline { margin: clamp(1.4rem,2.4vw,2.4rem) 0 0; color: rgba(231,228,239,.66); font-size: clamp(.92rem,1.25vw,1.2rem); font-weight: 300; letter-spacing: .045em; }
-.entry { display: inline-flex; align-items: center; gap: .85rem; margin-top: clamp(2.15rem,3.4vw,3.6rem); color: rgba(229,226,241,.5); font-family: var(--font-geist-mono),monospace; font-size: .66rem; font-weight: 400; letter-spacing: .2em; text-decoration: none; text-transform: uppercase; opacity: 0; transform: translateY(5px); animation: entry-in 1s 2.2s ease-out forwards; transition: color .35s ease; }
-.entryLine { width: 2.8rem; height: 1px; background: linear-gradient(90deg,rgba(155,148,236,.24),rgba(190,185,255,.72)); transform-origin: left center; transition: transform .45s cubic-bezier(.2,.75,.2,1),background .35s ease; }
-.entry:hover,.entry:focus-visible { color: rgba(246,244,250,.92); }
-.entry:hover .entryLine,.entry:focus-visible .entryLine { background: linear-gradient(90deg,rgba(155,148,236,.42),rgba(205,201,255,.94)); transform: scaleX(1.22); }
-.entry:focus-visible { outline: 1px solid rgba(181,175,255,.48); outline-offset: .65rem; }
-@keyframes disturbance { 0% { opacity: 0; transform: scale(.2); } 32% { opacity: .65; transform: scale(1); } 70% { opacity: .25; transform: scale(2.7); } 100% { opacity: 0; transform: scale(5); } }
-@keyframes ambient-form { to { opacity: 1; } }
-@keyframes ambient-breathe { from { transform: translate3d(-.4%,.25%,0) scale(.995); } to { transform: translate3d(.55%,-.35%,0) scale(1.018); } }
-@keyframes manifestation-bloom { 0%,18% { opacity: 0; transform: scale(.7); } 57% { opacity: 1; transform: scale(1); } 76% { opacity: .42; transform: scale(1.035); } 100% { opacity: 0; transform: scale(1.08); } }
-@keyframes identity-in { to { opacity: 1; transform: translateY(0); } }
-@keyframes entry-in { to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 700px) { .manifestationGlow { background: radial-gradient(ellipse 50% 25% at 55% 39%,rgba(123,105,255,.28),rgba(66,75,224,.1) 46%,transparent 75%); } .disturbance { top: 40%; left: 55%; } .phenomenon { inset: 0; width: 100%; } .hero { align-items: flex-end; padding-right: max(1.5rem,env(safe-area-inset-right)); padding-bottom: max(9vh,calc(env(safe-area-inset-bottom) + 2rem)); padding-left: max(1.5rem,env(safe-area-inset-left)); } .identity { width: 100%; } .wordmark { font-size: clamp(3.35rem,17vw,5.6rem); letter-spacing: .085em; } .status { margin-bottom: 1rem; } .tagline { margin-top: 1.25rem; } }
-@media (prefers-reduced-motion: reduce) { .ambient { animation: ambient-form .8s ease-out forwards; } .manifestationGlow { opacity: .2; animation: none; } .identity,.entry { animation-duration: .8s; animation-delay: 0s; } .disturbance { display: none; } }
+.landing {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  isolation: isolate;
+  color: #f3f1f7;
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at 68% 49%, rgba(48, 41, 112, 0.13), transparent 35%),
+    linear-gradient(145deg, #020205 0%, #06060b 54%, #030306 100%);
+}
+
+.landing::after {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  content: "";
+  background: radial-gradient(
+    circle at center,
+    transparent 36%,
+    rgba(0, 0, 0, 0.5) 120%
+  );
+}
+
+.ambient,
+.manifestationGlow,
+.disturbance,
+.phenomenon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ambient {
+  z-index: 0;
+  opacity: 0;
+  background:
+    radial-gradient(
+      ellipse 34% 46% at 69% 49%,
+      rgba(88, 69, 218, 0.18),
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 23% 30% at 78% 39%,
+      rgba(48, 92, 215, 0.11),
+      transparent 74%
+    ),
+    radial-gradient(
+      ellipse 20% 27% at 61% 60%,
+      rgba(75, 50, 182, 0.09),
+      transparent 76%
+    );
+  animation:
+    ambient-form 2.8s 0.45s ease-out forwards,
+    ambient-breathe 14s 3.25s ease-in-out infinite alternate;
+  will-change: opacity, transform;
+}
+
+.manifestationGlow {
+  z-index: 1;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse 24% 34% at 70% 49%,
+    rgba(123, 105, 255, 0.3),
+    rgba(66, 75, 224, 0.11) 44%,
+    transparent 73%
+  );
+  animation: manifestation-bloom 2.8s cubic-bezier(0.2, 0.68, 0.24, 1)
+    forwards;
+}
+
+.disturbance {
+  z-index: 1;
+  inset: 48% auto auto 67%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  opacity: 0;
+  background: #918fff;
+  box-shadow: 0 0 14px 5px rgba(105, 101, 255, 0.38);
+  animation: disturbance 1.8s 0.22s ease-in-out forwards;
+}
+
+.phenomenon {
+  z-index: 2;
+  inset: 0 0 0 34%;
+  width: 66%;
+  opacity: 1;
+}
+
+.hero {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  width: min(100%, 1440px);
+  min-height: 100vh;
+  min-height: 100svh;
+  margin: 0 auto;
+  padding:
+    max(2rem, env(safe-area-inset-top))
+    max(6vw, env(safe-area-inset-right))
+    max(2rem, env(safe-area-inset-bottom))
+    max(6vw, env(safe-area-inset-left));
+}
+
+.identity {
+  width: min(40rem, 52vw);
+  opacity: 0;
+  transform: translateY(8px);
+  animation: identity-in 1.3s 1.55s ease-out forwards;
+}
+
+.status {
+  margin: 0 0 1.4rem;
+  color: rgba(222, 219, 234, 0.66);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: clamp(0.58rem, 0.64vw, 0.72rem);
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.wordmark {
+  margin: 0;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: clamp(4rem, 9vw, 9.5rem);
+  font-weight: 270;
+  line-height: 0.84;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 28px rgba(174, 169, 255, 0.05);
+}
+
+.tagline {
+  margin: clamp(1.4rem, 2.4vw, 2.4rem) 0 0;
+  color: rgba(231, 228, 239, 0.66);
+  font-size: clamp(0.92rem, 1.25vw, 1.2rem);
+  font-weight: 300;
+  letter-spacing: 0.045em;
+}
+
+.entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 48px;
+  margin-top: clamp(1.65rem, 2.8vw, 2.8rem);
+  color: rgba(235, 232, 244, 0.68);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-decoration: none;
+  text-transform: uppercase;
+  border-radius: 999px;
+  opacity: 0;
+  touch-action: manipulation;
+  transform: translateY(5px);
+  -webkit-tap-highlight-color: transparent;
+  animation: entry-in 1s 2.2s ease-out forwards;
+  transition:
+    color 0.35s ease,
+    transform 0.2s ease;
+}
+
+.entryLine {
+  width: 2.8rem;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(155, 148, 236, 0.24),
+    rgba(190, 185, 255, 0.72)
+  );
+  transform-origin: left center;
+  transition:
+    transform 0.45s cubic-bezier(0.2, 0.75, 0.2, 1),
+    background 0.35s ease;
+}
+
+.entry:hover,
+.entry:focus-visible {
+  color: rgba(246, 244, 250, 0.92);
+}
+
+.entry:hover .entryLine,
+.entry:focus-visible .entryLine {
+  background: linear-gradient(
+    90deg,
+    rgba(155, 148, 236, 0.42),
+    rgba(205, 201, 255, 0.94)
+  );
+  transform: scaleX(1.22);
+}
+
+.entry > span:last-child {
+  display: inline-block;
+  transition: transform 0.25s ease;
+}
+
+.entry:hover > span:last-child,
+.entry:focus-visible > span:last-child {
+  transform: translate(2px, -2px);
+}
+
+.entry:active {
+  color: rgba(255, 255, 255, 0.96);
+  transform: translateY(1px) scale(0.985);
+}
+
+.entry:active .entryLine {
+  transform: scaleX(0.84);
+}
+
+.entry:active > span:last-child {
+  transform: translate(1px, -1px) scale(0.88);
+}
+
+.entry:focus-visible {
+  outline: 2px solid rgba(194, 186, 255, 0.78);
+  outline-offset: 0.45rem;
+}
+
+.signalDock {
+  position: absolute;
+  top: 50%;
+  right: max(6vw, env(safe-area-inset-right));
+  display: grid;
+  gap: 0.2rem;
+  width: clamp(13.5rem, 16vw, 16.5rem);
+  transform: translateY(-50%);
+}
+
+.signalLink {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 58px;
+  padding: 0.3rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  color: rgba(213, 209, 226, 0.5);
+  background: transparent;
+  text-decoration: none;
+  opacity: 0;
+  touch-action: manipulation;
+  transform: translateX(7px);
+  -webkit-tap-highlight-color: transparent;
+  animation: signal-in 0.9s 2.45s cubic-bezier(0.2, 0.72, 0.2, 1) forwards;
+  transition:
+    border-color 0.25s ease,
+    background-color 0.25s ease,
+    transform 0.18s ease;
+}
+
+.signalLink::before {
+  position: absolute;
+  top: 50%;
+  left: -1px;
+  width: 2px;
+  height: 18px;
+  border-radius: 999px;
+  content: "";
+  opacity: 0;
+  background: rgba(180, 169, 255, 0.86);
+  box-shadow: 0 0 12px rgba(119, 98, 238, 0.52);
+  transform: translateY(-50%) scaleY(0.35);
+  transition:
+    opacity 0.25s ease,
+    transform 0.28s cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.signalLink:nth-child(2) {
+  animation-delay: 2.58s;
+}
+
+.signalLink:nth-child(3) {
+  animation-delay: 2.71s;
+}
+
+.signalCore {
+  position: relative;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(182, 177, 211, 0.14);
+  border-radius: 50%;
+  color: rgba(187, 181, 240, 0.52);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(116, 103, 224, 0.09), transparent 62%),
+    rgba(8, 8, 14, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 0 0 rgba(105, 96, 222, 0);
+  transition:
+    color 0.35s ease,
+    border-color 0.35s ease,
+    background-color 0.35s ease,
+    box-shadow 0.45s ease,
+    transform 0.45s cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.signalCore::after {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgba(143, 133, 235, 0);
+  border-radius: inherit;
+  content: "";
+  transform: scale(0.86);
+  transition:
+    border-color 0.4s ease,
+    transform 0.55s cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.signalCopy {
+  display: block;
+  min-width: 0;
+}
+
+.signalLabel,
+.signalDescription {
+  display: block;
+}
+
+.signalLabel {
+  color: rgba(229, 226, 239, 0.52);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: color 0.35s ease;
+}
+
+.signalDescription {
+  margin-top: 0.25rem;
+  overflow: hidden;
+  color: rgba(200, 195, 214, 0.62);
+  font-size: 0.66rem;
+  font-weight: 300;
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateY(3px);
+  transition:
+    opacity 0.35s ease,
+    transform 0.4s cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.signalLink:hover,
+.signalLink:focus-visible,
+.signalLink[data-active="true"] {
+  color: rgba(240, 237, 248, 0.9);
+}
+
+.signalLink:hover,
+.signalLink:focus-visible,
+.signalLink[data-active="true"] {
+  border-color: rgba(159, 146, 244, 0.14);
+  background-color: rgba(89, 69, 182, 0.07);
+}
+
+.signalLink:hover::before,
+.signalLink:focus-visible::before,
+.signalLink[data-active="true"]::before {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+
+.signalLink:active {
+  border-color: rgba(181, 168, 255, 0.42);
+  background-color: rgba(102, 78, 204, 0.16);
+  transform: scale(0.975);
+}
+
+.signalLink:active .signalCore {
+  transform: scale(0.94);
+}
+
+.signalLink:hover .signalCore,
+.signalLink:focus-visible .signalCore,
+.signalLink[data-active="true"] .signalCore {
+  color: rgba(210, 204, 255, 0.96);
+  border-color: rgba(164, 155, 245, 0.46);
+  background-color: rgba(30, 26, 67, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 24px rgba(95, 82, 222, 0.16);
+  transform: scale(1.035);
+}
+
+.signalLink:hover .signalCore::after,
+.signalLink:focus-visible .signalCore::after,
+.signalLink[data-active="true"] .signalCore::after {
+  border-color: rgba(143, 133, 235, 0.13);
+  transform: scale(1);
+}
+
+.signalLink:hover .signalLabel,
+.signalLink:focus-visible .signalLabel,
+.signalLink[data-active="true"] .signalLabel {
+  color: rgba(242, 239, 248, 0.92);
+}
+
+.signalLink:hover .signalDescription,
+.signalLink:focus-visible .signalDescription,
+.signalLink[data-active="true"] .signalDescription {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.signalLink:focus-visible {
+  border-radius: 999px;
+  outline: 2px solid rgba(194, 186, 255, 0.78);
+  outline-offset: 0.35rem;
+}
+
+.presenceGlyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 22px;
+  height: 22px;
+}
+
+.presenceGlyph span {
+  width: 1px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.presenceGlyph span:nth-child(2),
+.presenceGlyph span:nth-child(4) {
+  height: 13px;
+}
+
+.presenceGlyph span:nth-child(3) {
+  height: 19px;
+}
+
+.creationGlyph {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  background:
+    linear-gradient(currentColor, currentColor) left top / 7px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) left top / 1px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) right top / 7px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) right top / 1px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / 7px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / 1px 7px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 7px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 1px 7px no-repeat;
+}
+
+.creationGlyph span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.intelligenceGlyph {
+  position: relative;
+  width: 22px;
+  height: 20px;
+}
+
+.intelligenceGlyph::before,
+.intelligenceGlyph::after {
+  position: absolute;
+  top: 10px;
+  left: 4px;
+  width: 15px;
+  height: 1px;
+  content: "";
+  background: currentColor;
+  opacity: 0.56;
+  transform-origin: left center;
+}
+
+.intelligenceGlyph::before {
+  transform: rotate(-29deg);
+}
+
+.intelligenceGlyph::after {
+  transform: rotate(27deg);
+}
+
+.intelligenceGlyph span {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.intelligenceGlyph span:nth-child(1) {
+  top: 8px;
+  left: 1px;
+}
+
+.intelligenceGlyph span:nth-child(2) {
+  top: 1px;
+  right: 1px;
+}
+
+.intelligenceGlyph span:nth-child(3) {
+  right: 1px;
+  bottom: 1px;
+}
+
+@keyframes disturbance {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+
+  32% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+
+  70% {
+    opacity: 0.25;
+    transform: scale(2.7);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(5);
+  }
+}
+
+@keyframes ambient-form {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ambient-breathe {
+  from {
+    transform: translate3d(-0.4%, 0.25%, 0) scale(0.995);
+  }
+
+  to {
+    transform: translate3d(0.55%, -0.35%, 0) scale(1.018);
+  }
+}
+
+@keyframes manifestation-bloom {
+  0%,
+  18% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  57% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  76% {
+    opacity: 0.42;
+    transform: scale(1.035);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes identity-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes entry-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes signal-in {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 980px) and (min-width: 701px) {
+  .signalDock {
+    top: auto;
+    right: max(4vw, env(safe-area-inset-right));
+    bottom: max(2rem, env(safe-area-inset-bottom));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    width: min(70vw, 34rem);
+    transform: none;
+  }
+
+  .signalLink {
+    gap: 0.7rem;
+  }
+
+  .signalDescription {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 980px) and (min-width: 701px) and (max-height: 540px) and (orientation: landscape) {
+  .hero {
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+
+  .identity {
+    width: min(38rem, 62vw);
+  }
+
+  .signalDock {
+    position: static;
+    display: grid;
+    width: min(14rem, 30vw);
+    flex: 0 0 auto;
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+    transform: none;
+  }
+
+  .signalLink {
+    min-height: 52px;
+  }
+}
+
+@media (max-width: 700px) {
+  .manifestationGlow {
+    background: radial-gradient(
+      ellipse 50% 25% at 55% 39%,
+      rgba(123, 105, 255, 0.28),
+      rgba(66, 75, 224, 0.1) 46%,
+      transparent 75%
+    );
+  }
+
+  .disturbance {
+    top: 40%;
+    left: 55%;
+  }
+
+  .phenomenon {
+    inset: 0;
+    width: 100%;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+    padding-bottom: max(4.5vh, calc(env(safe-area-inset-bottom) + 1.5rem));
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+  }
+
+  .identity {
+    width: 100%;
+  }
+
+  .wordmark {
+    font-size: clamp(3.35rem, 17vw, 5.6rem);
+    letter-spacing: 0.085em;
+  }
+
+  .status {
+    margin-bottom: 1rem;
+  }
+
+  .tagline {
+    margin-top: 1.25rem;
+  }
+
+  .entry {
+    margin-top: 1.35rem;
+  }
+
+  .signalDock {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+    width: 100%;
+    margin-top: 1.45rem;
+    transform: none;
+  }
+
+  .signalLink {
+    display: flex;
+    min-width: 0;
+    min-height: 72px;
+    flex-direction: column;
+    gap: 0.55rem;
+    justify-content: center;
+    padding: 0.25rem;
+    text-align: center;
+  }
+
+  .signalCore {
+    width: 48px;
+    height: 48px;
+  }
+
+  .signalCopy {
+    width: 100%;
+  }
+
+  .signalLabel {
+    overflow: hidden;
+    font-size: clamp(0.49rem, 2.2vw, 0.58rem);
+    letter-spacing: 0.11em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .signalDescription {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .signalLink:focus-visible {
+    border-radius: 1rem;
+    outline-offset: 0.2rem;
+  }
+}
+
+@media (max-width: 700px) and (max-height: 720px) {
+  .hero {
+    padding-top: max(1.25rem, env(safe-area-inset-top));
+    padding-bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.75rem));
+  }
+
+  .status {
+    margin-bottom: 0.7rem;
+  }
+
+  .tagline {
+    margin-top: 0.9rem;
+  }
+
+  .entry {
+    min-height: 48px;
+    margin-top: 0.85rem;
+  }
+
+  .signalDock {
+    margin-top: 0.8rem;
+  }
+
+  .signalLink {
+    min-height: 62px;
+    gap: 0.35rem;
+  }
+
+  .signalCore {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 700px) and (max-height: 480px) and (orientation: landscape) {
+  .hero {
+    min-height: max(100svh, 19rem);
+  }
+
+  .wordmark {
+    font-size: clamp(3rem, 13vw, 4.5rem);
+  }
+
+  .status {
+    margin-bottom: 0.55rem;
+  }
+
+  .tagline {
+    margin-top: 0.7rem;
+  }
+
+  .entry {
+    margin-top: 0.65rem;
+  }
+
+  .signalDock {
+    margin-top: 0.6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient {
+    animation: ambient-form 0.8s ease-out forwards;
+  }
+
+  .manifestationGlow {
+    opacity: 0.2;
+    animation: none;
+  }
+
+  .identity,
+  .entry {
+    animation-duration: 0.8s;
+    animation-delay: 0s;
+  }
+
+  .signalLink {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
+  .entry,
+  .entryLine,
+  .entry > span:last-child,
+  .signalLink,
+  .signalLink::before,
+  .signalCore,
+  .signalCore::after,
+  .signalLabel,
+  .signalDescription {
+    transition: none;
+  }
+
+  .disturbance {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .landing {
+    background: Canvas;
+  }
+
+  .landing::after,
+  .ambient,
+  .manifestationGlow,
+  .disturbance,
+  .phenomenon {
+    display: none;
+  }
+
+  .entry,
+  .signalLink,
+  .signalCore {
+    color: LinkText;
+  }
+
+  .entryLine,
+  .presenceGlyph span,
+  .creationGlyph span,
+  .intelligenceGlyph span,
+  .intelligenceGlyph::before,
+  .intelligenceGlyph::after {
+    background: LinkText;
+  }
+
+  .signalCore {
+    border-color: LinkText;
+  }
+}
