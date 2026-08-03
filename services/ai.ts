@@ -1,11 +1,5 @@
-import { buildProjectMemoryContext } from "@/core/context/ContextBuilder";
-import { projectEngine } from "@/core/project/ProjectEngine";
-
-interface IAuraApiResponse {
-  content?: unknown;
-  error?: unknown;
-  code?: unknown;
-}
+import { iauraBrain } from "@/core/brain";
+import { generateOpenAIResponse } from "@/services/openai";
 
 export function sanitizeAuraResponse(value: string): string {
   return value
@@ -28,30 +22,9 @@ export function sanitizeAuraResponse(value: string): string {
     .trim();
 }
 
-function buildInstructions(): string {
-  const project = projectEngine.getCurrentProject();
-  const projectMemory = buildProjectMemoryContext(project);
-
-  return `
-Eres IAURA, una inteligencia creativa centrada en proyectos.
-
-Debes responder de forma clara, precisa, útil y específica.
-Utiliza la memoria del proyecto como fuente principal de contexto.
-Prioriza las decisiones y piezas aprobadas sobre los borradores.
-No inventes información que no esté disponible.
-No uses markdown, asteriscos, encabezados con numerales ni símbolos decorativos.
-
-Memoria actual del proyecto:
-
-${
-  projectMemory ||
-  "No existe memoria adicional disponible para este proyecto."
-}
-  `.trim();
-}
-
 export async function generateAIResponse(
   prompt: string,
+  userContext?: string,
 ): Promise<string> {
   const cleanPrompt = prompt.trim();
 
@@ -59,34 +32,16 @@ export async function generateAIResponse(
     throw new Error("IAURA requires a non-empty prompt.");
   }
 
-  const response = await fetch("/api/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    credentials: "same-origin",
-    body: JSON.stringify({
-      prompt: cleanPrompt,
-      instructions: buildInstructions(),
-    }),
+  const brainResult = iauraBrain.analyze({
+    message: cleanPrompt,
+    userContext: userContext?.trim() ?? "",
   });
 
-  const data = (await response.json()) as IAuraApiResponse;
+  const response = await generateOpenAIResponse({
+    originalUserMessage: brainResult.originalUserMessage,
+    structuredContext: brainResult.structuredContext,
+    compiledPrompt: brainResult.compiledPrompt,
+  });
 
-  if (!response.ok) {
-    const message =
-      typeof data.error === "string"
-        ? data.error
-        : "IAURA could not generate a response.";
-
-    throw new Error(message);
-  }
-
-  if (typeof data.content !== "string" || !data.content.trim()) {
-    throw new Error(
-      "IAURA returned an invalid response.",
-    );
-  }
-
-  return sanitizeAuraResponse(data.content);
+  return sanitizeAuraResponse(response.content);
 }

@@ -8,5 +8,8 @@ export type {
   BrainDecision,
   BrainInput,
   BrainResult,
+  BrainStructuredContext,
+  BrainStructuredReasoning,
+  CognitiveRequest,
   ThinkingMode,
 } from "./types";

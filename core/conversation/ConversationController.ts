@@ -9,11 +9,6 @@ export class ConversationController {
     message: string,
     userContext: string
   ): Promise<AuraAssistantPlan> {
-    conversationMemory.add(
-      "user",
-      message
-    );
-
     const history =
       conversationMemory.getHistory();
 
@@ -23,9 +18,21 @@ export class ConversationController {
       history,
     });
 
+    conversationMemory.add(
+      "user",
+      message
+    );
+
     const response =
       await generateOpenAIResponse(
-        result.prompt
+        {
+          originalUserMessage:
+            result.originalUserMessage,
+          structuredContext:
+            result.structuredContext,
+          compiledPrompt:
+            result.compiledPrompt,
+        }
       );
 
     conversationMemory.add(

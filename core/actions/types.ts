@@ -1,5 +1,6 @@
 import type { Memory } from "@/types/memory";
 import type { ProjectKind } from "@/types/project";
+import type { ProjectRepositorySnapshot } from "@/core/project/ProjectRepository";
 
 export const IAURA_ACTION_TYPES = [
   "add_goal",
@@ -98,4 +99,6 @@ export interface AuraActionHistoryEntry {
   summaries: string[];
   before: Memory;
   after: Memory;
+  projectStateBefore?: ProjectRepositorySnapshot;
+  projectStateAfter?: ProjectRepositorySnapshot;
 }

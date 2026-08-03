@@ -23,21 +23,6 @@ ${memory.goals.map((goal) => `- ${goal}`).join("\n")}
 Habits:
 ${memory.habits.map((habit) => `- ${habit}`).join("\n")}
 
-Projects:
-${memory.projects.map((project) => `- ${project}`).join("\n")}
-
-Active Project:
-${
-  memory.activeProject
-    ? [
-        `Name: ${memory.activeProject.name}`,
-        `Kind: ${memory.activeProject.kind ?? "general"}`,
-        `Goal: ${memory.activeProject.goal}`,
-        `Status: ${memory.activeProject.status}`,
-      ].join("\n")
-    : "No active project."
-}
-
 Available Missions:
 ${MISSIONS.map(
   (mission) =>

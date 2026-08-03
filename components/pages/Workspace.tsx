@@ -11,7 +11,7 @@ interface WorkspaceProps {
   preferredLocale?: SupportedLocale;
   initialProject?: IAuraProject | null;
   studioRequest?: CreativeStudioRequest;
-  onProjectSelected?: (project: IAuraProject) => void;
+  onProjectSelected?: (project: IAuraProject | null) => void;
   onContinueWithAura?: () => void;
   onOpenIntelligence?: () => void;
 }

@@ -1,57 +1,41 @@
+import {
+  projectRepository,
+  type ProjectRepository,
+} from "./ProjectRepository";
 import type { IAuraProject } from "./types";
 
-const STORAGE_KEY = "iaura.projects";
-
-function canUseStorage(): boolean {
-  if (typeof window === "undefined") return false;
-
-  try {
-    return typeof window.localStorage !== "undefined";
-  } catch {
-    return false;
-  }
-}
-
+/** Compatibility adapter for legacy ProjectStorage callers. */
 export class ProjectStorage {
-  save(projects: IAuraProject[]): boolean {
-    if (!canUseStorage()) return false;
+  constructor(
+    private readonly repository: ProjectRepository = projectRepository,
+  ) {}
 
-    try {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(projects),
-      );
-      return true;
-    } catch {
-      // Keep the in-memory project usable when browser storage is unavailable.
-      return false;
-    }
+  save(projects: IAuraProject[]): boolean {
+    const currentActiveId =
+      this.repository.getActiveProject()?.id ?? null;
+    const activeProjectId = projects.some(
+      (project) => project.id === currentActiveId,
+    )
+      ? currentActiveId
+      : projects[0]?.id ?? null;
+
+    return this.repository.replaceSnapshot({
+      schemaVersion: 1,
+      activeProjectId,
+      projects,
+    });
   }
 
   load(): IAuraProject[] {
-    if (!canUseStorage()) return [];
-
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      const parsed: unknown = JSON.parse(raw);
-
-      return Array.isArray(parsed)
-        ? (parsed as IAuraProject[])
-        : [];
-    } catch {
-      return [];
-    }
+    return this.repository.getProjects();
   }
 
   clear(): void {
-    if (!canUseStorage()) return;
-
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // The in-memory engine remains usable when browser storage is blocked.
-    }
+    this.repository.replaceSnapshot({
+      schemaVersion: 1,
+      activeProjectId: null,
+      projects: [],
+    });
   }
 }
 

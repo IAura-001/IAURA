@@ -46,7 +46,7 @@ interface ProjectWorkspaceProps {
   preferredLocale?: SupportedLocale;
   initialProject?: IAuraProject | null;
   studioRequest?: CreativeStudioRequest;
-  onProjectSelected?: (project: IAuraProject) => void;
+  onProjectSelected?: (project: IAuraProject | null) => void;
   onContinueWithAura?: () => void;
   onOpenIntelligence?: () => void;
 }
@@ -199,6 +199,7 @@ export default function ProjectWorkspace({
   function startNewProject(): void {
     projectEngine.clearCurrentProject();
     setActiveProject(null);
+    onProjectSelected?.(null);
     setCurrentStudio(null);
     setShowCreateForm(true);
     setRefreshKey((current) => current + 1);

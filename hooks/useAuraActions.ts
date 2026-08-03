@@ -15,6 +15,8 @@ import {
   type PlannedAuraAction,
 } from "@/core/actions";
 import type { Memory } from "@/types/memory";
+import { memoryRepository } from "@/core/memory/MemoryRepository";
+import { projectEngine } from "@/core/project/ProjectEngine";
 
 const ACTION_HISTORY_KEY =
   "iaura-action-history";
@@ -125,6 +127,7 @@ export function useAuraActions({
       const before = cloneMemory(
         memoryRef.current
       );
+      const projectStateBefore = projectEngine.getSnapshot();
       const result = executeAuraActions(
         before,
         actions
@@ -138,6 +141,20 @@ export function useAuraActions({
       }
 
       const after = cloneMemory(result.memory);
+      if (!memoryRepository.saveMemory(after)) {
+        projectEngine.restoreSnapshot(projectStateBefore);
+        return result.items.map((item) =>
+          item.status === "executed"
+            ? {
+                ...item,
+                status: "skipped" as const,
+                reason:
+                  "La persistencia local falló; IAURA no confirmó el cambio.",
+              }
+            : item,
+        );
+      }
+
       const historyEntry: AuraActionHistoryEntry = {
         id: createHistoryId(),
         createdAt: new Date().toISOString(),
@@ -147,6 +164,8 @@ export function useAuraActions({
         ),
         before,
         after,
+        projectStateBefore,
+        projectStateAfter: projectEngine.getSnapshot(),
       };
 
       replaceMemory(after);
@@ -189,11 +208,60 @@ export function useAuraActions({
       return false;
     }
 
-    replaceMemory(
-      cloneMemory(
-        latestCompletedEntry.before
-      )
+    const restoredMemory = cloneMemory(
+      latestCompletedEntry.before,
     );
+    if (latestCompletedEntry.projectStateBefore) {
+      if (
+        !projectEngine.restoreSnapshot(
+          latestCompletedEntry.projectStateBefore,
+        )
+      ) {
+        return false;
+      }
+    } else if (
+      latestCompletedEntry.after.activeProject &&
+      !latestCompletedEntry.before.projects.some(
+        (name) =>
+          name.trim().toLocaleLowerCase() ===
+          latestCompletedEntry.after.activeProject?.name
+            .trim()
+            .toLocaleLowerCase(),
+      )
+    ) {
+      const createdProjectId =
+        latestCompletedEntry.after.activeProject.id;
+      const currentSnapshot = projectEngine.getSnapshot();
+      if (
+        !projectEngine.restoreSnapshot({
+          ...currentSnapshot,
+          activeProjectId:
+            restoredMemory.activeProject?.id ?? null,
+          projects: currentSnapshot.projects.filter(
+            (project) => project.id !== createdProjectId,
+          ),
+        })
+      ) {
+        return false;
+      }
+    } else if (restoredMemory.activeProject) {
+      projectEngine.setCurrentProject(restoredMemory.activeProject);
+      if (!projectEngine.didLastPersistenceSucceed()) return false;
+    } else {
+      projectEngine.clearCurrentProject();
+      if (!projectEngine.didLastPersistenceSucceed()) return false;
+    }
+
+    if (!memoryRepository.saveMemory(restoredMemory)) {
+      if (latestCompletedEntry.projectStateAfter) {
+        projectEngine.restoreSnapshot(
+          latestCompletedEntry.projectStateAfter,
+        );
+      }
+      return false;
+    }
+
+    replaceMemory(restoredMemory);
 
     setHistory((currentHistory) =>
       currentHistory.map((entry) =>

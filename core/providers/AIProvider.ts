@@ -1,11 +1,16 @@
 import type {
   AuraAssistantPlan,
 } from "@/core/actions";
+import type { CognitiveRequest } from "@/core/brain";
 
-export interface AIRequest {
+export interface LegacyAIRequest {
   prompt: string;
   instructions?: string;
 }
+
+export type AIRequest =
+  | CognitiveRequest
+  | LegacyAIRequest;
 
 export interface AIResponse
   extends AuraAssistantPlan {

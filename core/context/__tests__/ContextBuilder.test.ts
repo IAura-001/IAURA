@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildProjectMemoryContext } from "@/core/context/ContextBuilder";
+import {
+  buildActiveProjectMemoryContext,
+  buildProjectMemoryContext,
+} from "@/core/context/ContextBuilder";
+import { LocalProjectRepository } from "@/core/project/ProjectRepository";
 import type { CreativeAssetMetadata } from "@/types/creative-studio";
 import type { IAuraProject } from "@/types/project";
 
@@ -107,5 +111,42 @@ describe("Creative Studio project context", () => {
     expect(context).toContain(
       "Referencias de revisiones anteriores preservadas fuera del contexto activo: 2",
     );
+  });
+
+  it("reads the same active project selected by studio consumers", () => {
+    window.localStorage.clear();
+    const repository = new LocalProjectRepository();
+    const inactive: IAuraProject = {
+      id: "inactive",
+      name: "Old project",
+      description: "",
+      goal: "Old goal",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      status: "planning",
+      studios: {
+        branding: false,
+        website: false,
+        app: false,
+        marketing: false,
+        documents: false,
+      },
+    };
+    const active = {
+      ...inactive,
+      id: "active",
+      name: "Active studio project",
+      goal: "SAME_ACTIVE_PROJECT_MARKER",
+    };
+
+    repository.createProject(inactive);
+    repository.createProject(active);
+    repository.setActiveProjectId(active.id);
+
+    const context = buildActiveProjectMemoryContext(repository);
+
+    expect(repository.getActiveProject()?.id).toBe("active");
+    expect(context).toContain("SAME_ACTIVE_PROJECT_MARKER");
+    expect(context).not.toContain("Old goal");
   });
 });

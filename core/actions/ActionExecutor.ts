@@ -1,6 +1,9 @@
 import { MISSIONS } from "@/constants/missions";
 import type { Memory } from "@/types/memory";
-import type { IAuraProject } from "@/types/project";
+import {
+  projectEngine,
+  type ProjectEngine,
+} from "@/core/project/ProjectEngine";
 import { completeMission } from "@/utils/mission";
 
 import type {
@@ -69,43 +72,27 @@ function executed(
   };
 }
 
-function createProject(
-  action: PlannedAuraAction,
-  createdAt: string
-): IAuraProject {
-  const kind = action.projectKind ?? "general";
-  const isBrandProject = kind === "business";
-  const isCreativeProject = kind === "creative";
-
-  return {
-    id: `${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}`,
-    name: action.value,
-    description:
-      action.description ||
-      "Proyecto creado con IAURA.",
-    goal:
-      action.goal ||
-      "Convertir esta idea en un proyecto real.",
-    createdAt,
-    updatedAt: createdAt,
-    status: "planning",
-    kind,
-    studios: {
-      branding: isBrandProject || isCreativeProject,
-      website: isBrandProject,
-      app: false,
-      marketing: isBrandProject,
-      documents: isBrandProject || kind === "learning",
-    },
-  };
+export interface ActionExecutorDependencies {
+  projectEngine: Pick<
+    ProjectEngine,
+    | "createProject"
+    | "didLastPersistenceSucceed"
+    | "findEquivalentProject"
+    | "getProjects"
+    | "getSnapshot"
+    | "restoreSnapshot"
+  >;
 }
+
+const DEFAULT_DEPENDENCIES: ActionExecutorDependencies = {
+  projectEngine,
+};
 
 export function executeAuraActions(
   memory: Memory,
   actions: PlannedAuraAction[],
-  now = new Date()
+  now = new Date(),
+  dependencies: ActionExecutorDependencies = DEFAULT_DEPENDENCIES,
 ): ActionExecutionResult {
   let nextMemory: Memory = {
     ...memory,
@@ -332,12 +319,7 @@ export function executeAuraActions(
         continue;
       }
 
-      if (
-        includesValue(
-          nextMemory.projects,
-          action.value
-        )
-      ) {
+      if (dependencies.projectEngine.findEquivalentProject(action.value)) {
         items.push(
           skipped(
             action,
@@ -348,17 +330,39 @@ export function executeAuraActions(
         continue;
       }
 
-      const activeProject = createProject(
-        action,
-        createdAt
-      );
+      const projectStateBefore =
+        dependencies.projectEngine.getSnapshot();
+      const activeProject = dependencies.projectEngine.createProject({
+        name: action.value,
+        description:
+          action.description || "Proyecto creado con IAURA.",
+        goal:
+          action.goal || "Convertir esta idea en un proyecto real.",
+        kind: action.projectKind ?? "general",
+        createdAt,
+      });
+
+      if (!dependencies.projectEngine.didLastPersistenceSucceed()) {
+        dependencies.projectEngine.restoreSnapshot(projectStateBefore);
+        items.push(
+          skipped(
+            action,
+            `Proyecto no guardado: ${activeProject.name}`,
+            "La persistencia local falló; IAURA no confirmó la creación.",
+          ),
+        );
+        continue;
+      }
+
+      const persistedProjectNames = dependencies.projectEngine
+        .getProjects()
+        .map((project) => project.name);
 
       nextMemory = {
         ...nextMemory,
-        projects: [
-          ...nextMemory.projects,
-          activeProject.name,
-        ],
+        projects: Array.from(
+          new Set([...nextMemory.projects, ...persistedProjectNames]),
+        ),
         activeProject,
       };
       items.push(

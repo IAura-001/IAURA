@@ -2,7 +2,10 @@ import type {
   BrainContext,
   BrainInput,
 } from "../brain/types";
-import { projectEngine } from "../project/ProjectEngine";
+import {
+  projectRepository,
+  type ProjectRepository,
+} from "../project/ProjectRepository";
 import type { IAuraProject } from "../project/types";
 
 const MAX_SECTION_LENGTH = 1400;
@@ -186,15 +189,21 @@ Estado: ${project.status}`;
   return `${context.slice(0, MAX_CONTEXT_LENGTH).trim()}…`;
 }
 
+export function buildActiveProjectMemoryContext(
+  repository: ProjectRepository = projectRepository,
+): string {
+  return buildProjectMemoryContext(
+    repository.getActiveProject(),
+  );
+}
+
 export function buildBrainContext(
   input: BrainInput,
 ): BrainContext {
   const explicitUserContext =
     input.userContext?.trim() ?? "";
 
-  const projectContext = buildProjectMemoryContext(
-    projectEngine.getCurrentProject(),
-  );
+  const projectContext = buildActiveProjectMemoryContext();
 
   const combinedContext = [
     explicitUserContext

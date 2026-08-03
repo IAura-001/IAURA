@@ -1,14 +1,105 @@
 import { NextResponse } from "next/server";
 
 import { isRequestAuthorized } from "@/core/auth/access";
+import {
+  iauraBrain,
+  type CognitiveRequest,
+} from "@/core/brain";
+import {
+  assertValidCognitiveRequest,
+  BrainValidationError,
+} from "@/core/validator/ResponseValidator";
 import { createOpenAIProvider } from "@/services/providers";
-import { reasonAboutRequest } from "@/core/reasoning";
 
 export const runtime = "nodejs";
 
 interface ChatRequestBody {
+  originalUserMessage?: unknown;
+  structuredContext?: unknown;
+  compiledPrompt?: unknown;
   prompt?: unknown;
   instructions?: unknown;
+}
+
+function noStoreHeaders(): Record<string, string> {
+  return {
+    "Cache-Control": "no-store",
+  };
+}
+
+function isRecord(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function hasCognitiveRequestField(
+  body: ChatRequestBody,
+): boolean {
+  return (
+    "originalUserMessage" in body ||
+    "structuredContext" in body ||
+    "compiledPrompt" in body
+  );
+}
+
+function readCognitiveRequest(
+  body: ChatRequestBody,
+): CognitiveRequest {
+  const cognitiveRequest = {
+    originalUserMessage: body.originalUserMessage,
+    structuredContext: body.structuredContext,
+    compiledPrompt: body.compiledPrompt,
+  };
+
+  assertValidCognitiveRequest(cognitiveRequest);
+
+  return cognitiveRequest;
+}
+
+function invalidRequest(
+  error: string,
+  code: string,
+): NextResponse {
+  return NextResponse.json(
+    { error, code },
+    {
+      status: 400,
+      headers: noStoreHeaders(),
+    },
+  );
+}
+
+function adaptLegacyRequest(
+  body: ChatRequestBody,
+): CognitiveRequest | null {
+  if (
+    typeof body.prompt !== "string" ||
+    !body.prompt.trim()
+  ) {
+    return null;
+  }
+
+  const instructions =
+    typeof body.instructions === "string" &&
+    body.instructions.trim()
+      ? body.instructions.trim()
+      : undefined;
+
+  const result = iauraBrain.analyze({
+    message: body.prompt.trim(),
+    userContext: instructions,
+  });
+
+  return {
+    originalUserMessage: result.originalUserMessage,
+    structuredContext: result.structuredContext,
+    compiledPrompt: result.compiledPrompt,
+  };
 }
 
 export async function POST(request: Request) {
@@ -20,72 +111,90 @@ export async function POST(request: Request) {
       },
       {
         status: 401,
-        headers: {
-          "Cache-Control": "no-store",
-        },
+        headers: noStoreHeaders(),
+      },
+    );
+  }
+
+  let body: ChatRequestBody;
+
+  try {
+    const candidate = (await request.json()) as unknown;
+
+    if (!isRecord(candidate)) {
+      return invalidRequest(
+        "The chat request body must be a JSON object.",
+        "IAURA_INVALID_REQUEST",
+      );
+    }
+
+    body = candidate;
+  } catch {
+    return invalidRequest(
+      "The chat request body contains invalid JSON.",
+      "IAURA_INVALID_REQUEST",
+    );
+  }
+
+  let cognitiveRequest: CognitiveRequest;
+
+  try {
+    if (hasCognitiveRequestField(body)) {
+      cognitiveRequest = readCognitiveRequest(body);
+    } else {
+      const legacyRequest = adaptLegacyRequest(body);
+
+      if (!legacyRequest) {
+        return invalidRequest(
+          "A non-empty prompt is required.",
+          "IAURA_PROMPT_REQUIRED",
+        );
+      }
+
+      cognitiveRequest = legacyRequest;
+    }
+  } catch (error) {
+    if (error instanceof BrainValidationError) {
+      return invalidRequest(
+        error.message,
+        "IAURA_COGNITIVE_REQUEST_INVALID",
+      );
+    }
+
+    console.error(
+      "IAURA cognitive request preparation failed.",
+      error instanceof Error
+        ? error.message.slice(0, 500)
+        : "Unknown cognitive preparation failure.",
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "IAURA could not prepare this request at this time.",
+        code: "IAURA_COGNITIVE_PREPARATION_ERROR",
+      },
+      {
+        status: 502,
+        headers: noStoreHeaders(),
       },
     );
   }
 
   try {
-    const body = (await request.json()) as ChatRequestBody;
-
-    if (
-      typeof body.prompt !== "string" ||
-      !body.prompt.trim()
-    ) {
-      return NextResponse.json(
-        {
-          error: "A non-empty prompt is required.",
-          code: "IAURA_PROMPT_REQUIRED",
-        },
-        {
-          status: 400,
-          headers: {
-            "Cache-Control": "no-store",
-          },
-        },
-      );
-    }
-
-    const instructions =
-  typeof body.instructions === "string" &&
-  body.instructions.trim()
-    ? body.instructions.trim()
-    : undefined;
-
-const reasoning = reasonAboutRequest(body.prompt.trim(), {
-  context: instructions,
-});
-
     const provider = createOpenAIProvider();
-
-    const result = await provider.generate({
-  prompt: body.prompt.trim(),
-  instructions: [
-    instructions,
-    reasoning.instructions,
-  ]
-    .filter(Boolean)
-    .join("\n\n"),
-});
+    const result = await provider.generate(cognitiveRequest);
 
     return NextResponse.json(result, {
-      headers: {
-        "Cache-Control": "no-store",
-      },
+      headers: noStoreHeaders(),
     });
   } catch (error) {
-  console.error("========== OPENAI ERROR ==========");
-  console.error(error);
-  console.error(
-    JSON.stringify(
-      error,
-      Object.getOwnPropertyNames(error),
-      2
-    )
-  );
-  console.error("================================");
+    console.error(
+      "IAURA chat provider failed.",
+      error instanceof Error
+        ? error.message.slice(0, 500)
+        : "Unknown provider failure.",
+    );
 
     return NextResponse.json(
       {
@@ -95,9 +204,7 @@ const reasoning = reasonAboutRequest(body.prompt.trim(), {
       },
       {
         status: 502,
-        headers: {
-          "Cache-Control": "no-store",
-        },
+        headers: noStoreHeaders(),
       },
     );
   }

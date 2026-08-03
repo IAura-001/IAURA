@@ -1,51 +1,61 @@
-import { MemoryIndexer } from "./MemoryIndexer";
+import {
+  LocalMemoryRepository,
+  type MemoryRepository,
+} from "./MemoryRepository";
 import { MemoryScorer } from "./MemoryScorer";
 import { MemoryType } from "./MemoryTypes";
 import type { MemoryEntry } from "./MemoryTypes";
 
 export class MemoryEngine {
-  private memories: MemoryEntry[] = [];
   private scorer = new MemoryScorer();
-private indexer = new MemoryIndexer();
-add(
-  type: MemoryType,
-  content: string,
-  tags: string[] = []
-) {
-    
-  const entry: MemoryEntry = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    type,
-    content,
-    importance: this.scorer.score(type),
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    tags,
-  };
 
-  this.memories.push(entry);
-  this.indexer.add(entry);
+  constructor(
+    private readonly repository: MemoryRepository =
+      new LocalMemoryRepository(),
+  ) {}
 
-  return entry;
-}
-  getAll() {
-    return this.memories;
+  add(
+    type: MemoryType,
+    content: string,
+    tags: string[] = [],
+  ): MemoryEntry {
+    const now = Date.now();
+    const entry: MemoryEntry = {
+      id: `${now}-${Math.random().toString(36).slice(2)}`,
+      type,
+      content,
+      importance: this.scorer.score(type),
+      createdAt: now,
+      updatedAt: now,
+      tags,
+    };
+
+    this.repository.upsertEntry(entry);
+    return entry;
   }
-  getByType(type: MemoryType) {
-  return this.indexer.get(type);
-}
-search(query: string): MemoryEntry[] {
-  const normalized = query.toLowerCase();
 
-  return this.memories.filter((memory) => {
-    return (
-      memory.content.toLowerCase().includes(normalized) ||
-      memory.tags.some((tag) =>
-        tag.toLowerCase().includes(normalized)
-      )
-    );
-  });
-}count() {
-  return this.memories.length;
-}
+  getAll(): MemoryEntry[] {
+    return this.repository.getEntries();
+  }
+
+  getByType(type: MemoryType): MemoryEntry[] {
+    return this.getAll().filter((entry) => entry.type === type);
+  }
+
+  search(query: string): MemoryEntry[] {
+    const normalized = query.toLowerCase();
+
+    return this.getAll().filter((memory) => {
+      return (
+        memory.content.toLowerCase().includes(normalized) ||
+        memory.tags.some((tag) =>
+          tag.toLowerCase().includes(normalized),
+        )
+      );
+    });
+  }
+
+  count(): number {
+    return this.repository.getEntries().length;
+  }
 }

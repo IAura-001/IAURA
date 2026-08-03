@@ -1,18 +1,106 @@
 import OpenAI from "openai";
-import { IAURA_SYSTEM_PROMPT } from "@/core/personality";
+import type { ResponseInput } from "openai/resources/responses/responses";
+
 import {
   IAURA_RESPONSE_SCHEMA,
   parseAuraAssistantPlan,
 } from "@/core/actions";
+import {
+  iauraBrain,
+  type CognitiveRequest,
+} from "@/core/brain";
 import type {
   AIProvider,
   AIRequest,
   AIResponse,
+  LegacyAIRequest,
 } from "@/core/providers";
+import {
+  assertValidCognitiveRequest,
+} from "@/core/validator/ResponseValidator";
 
 interface OpenAIProviderConfig {
   apiKey: string;
   model: string;
+}
+
+function isCognitiveRequest(
+  request: AIRequest,
+): request is CognitiveRequest {
+  return "originalUserMessage" in request;
+}
+
+function adaptLegacyRequest(
+  request: LegacyAIRequest,
+): CognitiveRequest {
+  const result = iauraBrain.analyze({
+    message: request.prompt,
+    userContext: request.instructions,
+  });
+
+  return {
+    originalUserMessage: result.originalUserMessage,
+    structuredContext: result.structuredContext,
+    compiledPrompt: result.compiledPrompt,
+  };
+}
+
+function cleanErrorField(
+  value: unknown,
+): string | number | undefined {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  return value.slice(0, 500);
+}
+
+function providerErrorSummary(
+  error: unknown,
+): Record<string, string | number | undefined> {
+  if (typeof error !== "object" || error === null) {
+    return {
+      message: cleanErrorField(error),
+    };
+  }
+
+  const candidate = error as Record<string, unknown>;
+
+  return {
+    name: cleanErrorField(candidate.name),
+    message: cleanErrorField(candidate.message),
+    status: cleanErrorField(candidate.status),
+    code: cleanErrorField(candidate.code),
+    type: cleanErrorField(candidate.type),
+  };
+}
+
+function buildResponseInput(
+  request: CognitiveRequest,
+): ResponseInput {
+  const {
+    conversationHistory,
+    ...structuredContext
+  } = request.structuredContext;
+
+  return [
+    {
+      role: "user",
+      content: JSON.stringify(structuredContext),
+    },
+    ...conversationHistory.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    {
+      role: "user",
+      content: request.originalUserMessage,
+    },
+  ];
 }
 
 export class OpenAIProvider implements AIProvider {
@@ -41,18 +129,19 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async generate(
-    request: AIRequest
+    request: AIRequest,
   ): Promise<AIResponse> {
+    const cognitiveRequest = isCognitiveRequest(request)
+      ? request
+      : adaptLegacyRequest(request);
+
+    assertValidCognitiveRequest(cognitiveRequest);
+
     try {
       const response = await this.client.responses.create({
         model: this.model,
-        instructions: [
-  IAURA_SYSTEM_PROMPT,
-  request.instructions,
-]
-  .filter(Boolean)
-  .join("\n\n"),
-        input: request.prompt,
+        instructions: cognitiveRequest.compiledPrompt,
+        input: buildResponseInput(cognitiveRequest),
         text: {
           verbosity: "medium",
           format: {
@@ -67,7 +156,7 @@ export class OpenAIProvider implements AIProvider {
       });
 
       const plan = parseAuraAssistantPlan(
-        response.output_text
+        response.output_text,
       );
 
       return {
@@ -76,26 +165,10 @@ export class OpenAIProvider implements AIProvider {
         model: this.model,
       };
     } catch (error: unknown) {
-      console.error("========== OPENAI ERROR ==========");
-      console.error(error);
-
-      if (error && typeof error === "object") {
-        const details = error as {
-          status?: unknown;
-          code?: unknown;
-          type?: unknown;
-          message?: unknown;
-          response?: {
-            data?: unknown;
-          };
-        };
-
-        console.error("Status:", details.status);
-        console.error("Code:", details.code);
-        console.error("Type:", details.type);
-        console.error("Message:", details.message);
-        console.error("Body:", details.response?.data);
-      }
+      console.error(
+        "IAURA OpenAI generation failed.",
+        providerErrorSummary(error),
+      );
 
       throw error;
     }

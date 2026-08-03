@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_MEMORY } from "@/constants/memory";
+import { ProjectEngine, projectEngine } from "@/core/project/ProjectEngine";
 
 import { executeAuraActions } from "../ActionExecutor";
 import type { PlannedAuraAction } from "../types";
@@ -22,6 +23,15 @@ function action(
 }
 
 describe("ActionExecutor", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    projectEngine.restoreSnapshot({
+      schemaVersion: 1,
+      activeProjectId: null,
+      projects: [],
+    });
+  });
+
   it("executes safe life actions in one batch", () => {
     const result = executeAuraActions(
       {
@@ -131,6 +141,62 @@ describe("ActionExecutor", () => {
     expect(result.memory.activeProject?.kind).toBe("business");
     expect(result.memory.activeProject?.studios.branding).toBe(true);
     expect(result.memory.activeProject?.studios.website).toBe(true);
+  });
+
+  it("does not create an equivalent project twice across action calls", () => {
+    const first = executeAuraActions(
+      { ...DEFAULT_MEMORY, projects: [] },
+      [action("create_project", "VAEORA")],
+    );
+    const second = executeAuraActions(
+      { ...DEFAULT_MEMORY, projects: [] },
+      [action("create_project", " vaeora ")],
+    );
+
+    expect(first.items[0].status).toBe("executed");
+    expect(second.items[0].status).toBe("skipped");
+    expect(projectEngine.getProjects()).toHaveLength(1);
+  });
+
+  it("does not return a false success when project persistence fails", () => {
+    const isolatedEngine = new ProjectEngine();
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError");
+      });
+
+    const result = executeAuraActions(
+      { ...DEFAULT_MEMORY, projects: [], activeProject: null },
+      [action("create_project", "Unpersisted")],
+      new Date("2026-08-02T00:00:00.000Z"),
+      { projectEngine: isolatedEngine },
+    );
+
+    expect(result.items[0]).toMatchObject({
+      status: "skipped",
+      summary: "Proyecto no guardado: Unpersisted",
+    });
+    expect(result.memory.activeProject).toBeNull();
+    expect(isolatedEngine.getProjects()).toEqual([]);
+    setItem.mockRestore();
+  });
+
+  it("creates a real project when only a stale legacy name exists", () => {
+    const result = executeAuraActions(
+      {
+        ...DEFAULT_MEMORY,
+        projects: ["Name-only legacy project"],
+        activeProject: null,
+      },
+      [action("create_project", "Name-only legacy project")],
+    );
+
+    expect(result.items[0].status).toBe("executed");
+    expect(projectEngine.getProjects()).toHaveLength(1);
+    expect(result.memory.activeProject?.name).toBe(
+      "Name-only legacy project",
+    );
   });
 
   it("awards mission XP only once", () => {

@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { MemoryEngine } from "../MemoryEngine";
 import { MemoryType } from "../MemoryTypes";
 
 describe("MemoryEngine", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("adds a memory", () => {
     const engine = new MemoryEngine();
 
@@ -45,5 +49,14 @@ describe("MemoryEngine", () => {
     expect(
       engine.getByType(MemoryType.GOAL)
     ).toHaveLength(1);
+  });
+
+  it("reloads entries through the official repository", () => {
+    const first = new MemoryEngine();
+    first.add(MemoryType.GOAL, "Persisted goal", []);
+
+    const reloaded = new MemoryEngine();
+
+    expect(reloaded.search("Persisted goal")).toHaveLength(1);
   });
 });

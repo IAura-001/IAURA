@@ -3,6 +3,13 @@ import { IAURA_IDENTITY } from "./identity";
 import { IAURA_REASONING } from "./reasoning";
 import { IAURA_TONE } from "./tone";
 
+export {
+  IAURA_CONSTITUTION,
+  IAURA_IDENTITY,
+  IAURA_REASONING,
+  IAURA_TONE,
+};
+
 export const IAURA_SYSTEM_PROMPT = [
   IAURA_CONSTITUTION,
   IAURA_IDENTITY,

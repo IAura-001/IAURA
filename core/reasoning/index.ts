@@ -2,6 +2,7 @@ import {
   analyzeRequest,
   type AnalyzeRequestOptions,
   type ReasoningAnalysis,
+  type ReasoningIntent,
 } from "./analyzer";
 import {
   decideResponse,
@@ -16,6 +17,7 @@ import { buildReasoningInstructions } from "./response";
 export type {
   AnalyzeRequestOptions,
   ReasoningAnalysis,
+  ReasoningIntent,
   ReasoningPlan,
   ResponseDecision,
 };

@@ -1,5 +1,10 @@
 import type { ConversationMessage } from "../conversation/ConversationMemory";
 import type { AutonomyAssessment } from "../autonomy";
+import type {
+  ReasoningAnalysis,
+  ReasoningPlan,
+  ResponseDecision,
+} from "../reasoning";
 
 export type ThinkingMode =
   | "mentor"
@@ -26,10 +31,38 @@ export interface BrainDecision {
   reason: string;
 }
 
-export interface BrainResult {
+export interface BrainStructuredReasoning {
+  analysis: Omit<
+    ReasoningAnalysis,
+    | "originalInput"
+    | "normalizedInput"
+    | "relevantContext"
+    | "objective"
+  >;
+  plan: Omit<ReasoningPlan, "objective">;
+  responseDecision: ResponseDecision;
+  guidance: string;
+}
+
+export interface BrainStructuredContext {
+  userContext: string;
+  conversationHistory: ConversationMessage[];
+  createdAt: string;
+  decision: BrainDecision;
+  autonomy: AutonomyAssessment;
+  reasoning: BrainStructuredReasoning;
+}
+
+export interface CognitiveRequest {
+  originalUserMessage: string;
+  structuredContext: BrainStructuredContext;
+  compiledPrompt: string;
+}
+
+export interface BrainResult extends CognitiveRequest {
   context: BrainContext;
   decision: BrainDecision;
   autonomy: AutonomyAssessment;
   prompt: string;
-  validated: boolean;
+  validated: true;
 }

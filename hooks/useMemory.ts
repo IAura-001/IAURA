@@ -9,23 +9,12 @@ import { rewardXP } from "@/utils/xp";
 import { completeMission } from "@/utils/mission";
 import { DEFAULT_MEMORY } from "@/constants/memory";
 import { normalizeLocale } from "@/core/i18n/languages";
+import { memoryRepository } from "@/core/memory/MemoryRepository";
 import type { Memory } from "@/types/memory";
-
-
-const STORAGE_KEY = "iaura-memory";
 
 function loadStoredMemory(): Memory {
   try {
-    const savedMemory =
-      localStorage.getItem(STORAGE_KEY);
-
-    if (!savedMemory) {
-      return DEFAULT_MEMORY;
-    }
-
-    const parsedMemory = JSON.parse(
-      savedMemory
-    ) as Partial<Memory>;
+    const parsedMemory = memoryRepository.getMemory();
 
     return {
       ...DEFAULT_MEMORY,
@@ -46,8 +35,7 @@ function loadStoredMemory(): Memory {
       )
         ? parsedMemory.projects
         : [],
-      activeProject:
-        parsedMemory.activeProject ?? null,
+      activeProject: parsedMemory.activeProject,
       completedMissionIds: Array.isArray(
         parsedMemory.completedMissionIds
       )
@@ -88,7 +76,9 @@ export function useMemory() {
     if (!isLoaded) return;
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
+      if (!memoryRepository.saveMemory(memory)) {
+        throw new Error("Memory persistence failed.");
+      }
     } catch (error) {
       console.error("Unable to save IAURA memory:", error);
     }
@@ -131,8 +121,8 @@ export function useMemory() {
   }
 
   function resetMemory() {
-    setMemory(DEFAULT_MEMORY);
-    localStorage.removeItem(STORAGE_KEY);
+    memoryRepository.clearMemory();
+    setMemory(memoryRepository.getMemory());
   }
 
   return {

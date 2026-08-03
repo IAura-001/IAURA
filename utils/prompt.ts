@@ -1,14 +1,19 @@
-export function buildPrompt(userContext: string): string {
-  return `
-You are IAURA.
+export function buildPrompt(userContext?: string): string {
+  const profileSection = userContext?.trim()
+    ? `
+Current profile:
 
-You are an intelligent executive assistant focused on helping the user improve every day.
+${userContext.trim()}
+`.trim()
+    : "";
 
-Below is the user's current profile.
-
-${userContext}
-
-Your responsibilities:
+  return [
+    `
+Analyze the user's current profile and identify the most valuable next actions.
+`.trim(),
+    profileSection,
+    `
+Requested result:
 
 - Analyze the user's current situation.
 - Detect weaknesses.
@@ -17,5 +22,8 @@ Your responsibilities:
 - Keep the response concise.
 - Be practical.
 - Encourage progress.
-`.trim();
+`.trim(),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }

@@ -201,7 +201,7 @@ const openExperienceSurface = useCallback(
 );
 
 const handleWorkspaceProjectSelected = useCallback(
-  (project: IAuraProject) => {
+  (project: IAuraProject | null) => {
     updateMemory({
       activeProject: project,
     });
@@ -272,14 +272,17 @@ const recommendation = generateRecommendation(
   memory.preferredLocale
 );
 
-const prompt = buildPrompt(userContext);
+const prompt = buildPrompt();
 const handleAnalyze = () => {
   setIsAnalyzing(true);
   setShowAnalysis(false);
 
   window.setTimeout(async () => {
     try {
-      const newAnalysis = await generateAIResponse(prompt);
+      const newAnalysis = await generateAIResponse(
+        prompt,
+        userContext
+      );
 
       setAnalysis(newAnalysis);
       setShowAnalysis(true);
@@ -407,7 +410,7 @@ const responseStartedAt = performance.now();
   try {
     const response = await conversationController.send(
   trimmedInput,
-  prompt
+  userContext
 );
 
 const actionItems = executeActions(response.actions);
@@ -494,7 +497,7 @@ if (
   scheduleAuraLiveListening();
 }
 },
-[executeActions, isSending, memory.preferredLocale, prompt, scheduleAuraLiveListening, voiceMode, speak]
+[executeActions, isSending, memory.preferredLocale, scheduleAuraLiveListening, userContext, voiceMode, speak]
 );
 
   

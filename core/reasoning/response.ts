@@ -23,13 +23,10 @@ export function buildReasoningInstructions({
   decision,
 }: ReasoningResponseContext): string {
   return `
-# CONTEXTO DE RAZONAMIENTO PARA ESTA SOLICITUD
+# DIRECCIÓN COGNITIVA DEL TURNO
 
 Intención principal:
 ${analysis.primaryIntent}
-
-Objetivo interpretado:
-${analysis.objective}
 
 Urgencia:
 ${analysis.urgency}
@@ -56,20 +53,12 @@ Decisión de respuesta:
     decision.maximumSuggestedSteps
   }
 
-INSTRUCCIONES
-
-Usa este análisis como orientación interna.
-
-No menciones categorías técnicas como intención, urgencia, complejidad o motor de razonamiento.
-
-No expongas el proceso interno paso por paso.
-
-Entrega únicamente la respuesta final útil, natural y coherente con la identidad de IAURA.
+Aplicación:
 
 ${
   plan.clarificationQuestion
-    ? `Si falta información esencial, pregunta únicamente: "${plan.clarificationQuestion}"`
-    : "Termina con una recomendación o siguiente paso concreto cuando resulte útil."
+    ? `Solicitar únicamente la aclaración necesaria: "${plan.clarificationQuestion}"`
+    : "Entregar la respuesta con el formato, profundidad y límite de pasos indicados."
 }
 `.trim();
 }

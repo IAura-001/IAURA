@@ -1,4 +1,9 @@
-import { projectStorage } from "./ProjectStorage";
+import {
+  LocalProjectRepository,
+  projectRepository,
+  type ProjectRepository,
+  type ProjectRepositorySnapshot,
+} from "./ProjectRepository";
 import type {
   BrandingStudioMemory,
   IAuraProject,
@@ -14,6 +19,8 @@ export interface CreateProjectInput {
   description?: string;
   goal?: string;
   kind?: ProjectKind;
+  studios?: Partial<ProjectStudios>;
+  createdAt?: string;
 }
 
 export interface UpdateProjectInput {
@@ -36,6 +43,19 @@ const DEFAULT_STUDIOS: ProjectStudios = {
   documents: false,
 };
 
+function studiosForKind(kind: ProjectKind): ProjectStudios {
+  const business = kind === "business";
+  const creative = kind === "creative";
+
+  return {
+    ...DEFAULT_STUDIOS,
+    branding: business || creative,
+    website: business,
+    marketing: business,
+    documents: business || kind === "learning",
+  };
+}
+
 function createProjectId(): string {
   if (
     typeof globalThis.crypto !== "undefined" &&
@@ -50,25 +70,24 @@ function createProjectId(): string {
 }
 
 export class ProjectEngine {
-  private projects = new Map<string, IAuraProject>();
-  private currentProjectId: string | null = null;
   private lastPersistenceSucceeded = true;
 
-  constructor() {
-    const storedProjects = projectStorage.load();
-
-    for (const project of storedProjects) {
-      this.projects.set(project.id, project);
-    }
-
-    this.currentProjectId = storedProjects[0]?.id ?? null;
-  }
-
-  private persist(): void {
-    this.lastPersistenceSucceeded = projectStorage.save(this.getProjects());
-  }
+  constructor(
+    private readonly repository: ProjectRepository =
+      new LocalProjectRepository(),
+  ) {}
 
   didLastPersistenceSucceed(): boolean {
+    return this.lastPersistenceSucceeded;
+  }
+
+  getSnapshot(): ProjectRepositorySnapshot {
+    return this.repository.getSnapshot();
+  }
+
+  restoreSnapshot(snapshot: ProjectRepositorySnapshot): boolean {
+    this.lastPersistenceSucceeded =
+      this.repository.replaceSnapshot(snapshot);
     return this.lastPersistenceSucceeded;
   }
 
@@ -79,8 +98,15 @@ export class ProjectEngine {
       throw new Error("Project name is required.");
     }
 
-    const now = new Date().toISOString();
+    const equivalent = this.repository.findEquivalentProject(name);
+    if (equivalent) {
+      const active = this.repository.setActiveProject(equivalent);
+      this.lastPersistenceSucceeded = active.persisted;
+      return active.project;
+    }
 
+    const now = input.createdAt ?? new Date().toISOString();
+    const kind = input.kind ?? "general";
     const project: IAuraProject = {
       id: createProjectId(),
       name,
@@ -89,37 +115,37 @@ export class ProjectEngine {
       createdAt: now,
       updatedAt: now,
       status: "planning",
-      kind: input.kind ?? "general",
-      studios: { ...DEFAULT_STUDIOS },
+      kind,
+      studios: {
+        ...studiosForKind(kind),
+        ...input.studios,
+      },
     };
 
-    this.projects.set(project.id, project);
-    this.currentProjectId = project.id;
-    this.persist();
-
-    return project;
+    const result = this.repository.createProject(project);
+    this.lastPersistenceSucceeded = result.persisted;
+    return result.project;
   }
 
   getProjects(): IAuraProject[] {
-    return Array.from(this.projects.values());
+    return this.repository.getProjects();
   }
 
   getProject(projectId: string): IAuraProject | null {
-    return this.projects.get(projectId) ?? null;
+    return this.repository.getProject(projectId);
+  }
+
+  findEquivalentProject(name: string): IAuraProject | null {
+    return this.repository.findEquivalentProject(name);
   }
 
   setCurrentProject(project: IAuraProject): void {
-    this.projects.set(project.id, project);
-    this.currentProjectId = project.id;
-    this.persist();
+    const result = this.repository.setActiveProject(project);
+    this.lastPersistenceSucceeded = result.persisted;
   }
 
   getCurrentProject(): IAuraProject | null {
-    if (!this.currentProjectId) {
-      return null;
-    }
-
-    return this.projects.get(this.currentProjectId) ?? null;
+    return this.repository.getActiveProject();
   }
 
   hasCurrentProject(): boolean {
@@ -130,7 +156,7 @@ export class ProjectEngine {
     projectId: string,
     updates: UpdateProjectInput,
   ): IAuraProject {
-    const currentProject = this.projects.get(projectId);
+    const currentProject = this.repository.getProject(projectId);
 
     if (!currentProject) {
       throw new Error(`Project "${projectId}" was not found.`);
@@ -150,10 +176,9 @@ export class ProjectEngine {
       updatedAt: new Date().toISOString(),
     };
 
-    this.projects.set(projectId, updatedProject);
-    this.persist();
-
-    return updatedProject;
+    const result = this.repository.updateProject(updatedProject);
+    this.lastPersistenceSucceeded = result.persisted;
+    return result.project;
   }
 
   updateBrandingStudio(
@@ -162,9 +187,7 @@ export class ProjectEngine {
   ): IAuraProject {
     return this.updateProject(projectId, {
       brandingStudio,
-      studios: {
-        branding: true,
-      },
+      studios: { branding: true },
     });
   }
 
@@ -174,9 +197,7 @@ export class ProjectEngine {
   ): IAuraProject {
     return this.updateProject(projectId, {
       launchStudio,
-      studios: {
-        marketing: true,
-      },
+      studios: { marketing: true },
     });
   }
 
@@ -203,22 +224,16 @@ export class ProjectEngine {
   }
 
   deleteProject(projectId: string): boolean {
-    const deleted = this.projects.delete(projectId);
-
-    if (this.currentProjectId === projectId) {
-      this.currentProjectId = null;
-    }
-
-    if (deleted) {
-      this.persist();
-    }
-
-    return deleted;
+    const exists = this.repository.getProject(projectId) !== null;
+    this.lastPersistenceSucceeded =
+      exists && this.repository.deleteProject(projectId);
+    return exists;
   }
 
   clearCurrentProject(): void {
-    this.currentProjectId = null;
+    this.lastPersistenceSucceeded =
+      this.repository.clearActiveProject();
   }
 }
 
-export const projectEngine = new ProjectEngine();
+export const projectEngine = new ProjectEngine(projectRepository);

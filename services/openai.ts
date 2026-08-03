@@ -2,22 +2,31 @@ import {
   parseAuraAssistantPlan,
   type AuraAssistantPlan,
 } from "@/core/actions";
+import type { CognitiveRequest } from "@/core/brain";
 
 interface ChatErrorResponse {
   error?: string;
 }
 
 export async function generateOpenAIResponse(
-  prompt: string
+  request: CognitiveRequest,
+): Promise<AuraAssistantPlan>;
+export async function generateOpenAIResponse(
+  prompt: string,
+): Promise<AuraAssistantPlan>;
+export async function generateOpenAIResponse(
+  request: CognitiveRequest | string,
 ): Promise<AuraAssistantPlan> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      prompt,
-    }),
+    body: JSON.stringify(
+      typeof request === "string"
+        ? { prompt: request }
+        : request,
+    ),
   });
 
   const data =
