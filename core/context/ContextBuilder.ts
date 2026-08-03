@@ -203,6 +203,16 @@ export function buildBrainContext(
   const explicitUserContext =
     input.userContext?.trim() ?? "";
 
+  const conversationIdentity = input.conversationIdentity
+    ? `ConversaciÃ³n activa
+ID: ${compactText(input.conversationIdentity.conversationId, 240)}
+Ãmbito: ${
+        input.conversationIdentity.projectId
+          ? `proyecto ${compactText(input.conversationIdentity.projectId, 240)}`
+          : "general"
+      }`
+    : "";
+
   const projectContext = buildActiveProjectMemoryContext();
 
   const combinedContext = [
@@ -210,6 +220,7 @@ export function buildBrainContext(
       ? `Contexto adicional del usuario
 ${explicitUserContext}`
       : "",
+    conversationIdentity,
     projectContext,
   ]
     .filter(Boolean)

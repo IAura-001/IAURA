@@ -1,4 +1,4 @@
-export type StateScope = "project" | "memory";
+export type StateScope = "project" | "memory" | "conversation";
 
 export type StateOperationOutcome =
   | "committed"

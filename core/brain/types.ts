@@ -18,6 +18,10 @@ export interface BrainInput {
   message: string;
   userContext?: string;
   history?: ConversationMessage[];
+  conversationIdentity?: {
+    conversationId: string;
+    projectId?: string;
+  };
 }
 
 export interface BrainContext {
