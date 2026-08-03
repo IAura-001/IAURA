@@ -1,4 +1,17 @@
 import { mergeProjectSnapshots } from "./mergeProjectSnapshots";
+import {
+  atomicWriteState,
+  createWriterId,
+  parseLocalState,
+  readLocalState,
+  removeLocalState,
+  reportStateDiagnostic,
+  schemaVersionOf,
+  writeLocalState,
+  type MigrationOutcome,
+  type StateOperationResult,
+  type VersionedLocalState,
+} from "@/core/storage/StateReliability";
 import type {
   IAuraProject,
   ProjectKind,
@@ -9,19 +22,28 @@ import type {
 export const PROJECT_STATE_STORAGE_KEY = "iaura.project-state";
 export const LEGACY_PROJECTS_STORAGE_KEY = "iaura.projects";
 export const LEGACY_MEMORY_STORAGE_KEY = "iaura-memory";
-export const PROJECT_STATE_VERSION = 1;
+export const PROJECT_STATE_VERSION = 2;
+export const PROJECT_STAGING_STORAGE_KEY = `${PROJECT_STATE_STORAGE_KEY}.staging`;
+export const PROJECT_BACKUP_STORAGE_KEY = `${PROJECT_STATE_STORAGE_KEY}.backup`;
 
 export interface ProjectRepositorySnapshot {
-  schemaVersion: typeof PROJECT_STATE_VERSION;
+  schemaVersion: number;
   activeProjectId: string | null;
   projects: IAuraProject[];
+  revision?: number;
+  updatedAt?: string;
+  writerId?: string;
+  migrationCompletedAt?: string;
 }
 
-export interface ProjectWriteResult {
+export interface ProjectWriteResult extends StateOperationResult {
   project: IAuraProject;
   persisted: boolean;
   created: boolean;
 }
+
+type CurrentProjectState = ProjectRepositorySnapshot & VersionedLocalState;
+type ProjectRepositoryListener = () => void;
 
 export interface ProjectRepository {
   getSnapshot(): ProjectRepositorySnapshot;
@@ -33,10 +55,21 @@ export interface ProjectRepository {
   updateProject(project: IAuraProject): ProjectWriteResult;
   setActiveProject(project: IAuraProject): ProjectWriteResult;
   setActiveProjectId(projectId: string): boolean;
+  setActiveProjectIdResult(projectId: string): StateOperationResult;
   clearActiveProject(): boolean;
+  clearActiveProjectResult(): StateOperationResult;
   deleteProject(projectId: string): boolean;
+  deleteProjectResult(projectId: string): StateOperationResult;
   replaceSnapshot(snapshot: ProjectRepositorySnapshot): boolean;
   migrateLegacyProject(project: IAuraProject): ProjectWriteResult;
+  getRevision(): number;
+  getMigrationOutcome(): MigrationOutcome;
+  getLastOperationResult(): StateOperationResult;
+  replaceSnapshotResult(
+    snapshot: ProjectRepositorySnapshot,
+    expectedRevision?: number,
+  ): StateOperationResult;
+  subscribe(listener: ProjectRepositoryListener): () => void;
 }
 
 const DEFAULT_STUDIOS: ProjectStudios = {
@@ -159,10 +192,15 @@ function readStorage(key: string): string | null {
 
 function projectsFrom(value: unknown): IAuraProject[] {
   if (!Array.isArray(value)) return [];
-
-  return value
+  const projects = value
     .map(normalizeProject)
     .filter((project): project is IAuraProject => project !== null);
+  if (projects.length !== value.length) {
+    reportStateDiagnostic("project", "IAURA_STATE_CORRUPTED_RECORD_ISOLATED", {
+      invalidRecords: value.length - projects.length,
+    });
+  }
+  return projects;
 }
 
 function deduplicateProjects(projects: IAuraProject[]): {
@@ -230,11 +268,22 @@ function cloneSnapshot(
     schemaVersion: PROJECT_STATE_VERSION,
     activeProjectId: snapshot.activeProjectId,
     projects,
+    ...(typeof snapshot.revision === "number"
+      ? {
+          revision: snapshot.revision,
+          updatedAt: snapshot.updatedAt,
+          writerId: snapshot.writerId,
+          migrationCompletedAt: snapshot.migrationCompletedAt,
+        }
+      : {}),
   };
 }
 
 function normalizeSnapshot(value: unknown): ProjectRepositorySnapshot | null {
-  if (!isRecord(value) || value.schemaVersion !== PROJECT_STATE_VERSION) {
+  if (
+    !isRecord(value) ||
+    (value.schemaVersion !== 1 && value.schemaVersion !== PROJECT_STATE_VERSION)
+  ) {
     return null;
   }
 
@@ -250,37 +299,138 @@ function normalizeSnapshot(value: unknown): ProjectRepositorySnapshot | null {
     : null;
 
   return {
-    schemaVersion: PROJECT_STATE_VERSION,
+    schemaVersion: value.schemaVersion as number,
     activeProjectId: projects.some(
       (project) => project.id === activeProjectId,
     )
       ? activeProjectId
       : null,
     projects,
+    ...(value.schemaVersion === PROJECT_STATE_VERSION &&
+    typeof value.revision === "number" &&
+    Number.isInteger(value.revision) &&
+    value.revision >= 0 &&
+    typeof value.updatedAt === "string" &&
+    typeof value.writerId === "string" &&
+    typeof value.migrationCompletedAt === "string"
+      ? {
+          revision: value.revision,
+          updatedAt: value.updatedAt,
+          writerId: value.writerId,
+          migrationCompletedAt: value.migrationCompletedAt,
+        }
+      : {}),
+  };
+}
+
+function normalizeCurrentState(value: unknown): CurrentProjectState | null {
+  const normalized = normalizeSnapshot(value);
+  if (
+    !normalized ||
+    normalized.schemaVersion !== PROJECT_STATE_VERSION ||
+    typeof normalized.revision !== "number" ||
+    !normalized.updatedAt ||
+    !normalized.writerId ||
+    !normalized.migrationCompletedAt
+  ) {
+    return null;
+  }
+  return normalized as CurrentProjectState;
+}
+
+function emptyState(writerId: string): CurrentProjectState {
+  const now = new Date().toISOString();
+  return {
+    schemaVersion: PROJECT_STATE_VERSION,
+    revision: 0,
+    updatedAt: now,
+    writerId,
+    migrationCompletedAt: now,
+    activeProjectId: null,
+    projects: [],
   };
 }
 
 export class LocalProjectRepository implements ProjectRepository {
-  private state: ProjectRepositorySnapshot;
+  private state: CurrentProjectState;
+  private canonicalRaw: string | null = null;
+  private migrationOutcome: MigrationOutcome = "failed_safely";
+  private lastResult: StateOperationResult;
+  private readonly writerId: string;
+  private readonly listeners = new Set<ProjectRepositoryListener>();
+  private readonly storageListener?: (event: StorageEvent) => void;
+  private blockedByFutureVersion = false;
 
-  constructor() {
+  constructor(options: { synchronize?: boolean; writerId?: string } = {}) {
+    this.writerId = options.writerId ?? createWriterId();
     this.state = this.loadAndMigrate();
+    this.lastResult = {
+      ok: this.migrationOutcome !== "failed_safely",
+      outcome:
+        this.migrationOutcome === "failed_safely" ? "failed" : "unchanged",
+      revision: this.state.revision,
+      ...(this.blockedByFutureVersion
+        ? { code: "IAURA_STATE_UNSUPPORTED_VERSION" as const }
+        : {}),
+    };
+
+    if (options.synchronize && typeof window !== "undefined") {
+      this.storageListener = (event) => this.handleStorageEvent(event);
+      window.addEventListener("storage", this.storageListener);
+    }
   }
 
-  private loadAndMigrate(): ProjectRepositorySnapshot {
-    if (!canUseStorage()) {
-      return {
-        schemaVersion: PROJECT_STATE_VERSION,
-        activeProjectId: null,
-        projects: [],
-      };
+  private loadAndMigrate(): CurrentProjectState {
+    const fallback = emptyState(this.writerId);
+    if (!canUseStorage()) return fallback;
+
+    const canonicalRead = readLocalState(PROJECT_STATE_STORAGE_KEY);
+    const canonicalValue = parseLocalState(canonicalRead.value);
+    const canonicalVersion = schemaVersionOf(canonicalValue);
+    if (canonicalVersion !== null && canonicalVersion > PROJECT_STATE_VERSION) {
+      this.blockedByFutureVersion = true;
+      this.migrationOutcome = "failed_safely";
+      reportStateDiagnostic("project", "IAURA_STATE_FUTURE_VERSION_REJECTED", {
+        schemaVersion: canonicalVersion,
+      });
+      return fallback;
     }
 
-    const canonical = normalizeSnapshot(
-      parseJson(readStorage(PROJECT_STATE_STORAGE_KEY)),
-    );
-    let projects = canonical?.projects ?? [];
-    let activeProjectId = canonical?.activeProjectId ?? null;
+    const canonical = normalizeCurrentState(canonicalValue);
+    if (canonical) {
+      this.canonicalRaw = canonicalRead.value;
+      const staged = readLocalState(PROJECT_STAGING_STORAGE_KEY).value;
+      if (staged !== null) {
+        removeLocalState(PROJECT_STAGING_STORAGE_KEY);
+        this.migrationOutcome = "recovered";
+        reportStateDiagnostic("project", "IAURA_STATE_MIGRATION_RECOVERED");
+      } else {
+        this.migrationOutcome = "already_current";
+      }
+      return canonical;
+    }
+
+    const backupRead = readLocalState(PROJECT_BACKUP_STORAGE_KEY);
+    const backup = normalizeCurrentState(parseLocalState(backupRead.value));
+    const stagedRead = readLocalState(PROJECT_STAGING_STORAGE_KEY);
+    const staged = normalizeCurrentState(parseLocalState(stagedRead.value));
+    const recovered = backup ?? staged;
+    if (recovered) {
+      const raw = backup ? backupRead.value : stagedRead.value;
+      if (raw && writeLocalState(PROJECT_STATE_STORAGE_KEY, raw)) {
+        removeLocalState(PROJECT_STAGING_STORAGE_KEY);
+        this.canonicalRaw = raw;
+        this.migrationOutcome = "recovered";
+        reportStateDiagnostic("project", "IAURA_STATE_LAST_KNOWN_GOOD_RECOVERED", {
+          source: backup ? "backup" : "staging",
+        });
+        return recovered;
+      }
+    }
+
+    const previous = normalizeSnapshot(canonicalValue);
+    let projects = previous?.projects ?? [];
+    let activeProjectId = previous?.activeProjectId ?? null;
 
     const legacyProjects = projectsFrom(
       parseJson(readStorage(LEGACY_PROJECTS_STORAGE_KEY)),
@@ -331,28 +481,41 @@ export class LocalProjectRepository implements ProjectRepository {
       activeProjectId = null;
     }
 
-    const migrated: ProjectRepositorySnapshot = {
+    const now = new Date().toISOString();
+    const migrated: CurrentProjectState = {
       schemaVersion: PROJECT_STATE_VERSION,
+      revision: 1,
+      updatedAt: now,
+      writerId: this.writerId,
+      migrationCompletedAt: now,
       activeProjectId: activeProjectId ?? projects[0]?.id ?? null,
       projects,
     };
 
-    this.persist(migrated);
+    reportStateDiagnostic("project", "IAURA_STATE_MIGRATION_STARTED");
+    const write = atomicWriteState({
+      scope: "project",
+      storageKey: PROJECT_STATE_STORAGE_KEY,
+      stagingKey: PROJECT_STAGING_STORAGE_KEY,
+      backupKey: PROJECT_BACKUP_STORAGE_KEY,
+      expectedCanonicalRaw: canonicalRead.value,
+      state: migrated,
+      validate: normalizeCurrentState,
+    });
+    if (write.result.ok) {
+      this.canonicalRaw = write.canonicalRaw ?? null;
+      this.migrationOutcome = "migrated";
+      this.persistLegacyMirror(migrated);
+      reportStateDiagnostic("project", "IAURA_STATE_MIGRATION_COMPLETED", {
+        revision: migrated.revision,
+      });
+    } else {
+      this.migrationOutcome = "failed_safely";
+    }
     return migrated;
   }
 
-  private persist(snapshot: ProjectRepositorySnapshot): boolean {
-    if (!canUseStorage()) return false;
-
-    try {
-      window.localStorage.setItem(
-        PROJECT_STATE_STORAGE_KEY,
-        JSON.stringify(snapshot),
-      );
-    } catch {
-      return false;
-    }
-
+  private persistLegacyMirror(snapshot: CurrentProjectState): void {
     try {
       window.localStorage.setItem(
         LEGACY_PROJECTS_STORAGE_KEY,
@@ -362,13 +525,100 @@ export class LocalProjectRepository implements ProjectRepository {
       // The canonical write succeeded. The legacy mirror remains best-effort.
     }
 
-    return true;
   }
 
-  private commit(snapshot: ProjectRepositorySnapshot): boolean {
-    const persisted = this.persist(snapshot);
-    this.state = cloneSnapshot(snapshot);
-    return persisted;
+  private commit(
+    snapshot: ProjectRepositorySnapshot,
+    expectedRevision = this.state.revision,
+  ): StateOperationResult {
+    if (this.blockedByFutureVersion) {
+      return this.remember({
+        ok: false,
+        outcome: "failed",
+        revision: this.state.revision,
+        code: "IAURA_STATE_UNSUPPORTED_VERSION",
+      });
+    }
+    if (expectedRevision !== this.state.revision) {
+      return this.remember({
+        ok: false,
+        outcome: "conflict",
+        revision: this.state.revision,
+        code: "IAURA_STATE_STALE_WRITE",
+      });
+    }
+
+    const now = new Date().toISOString();
+    const candidate = normalizeCurrentState({
+      ...snapshot,
+      schemaVersion: PROJECT_STATE_VERSION,
+      revision: this.state.revision + 1,
+      updatedAt: now,
+      writerId: this.writerId,
+      migrationCompletedAt: this.state.migrationCompletedAt,
+    });
+    if (!candidate) {
+      return this.remember({
+        ok: false,
+        outcome: "failed",
+        revision: this.state.revision,
+        code: "IAURA_STATE_VALIDATION_FAILED",
+      });
+    }
+
+    const write = atomicWriteState({
+      scope: "project",
+      storageKey: PROJECT_STATE_STORAGE_KEY,
+      stagingKey: PROJECT_STAGING_STORAGE_KEY,
+      backupKey: PROJECT_BACKUP_STORAGE_KEY,
+      expectedCanonicalRaw: this.canonicalRaw,
+      state: candidate,
+      validate: normalizeCurrentState,
+    });
+    if (!write.result.ok) {
+      if (write.result.outcome === "conflict") this.refreshCanonical();
+      return this.remember(write.result);
+    }
+
+    this.state = candidate;
+    this.canonicalRaw = write.canonicalRaw ?? null;
+    this.persistLegacyMirror(candidate);
+    this.notify();
+    return this.remember(write.result);
+  }
+
+  private remember(result: StateOperationResult): StateOperationResult {
+    this.lastResult = result;
+    return result;
+  }
+
+  private refreshCanonical(): void {
+    const read = readLocalState(PROJECT_STATE_STORAGE_KEY);
+    const current = normalizeCurrentState(parseLocalState(read.value));
+    if (current) {
+      this.state = current;
+      this.canonicalRaw = read.value;
+      this.notify();
+    }
+  }
+
+  private handleStorageEvent(event: StorageEvent): void {
+    if (event.key !== PROJECT_STATE_STORAGE_KEY || !event.newValue) return;
+    const incoming = normalizeCurrentState(parseLocalState(event.newValue));
+    if (!incoming) return;
+    const newer =
+      incoming.revision > this.state.revision ||
+      (incoming.revision === this.state.revision &&
+        `${incoming.updatedAt}:${incoming.writerId}` >
+          `${this.state.updatedAt}:${this.state.writerId}`);
+    if (!newer) return;
+    this.state = incoming;
+    this.canonicalRaw = event.newValue;
+    this.notify();
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) listener();
   }
 
   getSnapshot(): ProjectRepositorySnapshot {
@@ -407,7 +657,14 @@ export class LocalProjectRepository implements ProjectRepository {
   createProject(project: IAuraProject): ProjectWriteResult {
     const equivalent = this.findEquivalentProject(project.name);
     if (equivalent) {
-      return { project: equivalent, persisted: true, created: false };
+      return {
+        project: equivalent,
+        persisted: true,
+        created: false,
+        ok: true,
+        outcome: "unchanged",
+        revision: this.state.revision,
+      };
     }
 
     const next: ProjectRepositorySnapshot = {
@@ -416,10 +673,12 @@ export class LocalProjectRepository implements ProjectRepository {
       projects: [...this.state.projects, project],
     };
 
+    const result = this.commit(next);
     return {
       project,
-      persisted: this.commit(next),
-      created: true,
+      ...result,
+      persisted: result.ok,
+      created: result.ok,
     };
   }
 
@@ -434,10 +693,12 @@ export class LocalProjectRepository implements ProjectRepository {
         )
       : [...this.state.projects, merged];
 
+    const result = this.commit({ ...this.state, projects });
     return {
       project: merged,
-      persisted: this.commit({ ...this.state, projects }),
-      created: !current,
+      ...result,
+      persisted: result.ok,
+      created: result.ok && !current,
     };
   }
 
@@ -449,7 +710,7 @@ export class LocalProjectRepository implements ProjectRepository {
     const activeProject = merged.projects.find(
       (candidate) => candidate.id === merged.projectId,
     ) ?? project;
-    const persisted = this.commit({
+    const result = this.commit({
       schemaVersion: PROJECT_STATE_VERSION,
       activeProjectId: merged.projectId,
       projects: merged.projects,
@@ -457,14 +718,23 @@ export class LocalProjectRepository implements ProjectRepository {
 
     return {
       project: activeProject,
-      persisted,
-      created: !existing,
+      ...result,
+      persisted: result.ok,
+      created: result.ok && !existing,
     };
   }
 
   setActiveProjectId(projectId: string): boolean {
-    if (!this.getProject(projectId)) return false;
-    if (this.state.activeProjectId === projectId) return true;
+    return this.setActiveProjectIdResult(projectId).ok;
+  }
+
+  setActiveProjectIdResult(projectId: string): StateOperationResult {
+    if (!this.getProject(projectId)) {
+      return this.remember({ ok: false, outcome: "failed", revision: this.state.revision, code: "IAURA_STATE_VALIDATION_FAILED" });
+    }
+    if (this.state.activeProjectId === projectId) {
+      return this.remember({ ok: true, outcome: "unchanged", revision: this.state.revision });
+    }
 
     return this.commit({
       ...this.state,
@@ -473,14 +743,27 @@ export class LocalProjectRepository implements ProjectRepository {
   }
 
   clearActiveProject(): boolean {
+    return this.clearActiveProjectResult().ok;
+  }
+
+  clearActiveProjectResult(): StateOperationResult {
+    if (this.state.activeProjectId === null) {
+      return this.remember({ ok: true, outcome: "unchanged", revision: this.state.revision });
+    }
     return this.commit({ ...this.state, activeProjectId: null });
   }
 
   deleteProject(projectId: string): boolean {
+    return this.deleteProjectResult(projectId).ok;
+  }
+
+  deleteProjectResult(projectId: string): StateOperationResult {
     const projects = this.state.projects.filter(
       (project) => project.id !== projectId,
     );
-    if (projects.length === this.state.projects.length) return false;
+    if (projects.length === this.state.projects.length) {
+      return this.remember({ ok: false, outcome: "failed", revision: this.state.revision, code: "IAURA_STATE_VALIDATION_FAILED" });
+    }
 
     return this.commit({
       ...this.state,
@@ -493,15 +776,37 @@ export class LocalProjectRepository implements ProjectRepository {
   }
 
   replaceSnapshot(snapshot: ProjectRepositorySnapshot): boolean {
+    return this.replaceSnapshotResult(snapshot).ok;
+  }
+
+  replaceSnapshotResult(
+    snapshot: ProjectRepositorySnapshot,
+    expectedRevision = this.state.revision,
+  ): StateOperationResult {
     const normalized = normalizeSnapshot(snapshot);
-    if (!normalized) return false;
-    return this.commit(normalized);
+    if (!normalized) {
+      return this.remember({
+        ok: false,
+        outcome: "failed",
+        revision: this.state.revision,
+        code: "IAURA_STATE_VALIDATION_FAILED",
+      });
+    }
+    return this.commit(normalized, expectedRevision);
   }
 
   migrateLegacyProject(project: IAuraProject): ProjectWriteResult {
     const normalized = normalizeProject(project);
     if (!normalized) {
-      return { project, persisted: false, created: false };
+      return {
+        project,
+        persisted: false,
+        created: false,
+        ok: false,
+        outcome: "failed",
+        revision: this.state.revision,
+        code: "IAURA_STATE_VALIDATION_FAILED",
+      };
     }
 
     const merged = addProject(this.state.projects, normalized);
@@ -519,12 +824,44 @@ export class LocalProjectRepository implements ProjectRepository {
         JSON.stringify(merged.projects) &&
       this.state.activeProjectId === merged.projectId;
 
+    const result = unchanged
+      ? this.remember({
+          ok: true,
+          outcome: "unchanged",
+          revision: this.state.revision,
+        })
+      : this.commit(next);
     return {
       project: nextProject,
-      persisted: unchanged ? true : this.commit(next),
-      created: !existing,
+      ...result,
+      persisted: result.ok,
+      created: result.ok && !existing,
     };
+  }
+
+  getRevision(): number {
+    return this.state.revision;
+  }
+
+  getMigrationOutcome(): MigrationOutcome {
+    return this.migrationOutcome;
+  }
+
+  getLastOperationResult(): StateOperationResult {
+    return { ...this.lastResult };
+  }
+
+  subscribe(listener: ProjectRepositoryListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  dispose(): void {
+    if (this.storageListener && typeof window !== "undefined") {
+      window.removeEventListener("storage", this.storageListener);
+    }
+    this.listeners.clear();
   }
 }
 
-export const projectRepository = new LocalProjectRepository();
+export const projectRepository = new LocalProjectRepository({ synchronize: true });

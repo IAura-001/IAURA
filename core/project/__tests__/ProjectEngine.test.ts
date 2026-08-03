@@ -79,7 +79,7 @@ describe("ProjectEngine creative studio integration", () => {
     expect(updated.studios.marketing).toBe(true);
   });
 
-  it("keeps the in-memory project usable and exposes a failed persistence write", () => {
+  it("preserves the prior repository state and exposes a failed persistence write", () => {
     const setItem = vi
       .spyOn(Storage.prototype, "setItem")
       .mockImplementation(() => {
@@ -90,7 +90,7 @@ describe("ProjectEngine creative studio integration", () => {
     const project = engine.createProject({ name: "Session-only brand" });
 
     expect(project.name).toBe("Session-only brand");
-    expect(engine.getCurrentProject()?.id).toBe(project.id);
+    expect(engine.getCurrentProject()).toBeNull();
     expect(engine.didLastPersistenceSucceed()).toBe(false);
     setItem.mockRestore();
   });

@@ -1,9 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { useState } from "react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_MEMORY } from "@/constants/memory";
-import { memoryRepository } from "@/core/memory/MemoryRepository";
+import {
+  memoryRepository,
+  MEMORY_STAGING_STORAGE_KEY,
+} from "@/core/memory/MemoryRepository";
 import { projectEngine } from "@/core/project/ProjectEngine";
 import type { PlannedAuraAction } from "@/core/actions";
 import type { Memory } from "@/types/memory";
@@ -118,5 +121,54 @@ describe("useAuraActions unified undo", () => {
     expect(projectEngine.getCurrentProject()).toBeNull();
     expect(projectEngine.getProjects()).toEqual([]);
     expect(result.current.memory.activeProject).toBeNull();
+  });
+
+  it("does not report action success when persistence fails", () => {
+    const { result } = renderActions({
+      ...DEFAULT_MEMORY,
+      projects: [],
+      activeProject: null,
+    });
+    const original = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
+      if (key === MEMORY_STAGING_STORAGE_KEY) {
+        throw new DOMException("quota", "QuotaExceededError");
+      }
+      return original.call(this, key, value);
+    });
+
+    let execution: ReturnType<typeof result.current.executeActions> = [];
+    act(() => {
+      execution = result.current.executeActions([createAction("Must roll back")]);
+    });
+    vi.restoreAllMocks();
+
+    expect(execution[0]).toMatchObject({ status: "skipped" });
+    expect(result.current.history).toEqual([]);
+    expect(projectEngine.findEquivalentProject("Must roll back")).toBeNull();
+  });
+
+  it("rejects undo after an incompatible memory revision", () => {
+    const { result } = renderActions({
+      ...DEFAULT_MEMORY,
+      projects: [],
+      activeProject: null,
+    });
+
+    act(() => {
+      result.current.executeActions([createAction("Keep after conflict")]);
+    });
+    memoryRepository.saveMemory({
+      ...memoryRepository.getMemory(),
+      goals: ["External change"],
+    });
+
+    let undone = true;
+    act(() => {
+      undone = result.current.undoLast();
+    });
+
+    expect(undone).toBe(false);
+    expect(projectEngine.findEquivalentProject("Keep after conflict")).not.toBeNull();
   });
 });

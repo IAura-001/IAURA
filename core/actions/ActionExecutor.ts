@@ -330,8 +330,6 @@ export function executeAuraActions(
         continue;
       }
 
-      const projectStateBefore =
-        dependencies.projectEngine.getSnapshot();
       const activeProject = dependencies.projectEngine.createProject({
         name: action.value,
         description:
@@ -343,7 +341,6 @@ export function executeAuraActions(
       });
 
       if (!dependencies.projectEngine.didLastPersistenceSucceed()) {
-        dependencies.projectEngine.restoreSnapshot(projectStateBefore);
         items.push(
           skipped(
             action,

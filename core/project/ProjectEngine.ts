@@ -4,6 +4,7 @@ import {
   type ProjectRepository,
   type ProjectRepositorySnapshot,
 } from "./ProjectRepository";
+import type { StateOperationResult } from "@/core/storage/StateReliability";
 import type {
   BrandingStudioMemory,
   IAuraProject,
@@ -85,10 +86,31 @@ export class ProjectEngine {
     return this.repository.getSnapshot();
   }
 
-  restoreSnapshot(snapshot: ProjectRepositorySnapshot): boolean {
-    this.lastPersistenceSucceeded =
-      this.repository.replaceSnapshot(snapshot);
+  restoreSnapshot(
+    snapshot: ProjectRepositorySnapshot,
+    expectedRevision?: number,
+  ): boolean {
+    this.lastPersistenceSucceeded = this.repository.replaceSnapshotResult(
+      snapshot,
+      expectedRevision,
+    ).ok;
     return this.lastPersistenceSucceeded;
+  }
+
+  restoreSnapshotResult(
+    snapshot: ProjectRepositorySnapshot,
+    expectedRevision?: number,
+  ): StateOperationResult {
+    const result = this.repository.replaceSnapshotResult(
+      snapshot,
+      expectedRevision,
+    );
+    this.lastPersistenceSucceeded = result.ok;
+    return result;
+  }
+
+  getRevision(): number {
+    return this.repository.getRevision();
   }
 
   createProject(input: CreateProjectInput): IAuraProject {

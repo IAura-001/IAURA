@@ -101,4 +101,8 @@ export interface AuraActionHistoryEntry {
   after: Memory;
   projectStateBefore?: ProjectRepositorySnapshot;
   projectStateAfter?: ProjectRepositorySnapshot;
+  projectRevisionBefore?: number;
+  projectRevisionAfter?: number;
+  memoryRevisionBefore?: number;
+  memoryRevisionAfter?: number;
 }

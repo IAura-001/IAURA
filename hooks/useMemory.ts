@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { rewardXP } from "@/utils/xp";
@@ -53,6 +54,7 @@ function loadStoredMemory(): Memory {
 }
 
 export function useMemory() {
+  const applyingRepositoryUpdate = useRef(false);
   const [memory, setMemory] =
     useState<Memory>(DEFAULT_MEMORY);
   const [isLoaded, setIsLoaded] =
@@ -72,8 +74,19 @@ export function useMemory() {
     };
   }, []);
 
+  useEffect(() =>
+    memoryRepository.subscribe(() => {
+      applyingRepositoryUpdate.current = true;
+      setMemory(loadStoredMemory());
+      setIsLoaded(true);
+    }), []);
+
   useEffect(() => {
     if (!isLoaded) return;
+    if (applyingRepositoryUpdate.current) {
+      applyingRepositoryUpdate.current = false;
+      return;
+    }
 
     try {
       if (!memoryRepository.saveMemory(memory)) {

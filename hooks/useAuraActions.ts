@@ -127,7 +127,9 @@ export function useAuraActions({
       const before = cloneMemory(
         memoryRef.current
       );
+      const memoryRevisionBefore = memoryRepository.getRevision();
       const projectStateBefore = projectEngine.getSnapshot();
+      const projectRevisionBefore = projectEngine.getRevision();
       const result = executeAuraActions(
         before,
         actions
@@ -141,8 +143,16 @@ export function useAuraActions({
       }
 
       const after = cloneMemory(result.memory);
-      if (!memoryRepository.saveMemory(after)) {
-        projectEngine.restoreSnapshot(projectStateBefore);
+      const projectRevisionAfterActions = projectEngine.getRevision();
+      const memoryWrite = memoryRepository.saveMemoryResult(
+        after,
+        memoryRevisionBefore,
+      );
+      if (!memoryWrite.ok) {
+        projectEngine.restoreSnapshot(
+          projectStateBefore,
+          projectRevisionAfterActions,
+        );
         return result.items.map((item) =>
           item.status === "executed"
             ? {
@@ -166,6 +176,10 @@ export function useAuraActions({
         after,
         projectStateBefore,
         projectStateAfter: projectEngine.getSnapshot(),
+        projectRevisionBefore,
+        projectRevisionAfter: projectEngine.getRevision(),
+        memoryRevisionBefore,
+        memoryRevisionAfter: memoryWrite.revision,
       };
 
       replaceMemory(after);
@@ -195,7 +209,11 @@ export function useAuraActions({
     sameMemory(
       memory,
       latestCompletedEntry.after
-    );
+    ) &&
+    (latestCompletedEntry.memoryRevisionAfter === undefined ||
+      memoryRepository.getRevision() === latestCompletedEntry.memoryRevisionAfter) &&
+    (latestCompletedEntry.projectRevisionAfter === undefined ||
+      projectEngine.getRevision() === latestCompletedEntry.projectRevisionAfter);
 
   const undoLast = useCallback((): boolean => {
     if (
@@ -203,7 +221,11 @@ export function useAuraActions({
       !sameMemory(
         memory,
         latestCompletedEntry.after
-      )
+      ) ||
+      (latestCompletedEntry.memoryRevisionAfter !== undefined &&
+        memoryRepository.getRevision() !== latestCompletedEntry.memoryRevisionAfter) ||
+      (latestCompletedEntry.projectRevisionAfter !== undefined &&
+        projectEngine.getRevision() !== latestCompletedEntry.projectRevisionAfter)
     ) {
       return false;
     }
@@ -215,6 +237,7 @@ export function useAuraActions({
       if (
         !projectEngine.restoreSnapshot(
           latestCompletedEntry.projectStateBefore,
+          latestCompletedEntry.projectRevisionAfter,
         )
       ) {
         return false;
@@ -252,10 +275,15 @@ export function useAuraActions({
       if (!projectEngine.didLastPersistenceSucceed()) return false;
     }
 
-    if (!memoryRepository.saveMemory(restoredMemory)) {
+    const memoryRestore = memoryRepository.saveMemoryResult(
+      restoredMemory,
+      latestCompletedEntry.memoryRevisionAfter,
+    );
+    if (!memoryRestore.ok) {
       if (latestCompletedEntry.projectStateAfter) {
         projectEngine.restoreSnapshot(
           latestCompletedEntry.projectStateAfter,
+          projectEngine.getRevision(),
         );
       }
       return false;
