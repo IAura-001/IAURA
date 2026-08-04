@@ -86,6 +86,30 @@ function providerRequestId(error: unknown): string | undefined {
 
 function mapOpenAIError(error: unknown): CreativeProviderError {
   const requestId = providerRequestId(error);
+  if (error instanceof Error) {
+  console.error("[VAEORA_OPENAI_PROVIDER_ERROR]", {
+    name: error.name,
+    message: error.message,
+    requestId,
+    status:
+      "status" in error && typeof error.status === "number"
+        ? error.status
+        : undefined,
+    code:
+      "code" in error && typeof error.code === "string"
+        ? error.code
+        : undefined,
+    type:
+      "type" in error && typeof error.type === "string"
+        ? error.type
+        : undefined,
+  });
+} else {
+  console.error("[VAEORA_OPENAI_PROVIDER_ERROR]", {
+    errorType: typeof error,
+    requestId,
+  });
+}
 
   if (error instanceof APIConnectionTimeoutError) {
     return new CreativeProviderError("timeout", requestId);
