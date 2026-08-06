@@ -1,8 +1,21 @@
+import type { AuraAssistantPlan } from "@/core/actions";
+import { executeMemoryUpdates } from "@/core/memory";
+import { generateCognitiveResponse } from "@/services/cognitive";
+
 import {
   iauraBrain,
   type BrainInput,
   type CognitiveRequest,
 } from "../brain";
+import {
+  ContextRetriever,
+  LocalConversationContextSource,
+  LocalMemoryContextSource,
+  mergeUserContext,
+  serializeContextPackage,
+  type ContextPackage,
+  type ContextRetrievalRequest,
+} from "../context";
 import {
   projectRepository,
   type ProjectRepository,
@@ -14,41 +27,48 @@ import {
   type ConversationMessage,
   type ConversationRepository,
 } from "./ConversationRepository";
-import { executeMemoryUpdates } from "@/core/memory";
-
-import type { AuraAssistantPlan } from "@/core/actions";
-import {
-  generateCognitiveResponse,
-} from "@/services/cognitive";
 
 export type ConversationTurnErrorCode =
   | "IAURA_CONVERSATION_PERSISTENCE_FAILED"
-  | "IAURA_CONVERSATION_PROVIDER_FAILED";
+  | "IAURA_CONVERSATION_PROVIDER_FAILED"
+  | "IAURA_CONTEXT_RETRIEVAL_FAILED";
+
+export type ConversationTurnStage =
+  | "conversation"
+  | "user_message"
+  | "context"
+  | "generation"
+  | "assistant_message";
 
 export class ConversationTurnError extends Error {
   readonly recoverable = true;
 
   constructor(
     readonly code: ConversationTurnErrorCode,
-    readonly stage:
-      | "conversation"
-      | "user_message"
-      | "generation"
-      | "assistant_message",
+    readonly stage: ConversationTurnStage,
     readonly conversationId?: string,
     readonly userMessageId?: string,
   ) {
     super(
       code === "IAURA_CONVERSATION_PROVIDER_FAILED"
         ? "IAURA could not generate a response. Your message was preserved for retry."
-        : "IAURA could not safely persist the conversation.",
+        : code === "IAURA_CONTEXT_RETRIEVAL_FAILED"
+          ? "IAURA could not retrieve the context required for this response. Your message was preserved for retry."
+          : "IAURA could not safely persist the conversation.",
     );
+
     this.name = "ConversationTurnError";
   }
 }
 
 interface BrainAnalyzer {
   analyze(input: BrainInput): CognitiveRequest;
+}
+
+interface ContextRetrievalService {
+  retrieve(
+    request: ContextRetrievalRequest,
+  ): Promise<ContextPackage>;
 }
 
 type ResponseGenerator = (
@@ -60,10 +80,16 @@ interface ConversationControllerOptions {
   projects?: ProjectRepository;
   brain?: BrainAnalyzer;
   generateResponse?: ResponseGenerator;
+  contextRetriever?: ContextRetrievalService;
 }
 
-function toBrainHistory(messages: ConversationMessage[]) {
-  return messages.map(({ role, content }) => ({ role, content }));
+function toBrainHistory(
+  messages: ConversationMessage[],
+): BrainInput["history"] {
+  return messages.map(({ role, content }) => ({
+    role,
+    content,
+  }));
 }
 
 export class ConversationController {
@@ -71,25 +97,46 @@ export class ConversationController {
   private readonly projects: ProjectRepository;
   private readonly brain: BrainAnalyzer;
   private readonly generateResponse: ResponseGenerator;
+  private readonly contextRetriever: ContextRetrievalService;
 
   constructor(options: ConversationControllerOptions = {}) {
-    this.conversations = options.conversations ?? conversationRepository;
-    this.projects = options.projects ?? projectRepository;
-    this.brain = options.brain ?? iauraBrain;
+    this.conversations =
+      options.conversations ?? conversationRepository;
+
+    this.projects =
+      options.projects ?? projectRepository;
+
+    this.brain =
+      options.brain ?? iauraBrain;
+
     this.generateResponse =
-  options.generateResponse ??
-  generateCognitiveResponse;
+      options.generateResponse ?? generateCognitiveResponse;
+
+    this.contextRetriever =
+      options.contextRetriever ??
+      new ContextRetriever({
+        conversationSource:
+          new LocalConversationContextSource(
+            this.conversations,
+          ),
+        memorySource:
+          new LocalMemoryContextSource(),
+      });
   }
 
   private resolveConversation(): Conversation {
     const activeProject = this.projects.getActiveProject();
     const projectId = activeProject?.id ?? null;
-    const existing = this.conversations.getActiveConversation(projectId);
+
+    const existing =
+      this.conversations.getActiveConversation(projectId);
 
     if (existing) {
-      const activation = this.conversations.setActiveConversation(
-        existing.conversationId,
-      );
+      const activation =
+        this.conversations.setActiveConversation(
+          existing.conversationId,
+        );
+
       if (!activation.ok) {
         throw new ConversationTurnError(
           "IAURA_CONVERSATION_PERSISTENCE_FAILED",
@@ -97,19 +144,27 @@ export class ConversationController {
           existing.conversationId,
         );
       }
+
       return existing;
     }
 
-    const created = this.conversations.createConversation({
-      ...(activeProject ? { projectId: activeProject.id } : {}),
-      title: activeProject?.name ?? "General conversation",
-    });
+    const created =
+      this.conversations.createConversation({
+        ...(activeProject
+          ? { projectId: activeProject.id }
+          : {}),
+        title:
+          activeProject?.name ??
+          "General conversation",
+      });
+
     if (!created.ok || !created.conversation) {
       throw new ConversationTurnError(
         "IAURA_CONVERSATION_PERSISTENCE_FAILED",
         "conversation",
       );
     }
+
     return created.conversation;
   }
 
@@ -117,7 +172,9 @@ export class ConversationController {
     conversation: Conversation,
     message: string,
   ): ConversationMessage {
-    const lastMessage = conversation.messages.at(-1);
+    const lastMessage =
+      conversation.messages.at(-1);
+
     if (
       lastMessage?.role === "user" &&
       lastMessage.content.trim() === message.trim()
@@ -125,10 +182,15 @@ export class ConversationController {
       return lastMessage;
     }
 
-    const write = this.conversations.appendMessage(
-      conversation.conversationId,
-      { role: "user", content: message },
-    );
+    const write =
+      this.conversations.appendMessage(
+        conversation.conversationId,
+        {
+          role: "user",
+          content: message,
+        },
+      );
+
     if (!write.ok || !write.message) {
       throw new ConversationTurnError(
         "IAURA_CONVERSATION_PERSISTENCE_FAILED",
@@ -136,35 +198,94 @@ export class ConversationController {
         conversation.conversationId,
       );
     }
+
     return write.message;
+  }
+
+  private async retrieveContext(
+    conversation: Conversation,
+    userMessage: ConversationMessage,
+    message: string,
+  ): Promise<ContextPackage> {
+    try {
+      return await this.contextRetriever.retrieve({
+        userId: "local-user",
+        conversationId:
+          conversation.conversationId,
+        message,
+      });
+    } catch {
+      throw new ConversationTurnError(
+        "IAURA_CONTEXT_RETRIEVAL_FAILED",
+        "context",
+        conversation.conversationId,
+        userMessage.messageId,
+      );
+    }
   }
 
   async send(
     message: string,
     userContext: string,
   ): Promise<AuraAssistantPlan> {
-    const conversation = this.resolveConversation();
-    const userMessage = this.persistUserMessage(conversation, message);
+    const conversation =
+      this.resolveConversation();
+
+    const userMessage =
+      this.persistUserMessage(
+        conversation,
+        message,
+      );
+
     const history = toBrainHistory(
-      this.conversations.getWorkingHistory(conversation.conversationId, {
-        excludeMessageId: userMessage.messageId,
-      }),
+      this.conversations.getWorkingHistory(
+        conversation.conversationId,
+        {
+          excludeMessageId:
+            userMessage.messageId,
+        },
+      ),
     );
-    const result = this.brain.analyze({
-      message,
-      userContext,
-      history,
-      conversationIdentity: {
-        conversationId: conversation.conversationId,
-        ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
-      },
-    });
+
+    const contextPackage =
+      await this.retrieveContext(
+        conversation,
+        userMessage,
+        message,
+      );
+
+    const retrievedContext =
+      serializeContextPackage(contextPackage);
+
+    const enrichedUserContext =
+      mergeUserContext(
+        userContext,
+        retrievedContext,
+      );
+
+    const result =
+      this.brain.analyze({
+        message,
+        userContext: enrichedUserContext,
+        history,
+        conversationIdentity: {
+          conversationId:
+            conversation.conversationId,
+          ...(conversation.projectId
+            ? {
+                projectId:
+                  conversation.projectId,
+              }
+            : {}),
+        },
+      });
 
     let response: AuraAssistantPlan;
 
-try {
-  response = await this.generateResponse(result);
-} catch {
+    try {
+      response =
+        await this.generateResponse(result);
+    } catch {
       throw new ConversationTurnError(
         "IAURA_CONVERSATION_PROVIDER_FAILED",
         "generation",
@@ -172,17 +293,22 @@ try {
         userMessage.messageId,
       );
     }
-executeMemoryUpdates(
-  response.memoryUpdates,
-);
-    const assistantWrite = this.conversations.appendMessage(
-      conversation.conversationId,
-      {
-        role: "assistant",
-        content: response.content,
-        structuredResponse: assistantMessageMetadata(response),
-      },
+
+    executeMemoryUpdates(
+      response.memoryUpdates,
     );
+
+    const assistantWrite =
+      this.conversations.appendMessage(
+        conversation.conversationId,
+        {
+          role: "assistant",
+          content: response.content,
+          structuredResponse:
+            assistantMessageMetadata(response),
+        },
+      );
+
     if (!assistantWrite.ok) {
       throw new ConversationTurnError(
         "IAURA_CONVERSATION_PERSISTENCE_FAILED",
@@ -196,4 +322,5 @@ executeMemoryUpdates(
   }
 }
 
-export const conversationController = new ConversationController();
+export const conversationController =
+  new ConversationController();
