@@ -111,40 +111,27 @@ export async function POST(
         },
       }
     );
-    } catch (error) {
-    const errorDetails =
-      error instanceof Error
-        ? {
-            name: error.name,
-            message: error.message,
-          }
-        : {
-            name: "UnknownError",
-            message: String(error),
-          };
+    } catch (error: unknown) {
+  console.error("=== IAURA TRANSCRIPTION ERROR ===");
 
-    console.error(
-      "IAURA transcription failed:",
-      errorDetails
-    );
-
-    return NextResponse.json(
-      {
-        error:
-          "Could not transcribe IAURA audio.",
-        code: "IAURA_TRANSCRIPTION_FAILED",
-        details:
-          process.env.NODE_ENV ===
-          "development"
-            ? errorDetails
-            : undefined,
-      },
-      {
-        status: 500,
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
-    );
+  if (error instanceof Error) {
+    console.error("Name:", error.name);
+    console.error("Message:", error.message);
+    console.error("Stack:", error.stack);
+  } else {
+    console.error("Unknown error:", error);
   }
+
+  return NextResponse.json(
+    {
+      error: "Could not transcribe IAURA audio.",
+    },
+    {
+      status: 500,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    }
+  );
+}
 }
