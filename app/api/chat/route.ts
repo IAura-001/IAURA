@@ -188,12 +188,43 @@ export async function POST(request: Request) {
     return NextResponse.json(result, {
       headers: noStoreHeaders(),
     });
-  } catch (error) {
+    } catch (error: unknown) {
+    const details =
+      typeof error === "object" && error !== null
+        ? error as Record<string, unknown>
+        : {};
+
+    const summary = {
+      name:
+        typeof details.name === "string"
+          ? details.name.slice(0, 200)
+          : undefined,
+      message:
+        typeof details.message === "string"
+          ? details.message.slice(0, 500)
+          : error instanceof Error
+            ? error.message.slice(0, 500)
+            : "Unknown provider failure.",
+      status:
+        typeof details.status === "number"
+          ? details.status
+          : undefined,
+      code:
+        typeof details.code === "string"
+          ? details.code.slice(0, 200)
+          : undefined,
+      type:
+        typeof details.type === "string"
+          ? details.type.slice(0, 200)
+          : undefined,
+      requestId:
+        typeof details.request_id === "string"
+          ? details.request_id.slice(0, 200)
+          : undefined,
+    };
+
     console.error(
-      "IAURA chat provider failed.",
-      error instanceof Error
-        ? error.message.slice(0, 500)
-        : "Unknown provider failure.",
+      `IAURA chat provider failed: ${JSON.stringify(summary)}`
     );
 
     return NextResponse.json(
