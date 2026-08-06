@@ -9,6 +9,7 @@ import {
 const mocks = vi.hoisted(() => ({
   analyze: vi.fn(),
   generateCognitiveResponse: vi.fn(),
+  executeMemoryUpdates: vi.fn(),
 }));
 
 vi.mock("@/core/brain", () => ({
@@ -20,6 +21,11 @@ vi.mock("@/core/brain", () => ({
 vi.mock("@/services/cognitive", () => ({
   generateCognitiveResponse:
     mocks.generateCognitiveResponse,
+}));
+
+vi.mock("@/core/memory", () => ({
+  executeMemoryUpdates:
+    mocks.executeMemoryUpdates,
 }));
 
 import {
@@ -72,14 +78,36 @@ const cognitiveRequest = {
   compiledPrompt: "Canonical IAURA prompt.",
 };
 
+const memoryUpdates = [
+  {
+    operation: "remember" as const,
+    type: "preference" as const,
+    content: "Prefers concise execution instructions.",
+    tags: [
+      "communication",
+      "execution",
+    ],
+    reason:
+      "This preference will improve future collaboration.",
+    confidence: 0.96,
+  },
+];
+
 describe("ConversationController", () => {
   beforeEach(() => {
     conversationMemory.clear();
+
     mocks.analyze.mockReset();
     mocks.generateCognitiveResponse.mockReset();
+    mocks.executeMemoryUpdates.mockReset();
+
+    mocks.executeMemoryUpdates.mockReturnValue({
+      items: [],
+      remembered: [],
+    });
   });
 
-  it("stops before provider execution while preserving the user message when Brain validation fails", async () => {
+  it("stops before provider and memory execution while preserving the user message when Brain validation fails", async () => {
     conversationMemory.add(
       "assistant",
       "Existing history.",
@@ -98,7 +126,8 @@ describe("ConversationController", () => {
       ]);
     });
 
-    const controller = new ConversationController();
+    const controller =
+      new ConversationController();
 
     await expect(
       controller.send(
@@ -110,7 +139,9 @@ describe("ConversationController", () => {
       disposition: "stop",
     });
 
-    expect(mocks.analyze).toHaveBeenCalledWith(
+    expect(
+      mocks.analyze,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         message: "invalid",
         userContext: "Project context",
@@ -128,6 +159,10 @@ describe("ConversationController", () => {
     ).not.toHaveBeenCalled();
 
     expect(
+      mocks.executeMemoryUpdates,
+    ).not.toHaveBeenCalled();
+
+    expect(
       conversationMemory.getHistory(),
     ).toEqual([
       ...initialHistory,
@@ -138,14 +173,16 @@ describe("ConversationController", () => {
     ]);
   });
 
-  it("sends only Brain's separated contract to the provider", async () => {
+  it("sends Brain's separated contract to the provider and executes its memory proposals", async () => {
     mocks.analyze.mockReturnValue(
       cognitiveRequest,
     );
 
     mocks.generateCognitiveResponse.mockResolvedValue({
-      content: "Use the approved direction.",
+      content:
+        "Use the approved direction.",
       actions: [],
+      memoryUpdates,
       experience: {
         kind: "general",
         title: "",
@@ -156,7 +193,8 @@ describe("ConversationController", () => {
       },
     });
 
-    const controller = new ConversationController();
+    const controller =
+      new ConversationController();
 
     await controller.send(
       "Plan the next step.",
@@ -170,15 +208,75 @@ describe("ConversationController", () => {
     );
 
     expect(
+      mocks.executeMemoryUpdates,
+    ).toHaveBeenCalledTimes(1);
+
+    expect(
+      mocks.executeMemoryUpdates,
+    ).toHaveBeenCalledWith(
+      memoryUpdates,
+    );
+
+    expect(
       conversationMemory.getHistory(),
     ).toEqual([
       {
         role: "user",
-        content: "Plan the next step.",
+        content:
+          "Plan the next step.",
       },
       {
         role: "assistant",
-        content: "Use the approved direction.",
+        content:
+          "Use the approved direction.",
+      },
+    ]);
+  });
+
+  it("executes an empty memory proposal list safely", async () => {
+    mocks.analyze.mockReturnValue(
+      cognitiveRequest,
+    );
+
+    mocks.generateCognitiveResponse.mockResolvedValue({
+      content:
+        "No durable memory is needed.",
+      actions: [],
+      memoryUpdates: [],
+      experience: {
+        kind: "general",
+        title: "",
+        summary: "",
+        phases: [],
+        choices: [],
+        recommendedSurface: "none",
+      },
+    });
+
+    const controller =
+      new ConversationController();
+
+    await controller.send(
+      "Explain this temporary error.",
+      "Project context",
+    );
+
+    expect(
+      mocks.executeMemoryUpdates,
+    ).toHaveBeenCalledWith([]);
+
+    expect(
+      conversationMemory.getHistory(),
+    ).toEqual([
+      {
+        role: "user",
+        content:
+          "Explain this temporary error.",
+      },
+      {
+        role: "assistant",
+        content:
+          "No durable memory is needed.",
       },
     ]);
   });

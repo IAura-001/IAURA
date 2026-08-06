@@ -1,6 +1,8 @@
 import type { Memory } from "@/types/memory";
 import type { ProjectKind } from "@/types/project";
-import type { ProjectRepositorySnapshot } from "@/core/project/ProjectRepository";
+import type {
+  ProjectRepositorySnapshot,
+} from "@/core/project/ProjectRepository";
 
 export const IAURA_ACTION_TYPES = [
   "add_goal",
@@ -14,6 +16,24 @@ export const IAURA_ACTION_TYPES = [
 
 export type IAuraActionType =
   (typeof IAURA_ACTION_TYPES)[number];
+
+export const IAURA_MEMORY_TYPES = [
+  "profile",
+  "goal",
+  "habit",
+  "project",
+  "preference",
+] as const;
+
+export type IAuraMemoryType =
+  (typeof IAURA_MEMORY_TYPES)[number];
+
+export const IAURA_MEMORY_OPERATIONS = [
+  "remember",
+] as const;
+
+export type IAuraMemoryOperation =
+  (typeof IAURA_MEMORY_OPERATIONS)[number];
 
 export const AURA_EXPERIENCE_KINDS = [
   "personal-goal",
@@ -74,9 +94,21 @@ export interface PlannedAuraAction {
   reason: string;
 }
 
+
+
+export interface PlannedMemoryUpdate {
+  operation: IAuraMemoryOperation;
+  type: IAuraMemoryType;
+  content: string;
+  tags: string[];
+  reason: string;
+  confidence: number;
+}
+
 export interface AuraAssistantPlan {
   content: string;
   actions: PlannedAuraAction[];
+  memoryUpdates: PlannedMemoryUpdate[];
   experience: AuraExperience;
 }
 

@@ -2,26 +2,42 @@ import {
   AURA_EXPERIENCE_KINDS,
   AURA_EXPERIENCE_SURFACES,
   IAURA_ACTION_TYPES,
+  IAURA_MEMORY_OPERATIONS,
+  IAURA_MEMORY_TYPES,
+  type AuraAssistantPlan,
   type AuraExperience,
   type AuraExperienceChoice,
   type AuraExperienceKind,
   type AuraExperiencePhase,
   type AuraExperienceSurface,
-  type AuraAssistantPlan,
   type IAuraActionType,
+  type IAuraMemoryOperation,
+  type IAuraMemoryType,
   type PlannedAuraAction,
+  type PlannedMemoryUpdate,
 } from "./types";
 import type { ProjectKind } from "@/types/project";
 
 const actionTypes = new Set<string>(
-  IAURA_ACTION_TYPES
+  IAURA_ACTION_TYPES,
 );
+
+const memoryOperations = new Set<string>(
+  IAURA_MEMORY_OPERATIONS,
+);
+
+const memoryTypes = new Set<string>(
+  IAURA_MEMORY_TYPES,
+);
+
 const experienceKinds = new Set<string>(
-  AURA_EXPERIENCE_KINDS
+  AURA_EXPERIENCE_KINDS,
 );
+
 const experienceSurfaces = new Set<string>(
-  AURA_EXPERIENCE_SURFACES
+  AURA_EXPERIENCE_SURFACES,
 );
+
 const projectKinds = new Set<string>([
   "general",
   "personal",
@@ -33,15 +49,45 @@ const projectKinds = new Set<string>([
 
 function readText(
   value: unknown,
-  maximumLength: number
+  maximumLength: number,
 ): string {
   return typeof value === "string"
     ? value.trim().slice(0, maximumLength)
     : "";
 }
 
+function readStringArray(
+  value: unknown,
+  maximumItems: number,
+  maximumItemLength: number,
+): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, maximumItems)
+    .map((item) =>
+      readText(item, maximumItemLength),
+    )
+    .filter(Boolean);
+}
+
+function readConfidence(
+  value: unknown,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value)
+  ) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(0, value));
+}
+
 function parseAction(
-  value: unknown
+  value: unknown,
 ): PlannedAuraAction | null {
   if (
     typeof value !== "object" ||
@@ -67,24 +113,84 @@ function parseAction(
     value: readText(candidate.value, 200),
     description: readText(
       candidate.description,
-      1000
+      1000,
     ),
     goal: readText(candidate.goal, 500),
     missionId: readText(
       candidate.missionId,
-      50
+      50,
     ),
     projectKind:
       typeof candidate.projectKind === "string" &&
       projectKinds.has(candidate.projectKind)
         ? (candidate.projectKind as ProjectKind)
         : "general",
-    reason: readText(candidate.reason, 300),
+    reason: readText(
+      candidate.reason,
+      300,
+    ),
+  };
+}
+
+function parseMemoryUpdate(
+  value: unknown,
+): PlannedMemoryUpdate | null {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return null;
+  }
+
+  const candidate = value as Record<
+    string,
+    unknown
+  >;
+
+  if (
+    typeof candidate.operation !== "string" ||
+    !memoryOperations.has(
+      candidate.operation,
+    ) ||
+    typeof candidate.type !== "string" ||
+    !memoryTypes.has(candidate.type)
+  ) {
+    return null;
+  }
+
+  const content = readText(
+    candidate.content,
+    500,
+  );
+
+  const reason = readText(
+    candidate.reason,
+    300,
+  );
+
+  if (!content || !reason) {
+    return null;
+  }
+
+  return {
+    operation:
+      candidate.operation as IAuraMemoryOperation,
+    type: candidate.type as IAuraMemoryType,
+    content,
+    tags: readStringArray(
+      candidate.tags,
+      8,
+      60,
+    ),
+    reason,
+    confidence: readConfidence(
+      candidate.confidence,
+    ),
   };
 }
 
 function parsePhase(
-  value: unknown
+  value: unknown,
 ): AuraExperiencePhase | null {
   if (
     typeof value !== "object" ||
@@ -93,19 +199,31 @@ function parsePhase(
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
-  const title = readText(candidate.title, 100);
+  const candidate = value as Record<
+    string,
+    unknown
+  >;
 
-  if (!title) return null;
+  const title = readText(
+    candidate.title,
+    100,
+  );
+
+  if (!title) {
+    return null;
+  }
 
   return {
     title,
-    description: readText(candidate.description, 240),
+    description: readText(
+      candidate.description,
+      240,
+    ),
   };
 }
 
 function parseChoice(
-  value: unknown
+  value: unknown,
 ): AuraExperienceChoice | null {
   if (
     typeof value !== "object" ||
@@ -114,21 +232,37 @@ function parseChoice(
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
-  const label = readText(candidate.label, 80);
-  const prompt = readText(candidate.prompt, 600);
+  const candidate = value as Record<
+    string,
+    unknown
+  >;
 
-  if (!label || !prompt) return null;
+  const label = readText(
+    candidate.label,
+    80,
+  );
+
+  const prompt = readText(
+    candidate.prompt,
+    600,
+  );
+
+  if (!label || !prompt) {
+    return null;
+  }
 
   return {
     label,
-    description: readText(candidate.description, 220),
+    description: readText(
+      candidate.description,
+      220,
+    ),
     prompt,
   };
 }
 
 function parseExperience(
-  value: unknown
+  value: unknown,
 ): AuraExperience {
   if (
     typeof value !== "object" ||
@@ -144,38 +278,64 @@ function parseExperience(
     };
   }
 
-  const candidate = value as Record<string, unknown>;
+  const candidate = value as Record<
+    string,
+    unknown
+  >;
+
   const kind =
     typeof candidate.kind === "string" &&
     experienceKinds.has(candidate.kind)
       ? (candidate.kind as AuraExperienceKind)
       : "general";
+
   const recommendedSurface =
-    typeof candidate.recommendedSurface === "string" &&
-    experienceSurfaces.has(candidate.recommendedSurface)
+    typeof candidate.recommendedSurface ===
+      "string" &&
+    experienceSurfaces.has(
+      candidate.recommendedSurface,
+    )
       ? (candidate.recommendedSurface as AuraExperienceSurface)
       : "none";
-  const phases = Array.isArray(candidate.phases)
+
+  const phases = Array.isArray(
+    candidate.phases,
+  )
     ? candidate.phases
         .slice(0, 5)
         .map(parsePhase)
         .filter(
-          (phase): phase is AuraExperiencePhase => phase !== null
+          (
+            phase,
+          ): phase is AuraExperiencePhase =>
+            phase !== null,
         )
     : [];
-  const choices = Array.isArray(candidate.choices)
+
+  const choices = Array.isArray(
+    candidate.choices,
+  )
     ? candidate.choices
         .slice(0, 4)
         .map(parseChoice)
         .filter(
-          (choice): choice is AuraExperienceChoice => choice !== null
+          (
+            choice,
+          ): choice is AuraExperienceChoice =>
+            choice !== null,
         )
     : [];
 
   return {
     kind,
-    title: readText(candidate.title, 120),
-    summary: readText(candidate.summary, 400),
+    title: readText(
+      candidate.title,
+      120,
+    ),
+    summary: readText(
+      candidate.summary,
+      400,
+    ),
     phases,
     choices,
     recommendedSurface,
@@ -183,7 +343,7 @@ function parseExperience(
 }
 
 export function parseAuraAssistantPlan(
-  value: unknown
+  value: unknown,
 ): AuraAssistantPlan {
   const parsedValue =
     typeof value === "string"
@@ -195,7 +355,7 @@ export function parseAuraAssistantPlan(
     parsedValue === null
   ) {
     throw new Error(
-      "IAURA returned an invalid action plan."
+      "IAURA returned an invalid action plan.",
     );
   }
 
@@ -206,32 +366,49 @@ export function parseAuraAssistantPlan(
 
   const content = readText(
     candidate.content,
-    12000
+    12000,
   );
 
   if (!content) {
     throw new Error(
-      "IAURA returned an empty response."
+      "IAURA returned an empty response.",
     );
   }
 
   const actions = Array.isArray(
-    candidate.actions
+    candidate.actions,
   )
     ? candidate.actions
         .slice(0, 8)
         .map(parseAction)
         .filter(
           (
-            action
+            action,
           ): action is PlannedAuraAction =>
-            action !== null
+            action !== null,
+        )
+    : [];
+
+  const memoryUpdates = Array.isArray(
+    candidate.memoryUpdates,
+  )
+    ? candidate.memoryUpdates
+        .slice(0, 6)
+        .map(parseMemoryUpdate)
+        .filter(
+          (
+            update,
+          ): update is PlannedMemoryUpdate =>
+            update !== null,
         )
     : [];
 
   return {
     content,
     actions,
-    experience: parseExperience(candidate.experience),
+    memoryUpdates,
+    experience: parseExperience(
+      candidate.experience,
+    ),
   };
 }

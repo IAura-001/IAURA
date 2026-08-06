@@ -1,7 +1,12 @@
 export const IAURA_RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["content", "actions", "experience"],
+  required: [
+  "content",
+  "actions",
+  "memoryUpdates",
+  "experience",
+],
   properties: {
     content: {
       type: "string",
@@ -79,6 +84,64 @@ export const IAURA_RESPONSE_SCHEMA = {
         },
       },
     },
+    memoryUpdates: {
+      type: "array",
+      maxItems: 6,
+      description:
+        "Durable memory proposals extracted from the user's real current message. Return an empty array when nothing should be remembered.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "operation",
+          "type",
+          "content",
+          "tags",
+          "reason",
+          "confidence",
+        ],
+        properties: {
+          operation: {
+            type: "string",
+            enum: ["remember"],
+          },
+          type: {
+            type: "string",
+            enum: [
+              "profile",
+              "goal",
+              "habit",
+              "project",
+              "preference",
+            ],
+          },
+          content: {
+            type: "string",
+            description:
+              "A concise, durable fact stated by the user. Do not include temporary requests, assistant conclusions, or speculative information.",
+          },
+          tags: {
+            type: "array",
+            maxItems: 8,
+            items: {
+              type: "string",
+            },
+          },
+          reason: {
+            type: "string",
+            description:
+              "Why this information is likely to remain useful in future conversations.",
+          },
+          confidence: {
+            type: "number",
+            minimum: 0,
+            maximum: 1,
+            description:
+              "Confidence that the user explicitly stated this durable information.",
+          },
+        },
+      },
+    },
     experience: {
       type: "object",
       additionalProperties: false,
@@ -124,8 +187,12 @@ export const IAURA_RESPONSE_SCHEMA = {
             additionalProperties: false,
             required: ["title", "description"],
             properties: {
-              title: { type: "string" },
-              description: { type: "string" },
+              title: {
+                type: "string",
+              },
+              description: {
+                type: "string",
+              },
             },
           },
         },
@@ -135,10 +202,18 @@ export const IAURA_RESPONSE_SCHEMA = {
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["label", "description", "prompt"],
+            required: [
+              "label",
+              "description",
+              "prompt",
+            ],
             properties: {
-              label: { type: "string" },
-              description: { type: "string" },
+              label: {
+                type: "string",
+              },
+              description: {
+                type: "string",
+              },
               prompt: {
                 type: "string",
                 description:

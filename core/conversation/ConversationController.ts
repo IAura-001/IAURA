@@ -14,6 +14,7 @@ import {
   type ConversationMessage,
   type ConversationRepository,
 } from "./ConversationRepository";
+import { executeMemoryUpdates } from "@/core/memory";
 
 import type { AuraAssistantPlan } from "@/core/actions";
 import {
@@ -171,7 +172,9 @@ try {
         userMessage.messageId,
       );
     }
-
+executeMemoryUpdates(
+  response.memoryUpdates,
+);
     const assistantWrite = this.conversations.appendMessage(
       conversation.conversationId,
       {
