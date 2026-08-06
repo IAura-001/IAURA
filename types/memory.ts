@@ -8,6 +8,8 @@ export interface Memory {
 
   preferredLocale: SupportedLocale;
 
+  hasCompletedOnboarding: boolean;
+
   goals: string[];
 
   habits: string[];

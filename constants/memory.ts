@@ -8,6 +8,8 @@ export const DEFAULT_MEMORY: Memory = {
 
   preferredLocale: DEFAULT_LOCALE,
 
+  hasCompletedOnboarding: false,
+
   goals: [],
 
   habits: [],
