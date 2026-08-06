@@ -460,7 +460,15 @@ export function useVoice() {
           "language",
           language
         );
-
+console.info(
+  "IAURA audio prepared:",
+  {
+    type: audio.type,
+    size: audio.size,
+    fileName,
+    language,
+  }
+);
         const response = await fetch(
           "/api/transcribe",
           {
@@ -471,10 +479,33 @@ export function useVoice() {
         );
 
         if (!response.ok) {
-          throw new Error(
-            `Transcription failed: ${response.status}`
-          );
-        }
+  const errorBody = (await response
+    .json()
+    .catch(() => null)) as
+    | {
+        error?: unknown;
+        code?: unknown;
+        details?: unknown;
+      }
+    | null;
+
+  console.error(
+    "IAURA transcription response:",
+    {
+      status: response.status,
+      audioType: audio.type,
+      audioSize: audio.size,
+      fileName,
+      response: errorBody,
+    }
+  );
+
+  throw new Error(
+    typeof errorBody?.error === "string"
+      ? errorBody.error
+      : `Transcription failed: ${response.status}`
+  );
+}
 
         const result =
           (await response.json()) as {

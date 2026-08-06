@@ -111,21 +111,39 @@ export async function POST(
         },
       }
     );
-  } catch (error) {
+    } catch (error) {
+    const errorDetails =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+          }
+        : {
+            name: "UnknownError",
+            message: String(error),
+          };
+
     console.error(
       "IAURA transcription failed:",
-      error instanceof Error
-        ? error.name
-        : "UnknownError"
+      errorDetails
     );
 
     return NextResponse.json(
       {
         error:
           "Could not transcribe IAURA audio.",
+        code: "IAURA_TRANSCRIPTION_FAILED",
+        details:
+          process.env.NODE_ENV ===
+          "development"
+            ? errorDetails
+            : undefined,
       },
       {
         status: 500,
+        headers: {
+          "Cache-Control": "no-store",
+        },
       }
     );
   }
