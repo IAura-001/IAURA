@@ -9,14 +9,11 @@ import {
 
 import { IAURA_RESPONSE_SCHEMA } from "@/core/actions";
 import type {
-  BrainResult,
   CognitiveRequest,
 } from "@/core/brain";
-import type { AIRequest } from "@/core/providers";
 
 const mocks = vi.hoisted(() => ({
   createResponse: vi.fn(),
-  brainAnalyze: vi.fn(),
 }));
 
 vi.mock("openai", () => ({
@@ -24,12 +21,6 @@ vi.mock("openai", () => ({
     responses = {
       create: mocks.createResponse,
     };
-  },
-}));
-
-vi.mock("@/core/brain", () => ({
-  iauraBrain: {
-    analyze: mocks.brainAnalyze,
   },
 }));
 
@@ -107,22 +98,6 @@ const assistantPlan = {
   },
 };
 
-function brainResult(): BrainResult {
-  return {
-    ...cognitiveRequest,
-    originalUserMessage: "Legacy request",
-    context: {
-      message: "Legacy request",
-      userContext: cognitiveRequest.structuredContext.userContext,
-      createdAt: cognitiveRequest.structuredContext.createdAt,
-    },
-    decision: cognitiveRequest.structuredContext.decision,
-    autonomy: cognitiveRequest.structuredContext.autonomy,
-    prompt: cognitiveRequest.compiledPrompt,
-    validated: true,
-  };
-}
-
 describe("OpenAIProvider", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -130,7 +105,7 @@ describe("OpenAIProvider", () => {
 
   beforeEach(() => {
     mocks.createResponse.mockReset();
-    mocks.brainAnalyze.mockReset();
+
     mocks.createResponse.mockResolvedValue({
       output_text: JSON.stringify(assistantPlan),
     });
@@ -148,17 +123,22 @@ describe("OpenAIProvider", () => {
     expect(body.instructions).toBe(
       cognitiveRequest.compiledPrompt,
     );
+
     expect(body.input).toHaveLength(4);
 
     const contextMessage = body.input[0];
+
     expect(contextMessage.role).toBe("user");
+
     const parsedContext = JSON.parse(
       contextMessage.content,
     ) as Record<string, unknown>;
+
     expect(parsedContext).toMatchObject({
       userContext: "Preferred language: English",
       decision: cognitiveRequest.structuredContext.decision,
     });
+
     expect(parsedContext).not.toHaveProperty(
       "conversationHistory",
     );
@@ -166,10 +146,12 @@ describe("OpenAIProvider", () => {
     expect(body.input.slice(1, 3)).toEqual(
       cognitiveRequest.structuredContext.conversationHistory,
     );
+
     expect(body.input.at(-1)).toEqual({
       role: "user",
       content: cognitiveRequest.originalUserMessage,
     });
+
     expect(body.text).toEqual({
       verbosity: "medium",
       format: {
@@ -181,35 +163,11 @@ describe("OpenAIProvider", () => {
         schema: IAURA_RESPONSE_SCHEMA,
       },
     });
-    expect(mocks.brainAnalyze).not.toHaveBeenCalled();
+
     expect(result).toMatchObject({
       content: assistantPlan.content,
       provider: "openai",
       model: "test-model",
-    });
-  });
-
-  it("adapts direct legacy provider callers through Brain", async () => {
-    mocks.brainAnalyze.mockReturnValue(brainResult());
-    const provider = new OpenAIProvider({
-      apiKey: "test-key",
-      model: "test-model",
-    });
-
-    await provider.generate({
-      prompt: "Legacy request",
-      instructions: "Existing context",
-    });
-
-    expect(mocks.brainAnalyze).toHaveBeenCalledWith({
-      message: "Legacy request",
-      userContext: "Existing context",
-    });
-    expect(
-      mocks.createResponse.mock.calls[0][0].input.at(-1),
-    ).toEqual({
-      role: "user",
-      content: "Legacy request",
     });
   });
 
@@ -218,10 +176,11 @@ describe("OpenAIProvider", () => {
       apiKey: "test-key",
       model: "test-model",
     });
+
     const invalidRequest = {
       ...cognitiveRequest,
       compiledPrompt: "",
-    } as AIRequest;
+    } as unknown as CognitiveRequest;
 
     await expect(
       provider.generate(invalidRequest),
@@ -229,13 +188,17 @@ describe("OpenAIProvider", () => {
       name: "BrainValidationError",
       disposition: "stop",
     });
-    expect(mocks.createResponse).not.toHaveBeenCalled();
+
+    expect(
+      mocks.createResponse,
+    ).not.toHaveBeenCalled();
   });
 
   it("does not include provider response bodies in error logs", async () => {
     const errorLog = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
+
     mocks.createResponse.mockRejectedValue({
       name: "ProviderError",
       message: "Request failed",
@@ -246,6 +209,7 @@ describe("OpenAIProvider", () => {
         data: "private-provider-body",
       },
     });
+
     const provider = new OpenAIProvider({
       apiKey: "test-key",
       model: "test-model",
@@ -255,7 +219,9 @@ describe("OpenAIProvider", () => {
       provider.generate(cognitiveRequest),
     ).rejects.toBeDefined();
 
-    expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
+    expect(
+      JSON.stringify(errorLog.mock.calls),
+    ).not.toContain(
       "private-provider-body",
     );
   });

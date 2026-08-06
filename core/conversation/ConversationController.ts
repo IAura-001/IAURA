@@ -16,7 +16,9 @@ import {
 } from "./ConversationRepository";
 
 import type { AuraAssistantPlan } from "@/core/actions";
-import { generateOpenAIResponse } from "@/services/openai";
+import {
+  generateCognitiveResponse,
+} from "@/services/cognitive";
 
 export type ConversationTurnErrorCode =
   | "IAURA_CONVERSATION_PERSISTENCE_FAILED"
@@ -73,7 +75,9 @@ export class ConversationController {
     this.conversations = options.conversations ?? conversationRepository;
     this.projects = options.projects ?? projectRepository;
     this.brain = options.brain ?? iauraBrain;
-    this.generateResponse = options.generateResponse ?? generateOpenAIResponse;
+    this.generateResponse =
+  options.generateResponse ??
+  generateCognitiveResponse;
   }
 
   private resolveConversation(): Conversation {
@@ -156,13 +160,10 @@ export class ConversationController {
     });
 
     let response: AuraAssistantPlan;
-    try {
-      response = await this.generateResponse({
-        originalUserMessage: result.originalUserMessage,
-        structuredContext: result.structuredContext,
-        compiledPrompt: result.compiledPrompt,
-      });
-    } catch {
+
+try {
+  response = await this.generateResponse(result);
+} catch {
       throw new ConversationTurnError(
         "IAURA_CONVERSATION_PROVIDER_FAILED",
         "generation",

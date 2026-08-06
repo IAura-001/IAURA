@@ -5,15 +5,10 @@ import {
   IAURA_RESPONSE_SCHEMA,
   parseAuraAssistantPlan,
 } from "@/core/actions";
-import {
-  iauraBrain,
-  type CognitiveRequest,
-} from "@/core/brain";
+import type { CognitiveRequest } from "@/core/brain";
 import type {
   AIProvider,
-  AIRequest,
   AIResponse,
-  LegacyAIRequest,
 } from "@/core/providers";
 import {
   assertValidCognitiveRequest,
@@ -22,27 +17,6 @@ import {
 interface OpenAIProviderConfig {
   apiKey: string;
   model: string;
-}
-
-function isCognitiveRequest(
-  request: AIRequest,
-): request is CognitiveRequest {
-  return "originalUserMessage" in request;
-}
-
-function adaptLegacyRequest(
-  request: LegacyAIRequest,
-): CognitiveRequest {
-  const result = iauraBrain.analyze({
-    message: request.prompt,
-    userContext: request.instructions,
-  });
-
-  return {
-    originalUserMessage: result.originalUserMessage,
-    structuredContext: result.structuredContext,
-    compiledPrompt: result.compiledPrompt,
-  };
 }
 
 function cleanErrorField(
@@ -129,12 +103,8 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async generate(
-    request: AIRequest,
+    cognitiveRequest: CognitiveRequest,
   ): Promise<AIResponse> {
-    const cognitiveRequest = isCognitiveRequest(request)
-      ? request
-      : adaptLegacyRequest(request);
-
     assertValidCognitiveRequest(cognitiveRequest);
 
     try {
