@@ -7,6 +7,7 @@ import {
 import { LocalProjectRepository } from "@/core/project/ProjectRepository";
 import type { CreativeAssetMetadata } from "@/types/creative-studio";
 import type { IAuraProject } from "@/types/project";
+import { IAURA_DEVELOPMENT_CONTINUITY } from "@/core/project/IAuraContinuity";
 
 function asset(
   id: string,
@@ -38,6 +39,28 @@ function asset(
 }
 
 describe("Creative Studio project context", () => {
+  it("separates user project status from established product continuity", () => {
+    const project: IAuraProject = {
+      id: "iaura-project",
+      name: "IAURA",
+      description: "AI ecosystem centered on Aura",
+      goal: "Connect memory and context",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+      status: "planning",
+      studios: { branding: false, website: false, app: true, marketing: false, documents: false },
+      developmentContinuity: IAURA_DEVELOPMENT_CONTINUITY,
+    };
+
+    const context = buildProjectMemoryContext(project);
+
+    expect(context).toContain("ESTADO DEL PROYECTO DEL USUARIO");
+    expect(context).toContain("Estado: planning");
+    expect(context).toContain("CONTINUIDAD ESTABLECIDA DEL PRODUCTO (v1)");
+    expect(context).toContain("Entry / Homepage → Workspace → Project Workspace");
+    expect(context).toContain("instead of restarting IAURA as a blank project");
+  });
+
   it("exposes only the active brand revision to Aura", () => {
     const project: IAuraProject = {
       id: "project-1",

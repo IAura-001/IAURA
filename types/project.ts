@@ -22,6 +22,14 @@ export interface ProjectStudios {
   documents: boolean;
 }
 
+export interface ProjectDevelopmentContinuity {
+  version: number;
+  identity: string;
+  establishedFoundation: string[];
+  architecturalDirection: string[];
+  developmentPrinciple: string;
+}
+
 export type BrandPersonality =
   | "futuristic"
   | "human"
@@ -103,6 +111,7 @@ export interface IAuraProject {
   status: ProjectStatus;
   kind?: ProjectKind;
   studios: ProjectStudios;
+  developmentContinuity?: ProjectDevelopmentContinuity;
   branding?: BrandProfile;
   brandingStudio?: BrandingStudioMemory;
   launchStudio?: LaunchStudioMemory;

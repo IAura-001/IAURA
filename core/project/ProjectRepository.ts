@@ -1,4 +1,5 @@
 import { mergeProjectSnapshots } from "./mergeProjectSnapshots";
+import { bootstrapIAuraContinuity } from "./IAuraContinuity";
 import {
   atomicWriteState,
   createWriterId,
@@ -22,7 +23,7 @@ import type {
 export const PROJECT_STATE_STORAGE_KEY = "iaura.project-state";
 export const LEGACY_PROJECTS_STORAGE_KEY = "iaura.projects";
 export const LEGACY_MEMORY_STORAGE_KEY = "iaura-memory";
-export const PROJECT_STATE_VERSION = 2;
+export const PROJECT_STATE_VERSION = 3;
 export const PROJECT_STAGING_STORAGE_KEY = `${PROJECT_STATE_STORAGE_KEY}.staging`;
 export const PROJECT_BACKUP_STORAGE_KEY = `${PROJECT_STATE_STORAGE_KEY}.backup`;
 
@@ -158,7 +159,7 @@ function normalizeProject(value: unknown): IAuraProject | null {
     ? (value.kind as ProjectKind)
     : undefined;
 
-  return {
+  return bootstrapIAuraContinuity({
     ...value,
     id,
     name,
@@ -169,7 +170,7 @@ function normalizeProject(value: unknown): IAuraProject | null {
     status,
     kind: kind ?? "general",
     studios: normalizeStudios(value.studios),
-  } as IAuraProject;
+  } as IAuraProject);
 }
 
 function parseJson(raw: string | null): unknown {
@@ -282,7 +283,7 @@ function cloneSnapshot(
 function normalizeSnapshot(value: unknown): ProjectRepositorySnapshot | null {
   if (
     !isRecord(value) ||
-    (value.schemaVersion !== 1 && value.schemaVersion !== PROJECT_STATE_VERSION)
+    ![1, 2, PROJECT_STATE_VERSION].includes(value.schemaVersion as number)
   ) {
     return null;
   }

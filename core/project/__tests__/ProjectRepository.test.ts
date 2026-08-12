@@ -152,6 +152,49 @@ describe("LocalProjectRepository migration", () => {
     });
   });
 
+  it("bootstraps canonical IAURA continuity additively and idempotently", () => {
+    const iaura = project("iaura-project", "IAURA", {
+      description: "An AI ecosystem centered on Aura, memory, context, and voice.",
+      goal: "Connect Aura across the workspace.",
+      status: "planning",
+    });
+    const nova = project("nova-project", "Nova", {
+      description: "An AI ecosystem centered on Aura.",
+    });
+    window.localStorage.setItem(
+      PROJECT_STATE_STORAGE_KEY,
+      JSON.stringify({
+        schemaVersion: 2,
+        activeProjectId: iaura.id,
+        projects: [iaura, nova],
+      }),
+    );
+
+    const first = new LocalProjectRepository();
+    const continuity = first.getProject(iaura.id)?.developmentContinuity;
+    const second = new LocalProjectRepository();
+
+    expect(continuity).toMatchObject({ version: 1 });
+    expect(first.getProject(iaura.id)?.status).toBe("planning");
+    expect(first.getProject(nova.id)?.developmentContinuity).toBeUndefined();
+    expect(second.getProject(iaura.id)?.developmentContinuity).toEqual(continuity);
+    expect(second.getProjects()).toHaveLength(2);
+  });
+
+  it("does not bootstrap a project from the IAURA display name alone", () => {
+    window.localStorage.setItem(
+      LEGACY_PROJECTS_STORAGE_KEY,
+      JSON.stringify([project("other-iaura", "IAURA", {
+        description: "A local gardening project.",
+        goal: "Plan seasonal planting.",
+      })]),
+    );
+
+    const repository = new LocalProjectRepository();
+
+    expect(repository.getProject("other-iaura")?.developmentContinuity).toBeUndefined();
+  });
+
   it("deduplicates an already-versioned snapshot and remaps its active id", () => {
     const first = project("project-1", "VAEORA");
     const duplicate = project("project-2", "  vaeora  ");

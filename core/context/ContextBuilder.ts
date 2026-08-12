@@ -158,6 +158,17 @@ ${approvedAssets.length > 0 ? `Assets visuales aprobados\n${approvedAssets.join(
 ${preservedPreviousCount > 0 ? `Referencias de revisiones anteriores preservadas fuera del contexto activo: ${preservedPreviousCount}` : ""}`.trim();
 }
 
+function formatDevelopmentContinuity(project: IAuraProject): string {
+  const continuity = project.developmentContinuity;
+  if (!continuity) return "";
+
+  return `CONTINUIDAD ESTABLECIDA DEL PRODUCTO (v${continuity.version})
+Identidad: ${compactText(continuity.identity)}
+Base funcional: ${continuity.establishedFoundation.map((item) => compactText(item, 240)).join("; ")}
+Arquitectura: ${continuity.architecturalDirection.map((item) => compactText(item, 160)).join(" → ")}
+Principio de desarrollo: ${compactText(continuity.developmentPrinciple)}`;
+}
+
 export function buildProjectMemoryContext(
   project: IAuraProject | null,
 ): string {
@@ -165,7 +176,8 @@ export function buildProjectMemoryContext(
     return "";
   }
 
-  const projectIdentity = `Proyecto activo
+  const projectIdentity = `ESTADO DEL PROYECTO DEL USUARIO
+Proyecto activo
 Nombre: ${compactText(project.name)}
 Descripción: ${compactText(project.description)}
 Objetivo: ${compactText(project.goal)}
@@ -174,6 +186,7 @@ Estado: ${project.status}`;
 
   const context = [
     projectIdentity,
+    formatDevelopmentContinuity(project),
     formatBrandProfile(project),
     formatBrandingMemory(project),
     formatCreativeStudio(project),
