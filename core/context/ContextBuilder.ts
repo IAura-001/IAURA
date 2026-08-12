@@ -176,7 +176,13 @@ export function buildProjectMemoryContext(
     return "";
   }
 
-  const projectIdentity = `ESTADO DEL PROYECTO DEL USUARIO
+  const projectIdentity = `ACTIVE PROJECT INTELLIGENCE — PROJECT-SCOPED
+
+Scope: This section is the authoritative context for the currently active project.
+Facts about another named project in global personal context must not be transferred to this project.
+The active project's goal, status, implementation, development continuity, and capabilities must come from this project-scoped context.
+
+ESTADO DEL PROYECTO DEL USUARIO
 Proyecto activo
 Nombre: ${compactText(project.name)}
 Descripción: ${compactText(project.description)}

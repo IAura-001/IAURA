@@ -8,6 +8,8 @@ import { LocalProjectRepository } from "@/core/project/ProjectRepository";
 import type { CreativeAssetMetadata } from "@/types/creative-studio";
 import type { IAuraProject } from "@/types/project";
 import { IAURA_DEVELOPMENT_CONTINUITY } from "@/core/project/IAuraContinuity";
+import { DEFAULT_MEMORY } from "@/constants/memory";
+import { buildUserContext } from "@/utils/context";
 
 function asset(
   id: string,
@@ -171,5 +173,88 @@ describe("Creative Studio project context", () => {
     expect(repository.getActiveProject()?.id).toBe("active");
     expect(context).toContain("SAME_ACTIVE_PROJECT_MARKER");
     expect(context).not.toContain("Old goal");
+  });
+
+  it("keeps an IAURA personal goal distinct from active Nova project state", () => {
+    const personalContext = buildUserContext({
+      ...DEFAULT_MEMORY,
+      goals: ["Launch an IAURA beta"],
+      habits: ["Work daily on IAURA"],
+    });
+    const nova: IAuraProject = {
+      id: "nova",
+      name: "Nova",
+      description: "A separate active project",
+      goal: "Validate Nova workflows",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-12T00:00:00.000Z",
+      status: "building",
+      studios: {
+        branding: false,
+        website: false,
+        app: true,
+        marketing: false,
+        documents: false,
+      },
+    };
+    const projectContext = buildProjectMemoryContext(nova);
+    const combinedContext = `${personalContext}\n\n${projectContext}`;
+
+    expect(combinedContext).toContain(
+      "PERSONAL INTELLIGENCE — GLOBAL USER CONTEXT",
+    );
+    expect(combinedContext).toContain("Launch an IAURA beta");
+    expect(combinedContext).toContain(
+      "ACTIVE PROJECT INTELLIGENCE — PROJECT-SCOPED",
+    );
+    expect(projectContext).toContain("Nombre: Nova");
+    expect(projectContext).toContain("Objetivo: Validate Nova workflows");
+    expect(projectContext).not.toContain("Launch an IAURA beta");
+    expect(projectContext).not.toContain(
+      "CONTINUIDAD ESTABLECIDA DEL PRODUCTO",
+    );
+  });
+
+  it("keeps IAURA development continuity scoped to IAURA", () => {
+    const iaura: IAuraProject = {
+      id: "iaura-project",
+      name: "IAURA",
+      description: "AI ecosystem centered on Aura",
+      goal: "Connect memory and context",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+      status: "building",
+      studios: { branding: false, website: false, app: true, marketing: false, documents: false },
+      developmentContinuity: IAURA_DEVELOPMENT_CONTINUITY,
+    };
+    const nova: IAuraProject = {
+      ...iaura,
+      id: "nova",
+      name: "Nova",
+      goal: "Validate Nova workflows",
+      developmentContinuity: undefined,
+    };
+
+    expect(buildProjectMemoryContext(iaura)).toContain(
+      "CONTINUIDAD ESTABLECIDA DEL PRODUCTO (v1)",
+    );
+    expect(buildProjectMemoryContext(nova)).not.toContain(
+      "CONTINUIDAD ESTABLECIDA DEL PRODUCTO",
+    );
+  });
+
+  it("returns no project context when no project is active without affecting personal serialization", () => {
+    const repository = new LocalProjectRepository();
+    repository.clearActiveProject();
+    const personalContext = buildUserContext({
+      ...DEFAULT_MEMORY,
+      goals: ["Launch an IAURA beta"],
+    });
+
+    expect(buildActiveProjectMemoryContext(repository)).toBe("");
+    expect(personalContext).toContain(
+      "PERSONAL INTELLIGENCE — GLOBAL USER CONTEXT",
+    );
+    expect(personalContext).toContain("Launch an IAURA beta");
   });
 });
