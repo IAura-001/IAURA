@@ -275,10 +275,10 @@ function ChatInputComponent({
           >
             <span
               className={[
-                "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                "absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
                 voiceMode
-                  ? "translate-x-[18px]"
-                  : "translate-x-0.5",
+                  ? "translate-x-4"
+                  : "translate-x-0",
               ].join(" ")}
             />
           </span>
