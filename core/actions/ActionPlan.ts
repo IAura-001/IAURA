@@ -251,16 +251,33 @@ function parseChoice(
     return null;
   }
 
-  const rawConfirmation = candidate.confirmation;
-  const confirmation =
-    typeof rawConfirmation === "object" &&
-    rawConfirmation !== null &&
-    (rawConfirmation as Record<string, unknown>).kind === "project-decision"
-      ? readText(
-          (rawConfirmation as Record<string, unknown>).content,
-          600,
-        )
-      : "";
+  const rawConfirmation =
+    typeof candidate.confirmation === "object" && candidate.confirmation !== null
+      ? candidate.confirmation as Record<string, unknown>
+      : null;
+  const confirmation = (() => {
+    if (!rawConfirmation) return undefined;
+    if (rawConfirmation.kind === "project-decision") {
+      const content = readText(rawConfirmation.content, 600);
+      return content ? { kind: "project-decision" as const, content } : undefined;
+    }
+    if (rawConfirmation.kind === "beta-context") {
+      const goal = readText(rawConfirmation.goal, 500);
+      const blocker = readText(rawConfirmation.blocker, 500);
+      const summary = readText(rawConfirmation.summary, 1000);
+      return goal && blocker && summary
+        ? { kind: "beta-context" as const, goal, blocker, summary }
+        : undefined;
+    }
+    if (rawConfirmation.kind === "beta-outcome") {
+      const outcome = readText(rawConfirmation.outcome, 1000);
+      const doneWhen = readText(rawConfirmation.doneWhen, 1000);
+      return outcome && doneWhen
+        ? { kind: "beta-outcome" as const, outcome, doneWhen }
+        : undefined;
+    }
+    return undefined;
+  })();
 
   return {
     label,
@@ -269,14 +286,7 @@ function parseChoice(
       220,
     ),
     prompt,
-    ...(confirmation
-      ? {
-          confirmation: {
-            kind: "project-decision" as const,
-            content: confirmation,
-          },
-        }
-      : {}),
+    ...(confirmation ? { confirmation } : {}),
   };
 }
 

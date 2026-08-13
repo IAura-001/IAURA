@@ -538,6 +538,7 @@ export default function Home({
   const handleSend = useCallback(
     async (
       missionOverride?: string | AuraExperienceChoice,
+      sourceMessageId?: string,
     ) => {
       const trimmedInput =
         (typeof missionOverride === "string"
@@ -574,16 +575,18 @@ export default function Home({
       setIsSending(true);
 
       try {
-        const response =
+        const turn =
           typeof missionOverride === "object"
             ? await conversationController.sendChoice(
                 missionOverride,
+                sourceMessageId ?? "",
                 userContext,
               )
             : await conversationController.send(
                 trimmedInput,
                 userContext,
               );
+        const response = turn.plan;
 
         const actionItems =
           executeActions(
@@ -607,9 +610,7 @@ export default function Home({
 
         const assistantMessage: ChatMessage =
           {
-            id: `${Date.now()}-${Math.random()
-              .toString(36)
-              .slice(2)}`,
+            id: turn.assistantMessageId,
             role: "assistant",
             content,
             experience:
@@ -690,6 +691,10 @@ export default function Home({
               voiceError,
             );
           }
+        }
+
+        if (typeof missionOverride === "object") {
+          throw error;
         }
       } finally {
         performanceMonitor.recordResponse(

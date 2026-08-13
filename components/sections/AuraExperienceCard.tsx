@@ -11,8 +11,9 @@ import { useI18n } from "@/core/i18n/I18nContext";
 
 interface AuraExperienceCardProps {
   experience: AuraExperience;
+  sourceMessageId: string;
   disabled?: boolean;
-  onChoose?: (choice: AuraExperienceChoice) => void | Promise<void>;
+  onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
 }
 
@@ -89,6 +90,7 @@ const copy = {
 
 export default function AuraExperienceCard({
   experience,
+  sourceMessageId,
   disabled = false,
   onChoose,
   onOpenSurface,
@@ -113,8 +115,10 @@ export default function AuraExperienceCard({
 
     setPendingChoice(index);
     try {
-      await onChoose(choice);
+      await onChoose(choice, sourceMessageId);
       setChosenChoice(index);
+    } catch {
+      // HomePage already renders the existing conversation error state.
     } finally {
       setPendingChoice(null);
     }

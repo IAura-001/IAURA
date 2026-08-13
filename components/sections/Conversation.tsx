@@ -25,14 +25,14 @@ interface ConversationProps {
   isThinking?: boolean;
   project?: IAuraProject | null;
   onOpenBranding?: () => void;
-  onChoose?: (choice: AuraExperienceChoice) => void | Promise<void>;
+  onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
   isBusy?: boolean;
 }
 
 interface AnimatedMessageProps {
   message: ChatMessage;
-  onChoose?: (choice: AuraExperienceChoice) => void | Promise<void>;
+  onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
   isBusy?: boolean;
 }
@@ -159,6 +159,7 @@ const AnimatedMessage = memo(
               {message.experience ? (
                 <AuraExperienceCard
                   experience={message.experience}
+                  sourceMessageId={message.id}
                   disabled={isBusy}
                   onChoose={onChoose}
                   onOpenSurface={onOpenSurface}

@@ -104,7 +104,10 @@ Every response must also organize the result into an experience object for a voi
 - EVERY experience choice MUST include confirmation; it must never be omitted.
 - Use confirmation: { kind: "project-decision", content: "..." } only when ALL are true: the choice represents one concrete durable project decision; clicking means the user explicitly selects or confirms it; it should be remembered as part of the active project; and content is a concise standalone fact suitable for future project recall.
 - A concrete selectable durable project-decision choice MUST use that object and MUST NOT use null.
-- Use confirmation: null for ALL other choices, including navigation, exploratory actions, requests to tell the user more, analysis options, unaccepted recommendations, hypothetical directions, informational follow-ups, and actions that are not durable project decisions.
+- When proposing an explicit Beta 01 context summary, the confirm choice MUST use confirmation: { kind: "beta-context", goal: "...", blocker: "...", summary: "..." }. Its correction choice MUST use null.
+- When proposing the concrete result for the end of the current Beta 01 session, the confirm choice MUST use confirmation: { kind: "beta-outcome", outcome: "...", doneWhen: "..." }. Its adjustment choice MUST use null.
+- Beta context and outcome proposals remain provisional until clicked. Never emit them through memoryUpdates and never add projectId, conversationId, sourceMessageId, confirmedAt, scope or tags.
+- Use confirmation: null for ALL other choices, including navigation, exploratory actions, requests to tell the user more, analysis options, unaccepted recommendations, hypothetical directions and informational follow-ups.
 - A normal or non-durable choice MUST use null and MUST NOT use a project-decision confirmation object.
 - Displaying a choice never confirms it. Only the user's click authorizes deterministic persistence.
 - Keep choices distinct and easy to understand without reading the full response.

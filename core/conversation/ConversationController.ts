@@ -35,7 +35,9 @@ import {
 export type ConversationTurnErrorCode =
   | "IAURA_CONVERSATION_PERSISTENCE_FAILED"
   | "IAURA_CONVERSATION_PROVIDER_FAILED"
-  | "IAURA_CONTEXT_RETRIEVAL_FAILED";
+  | "IAURA_CONTEXT_RETRIEVAL_FAILED"
+  | "IAURA_BETA_CONFIRMATION_INVALID"
+  | "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE";
 
 export type ConversationTurnStage =
   | "conversation"
@@ -79,12 +81,41 @@ type ResponseGenerator = (
   request: CognitiveRequest,
 ) => Promise<AuraAssistantPlan>;
 
+export interface ConversationTurnResult {
+  plan: AuraAssistantPlan;
+  assistantMessageId: string;
+}
+
 interface ConversationControllerOptions {
   conversations?: ConversationRepository;
   projects?: ProjectRepository;
   brain?: BrainAnalyzer;
   generateResponse?: ResponseGenerator;
   contextRetriever?: ContextRetrievalService;
+  now?: () => string;
+}
+
+function serializeBetaWorkflow(conversation: Conversation): string {
+  const workflow = conversation.betaWorkflow;
+  if (!workflow) return "";
+
+  return [
+    "BETA 01 CONVERSATION WORKFLOW — PROJECT-SCOPED",
+    `Status: ${workflow.status}`,
+    workflow.confirmedContext
+      ? `Confirmed context:\n- Goal: ${workflow.confirmedContext.goal}\n- Blocker: ${workflow.confirmedContext.blocker}\n- Summary: ${workflow.confirmedContext.summary}`
+      : "Confirmed context: none",
+    workflow.confirmedOutcome
+      ? `Confirmed outcome:\n- Outcome: ${workflow.confirmedOutcome.outcome}\n- Done when: ${workflow.confirmedOutcome.doneWhen}`
+      : "Confirmed outcome: none",
+  ].join("\n");
+}
+
+function sameChoice(
+  left: AuraExperienceChoice,
+  right: AuraExperienceChoice,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function toBrainHistory(
@@ -102,6 +133,7 @@ export class ConversationController {
   private readonly brain: BrainAnalyzer;
   private readonly generateResponse: ResponseGenerator;
   private readonly contextRetriever: ContextRetrievalService;
+  private readonly now: () => string;
 
   constructor(options: ConversationControllerOptions = {}) {
     this.conversations =
@@ -126,6 +158,7 @@ export class ConversationController {
         memorySource:
           new LocalMemoryContextSource(),
       });
+    this.now = options.now ?? (() => new Date().toISOString());
   }
 
   private resolveConversation(): Conversation {
@@ -233,7 +266,7 @@ export class ConversationController {
     conversation: Conversation,
     message: string,
     userContext: string,
-  ): Promise<AuraAssistantPlan> {
+  ): Promise<ConversationTurnResult> {
     const userMessage =
       this.persistUserMessage(
         conversation,
@@ -262,7 +295,7 @@ export class ConversationController {
 
     const enrichedUserContext =
       mergeUserContext(
-        userContext,
+        mergeUserContext(userContext, serializeBetaWorkflow(conversation)),
         retrievedContext,
       );
 
@@ -313,7 +346,7 @@ export class ConversationController {
         },
       );
 
-    if (!assistantWrite.ok) {
+    if (!assistantWrite.ok || !assistantWrite.message) {
       throw new ConversationTurnError(
         "IAURA_CONVERSATION_PERSISTENCE_FAILED",
         "assistant_message",
@@ -322,15 +355,19 @@ export class ConversationController {
       );
     }
 
-    return response;
+    return {
+      plan: response,
+      assistantMessageId: assistantWrite.message.messageId,
+    };
   }
 
   async send(
     message: string,
     userContext: string,
-  ): Promise<AuraAssistantPlan> {
+  ): Promise<ConversationTurnResult> {
+    const conversation = this.resolveConversation();
     return this.sendInConversation(
-      this.resolveConversation(),
+      conversation,
       message,
       userContext,
     );
@@ -338,18 +375,35 @@ export class ConversationController {
 
   async sendChoice(
     choice: AuraExperienceChoice,
+    sourceMessageId: string,
     userContext: string,
-  ): Promise<AuraAssistantPlan> {
+  ): Promise<ConversationTurnResult> {
     const conversation = this.resolveConversation();
+    const sourceMessage = conversation.messages.find(
+      (message) => message.messageId === sourceMessageId && message.role === "assistant",
+    );
+    const persistedChoice = sourceMessage?.structuredResponse?.experience?.choices.find(
+      (candidate) => sameChoice(candidate, choice),
+    );
+
+    if (!sourceMessage || !persistedChoice) {
+      throw new ConversationTurnError(
+        "IAURA_BETA_CONFIRMATION_INVALID",
+        "conversation",
+        conversation.conversationId,
+      );
+    }
+
+    const confirmation = persistedChoice.confirmation;
 
     if (
-      choice.confirmation?.kind === "project-decision" &&
+      confirmation?.kind === "project-decision" &&
       conversation.projectId
     ) {
       const confirmedDecision: PlannedMemoryUpdate = {
         operation: "remember",
         type: "project",
-        content: choice.confirmation.content,
+        content: confirmation.content,
         tags: [],
         reason: "The user explicitly selected this project decision.",
         confidence: 1,
@@ -358,9 +412,88 @@ export class ConversationController {
       executeMemoryUpdates([confirmedDecision], conversation.projectId);
     }
 
+    if (confirmation?.kind === "beta-context") {
+      const existing = conversation.betaWorkflow?.confirmedContext;
+      const alreadyConfirmed =
+        existing?.sourceMessageId === sourceMessage.messageId &&
+        existing.goal === confirmation.goal &&
+        existing.blocker === confirmation.blocker &&
+        existing.summary === confirmation.summary &&
+        conversation.betaWorkflow?.status === "defining-outcome";
+      const write = alreadyConfirmed
+        ? { ok: true, outcome: "unchanged" as const }
+        : this.conversations.updateConversationMetadata(
+        conversation.conversationId,
+        {
+          betaWorkflow: {
+            version: 1,
+            status: "defining-outcome",
+            confirmedContext: {
+              goal: confirmation.goal,
+              blocker: confirmation.blocker,
+              summary: confirmation.summary,
+              sourceMessageId: sourceMessage.messageId,
+              confirmedAt: this.now(),
+            },
+            ...(conversation.betaWorkflow?.confirmedOutcome
+              ? { confirmedOutcome: conversation.betaWorkflow.confirmedOutcome }
+              : {}),
+          },
+        },
+      );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
+    if (confirmation?.kind === "beta-outcome") {
+      if (!conversation.betaWorkflow?.confirmedContext) {
+        throw new ConversationTurnError(
+          "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+      const existing = conversation.betaWorkflow.confirmedOutcome;
+      const alreadyConfirmed =
+        existing?.sourceMessageId === sourceMessage.messageId &&
+        existing.outcome === confirmation.outcome &&
+        existing.doneWhen === confirmation.doneWhen &&
+        conversation.betaWorkflow.status === "recommended";
+      const write = alreadyConfirmed
+        ? { ok: true, outcome: "unchanged" as const }
+        : this.conversations.updateConversationMetadata(
+        conversation.conversationId,
+        {
+          betaWorkflow: {
+            ...conversation.betaWorkflow,
+            version: 1,
+            status: "recommended",
+            confirmedOutcome: {
+              outcome: confirmation.outcome,
+              doneWhen: confirmation.doneWhen,
+              sourceMessageId: sourceMessage.messageId,
+              confirmedAt: this.now(),
+            },
+          },
+        },
+      );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
     return this.sendInConversation(
-      conversation,
-      choice.prompt,
+      this.conversations.getConversation(conversation.conversationId) ?? conversation,
+      persistedChoice.prompt,
       userContext,
     );
   }

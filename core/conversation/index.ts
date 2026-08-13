@@ -17,6 +17,7 @@ export {
   conversationRepository,
 } from "./ConversationRepository";
 export type {
+  ConversationTurnResult,
   ConversationTurnErrorCode,
 } from "./ConversationController";
 export type {

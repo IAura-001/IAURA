@@ -73,11 +73,25 @@ export interface AuraExperienceChoice {
   label: string;
   description: string;
   prompt: string;
-  confirmation?: {
-    kind: "project-decision";
-    content: string;
-  };
+  confirmation?: AuraExperienceConfirmation;
 }
+
+export type AuraExperienceConfirmation =
+  | {
+      kind: "project-decision";
+      content: string;
+    }
+  | {
+      kind: "beta-context";
+      goal: string;
+      blocker: string;
+      summary: string;
+    }
+  | {
+      kind: "beta-outcome";
+      outcome: string;
+      doneWhen: string;
+    };
 
 export interface AuraExperience {
   kind: AuraExperienceKind;

@@ -59,6 +59,19 @@ export type BetaWorkflowStatus =
 export interface BetaWorkflowMetadata {
   version: typeof BETA_WORKFLOW_VERSION;
   status: BetaWorkflowStatus;
+  confirmedContext?: {
+    goal: string;
+    blocker: string;
+    summary: string;
+    sourceMessageId: string;
+    confirmedAt: string;
+  };
+  confirmedOutcome?: {
+    outcome: string;
+    doneWhen: string;
+    sourceMessageId: string;
+    confirmedAt: string;
+  };
 }
 
 export interface ConversationStructuredResponse {
@@ -265,9 +278,38 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
     return undefined;
   }
 
+  const context = isRecord(value.confirmedContext) &&
+    isNonEmptyString(value.confirmedContext.goal) &&
+    isNonEmptyString(value.confirmedContext.blocker) &&
+    isNonEmptyString(value.confirmedContext.summary) &&
+    isNonEmptyString(value.confirmedContext.sourceMessageId) &&
+    isIsoDate(value.confirmedContext.confirmedAt)
+      ? {
+          goal: value.confirmedContext.goal.trim().slice(0, 500),
+          blocker: value.confirmedContext.blocker.trim().slice(0, 500),
+          summary: value.confirmedContext.summary.trim().slice(0, 1000),
+          sourceMessageId: value.confirmedContext.sourceMessageId.trim(),
+          confirmedAt: value.confirmedContext.confirmedAt,
+        }
+      : undefined;
+  const outcome = isRecord(value.confirmedOutcome) &&
+    isNonEmptyString(value.confirmedOutcome.outcome) &&
+    isNonEmptyString(value.confirmedOutcome.doneWhen) &&
+    isNonEmptyString(value.confirmedOutcome.sourceMessageId) &&
+    isIsoDate(value.confirmedOutcome.confirmedAt)
+      ? {
+          outcome: value.confirmedOutcome.outcome.trim().slice(0, 1000),
+          doneWhen: value.confirmedOutcome.doneWhen.trim().slice(0, 1000),
+          sourceMessageId: value.confirmedOutcome.sourceMessageId.trim(),
+          confirmedAt: value.confirmedOutcome.confirmedAt,
+        }
+      : undefined;
+
   return {
     version: BETA_WORKFLOW_VERSION,
     status: value.status,
+    ...(context ? { confirmedContext: context } : {}),
+    ...(outcome && context ? { confirmedOutcome: outcome } : {}),
   };
 }
 
@@ -328,16 +370,37 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
     if (!label || !prompt) return [];
 
     const rawConfirmation = choice.confirmation;
-    const confirmation =
-      isRecord(rawConfirmation) &&
-      rawConfirmation.kind === "project-decision" &&
-      typeof rawConfirmation.content === "string" &&
-      rawConfirmation.content.trim()
-        ? {
-            kind: "project-decision" as const,
-            content: rawConfirmation.content.trim().slice(0, 600),
-          }
-        : undefined;
+    const confirmation = (() => {
+      if (!isRecord(rawConfirmation)) return undefined;
+      if (
+        rawConfirmation.kind === "project-decision" &&
+        isNonEmptyString(rawConfirmation.content)
+      ) return {
+        kind: "project-decision" as const,
+        content: rawConfirmation.content.trim().slice(0, 600),
+      };
+      if (
+        rawConfirmation.kind === "beta-context" &&
+        isNonEmptyString(rawConfirmation.goal) &&
+        isNonEmptyString(rawConfirmation.blocker) &&
+        isNonEmptyString(rawConfirmation.summary)
+      ) return {
+        kind: "beta-context" as const,
+        goal: rawConfirmation.goal.trim().slice(0, 500),
+        blocker: rawConfirmation.blocker.trim().slice(0, 500),
+        summary: rawConfirmation.summary.trim().slice(0, 1000),
+      };
+      if (
+        rawConfirmation.kind === "beta-outcome" &&
+        isNonEmptyString(rawConfirmation.outcome) &&
+        isNonEmptyString(rawConfirmation.doneWhen)
+      ) return {
+        kind: "beta-outcome" as const,
+        outcome: rawConfirmation.outcome.trim().slice(0, 1000),
+        doneWhen: rawConfirmation.doneWhen.trim().slice(0, 1000),
+      };
+      return undefined;
+    })();
 
     return [{
       label,
@@ -596,7 +659,17 @@ function cloneConversation(conversation: Conversation): Conversation {
     messages: conversation.messages.map(cloneMessage),
     ...(conversation.summary ? { summary: { ...conversation.summary } } : {}),
     ...(conversation.betaWorkflow
-      ? { betaWorkflow: { ...conversation.betaWorkflow } }
+      ? {
+          betaWorkflow: {
+            ...conversation.betaWorkflow,
+            ...(conversation.betaWorkflow.confirmedContext
+              ? { confirmedContext: { ...conversation.betaWorkflow.confirmedContext } }
+              : {}),
+            ...(conversation.betaWorkflow.confirmedOutcome
+              ? { confirmedOutcome: { ...conversation.betaWorkflow.confirmedOutcome } }
+              : {}),
+          },
+        }
       : {}),
   };
 }
@@ -1147,7 +1220,7 @@ export class LocalConversationRepository implements ConversationRepository {
       ...(update.betaWorkflow === null
         ? { betaWorkflow: undefined }
         : update.betaWorkflow
-          ? { betaWorkflow: { ...update.betaWorkflow } }
+          ? { betaWorkflow: normalizeBetaWorkflow(update.betaWorkflow) }
           : {}),
       updatedAt: now,
       lastAccessedAt: now,

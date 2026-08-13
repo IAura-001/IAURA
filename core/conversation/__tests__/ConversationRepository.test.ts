@@ -105,6 +105,72 @@ describe("LocalConversationRepository", () => {
     });
   });
 
+  it("persists confirmed context and outcome across reconstruction", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "confirmed-beta",
+      projectId: "project-1",
+    });
+    first.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1,
+        status: "recommended",
+        confirmedContext: {
+          goal: "Launch Beta 01",
+          blocker: "The next step is unclear",
+          summary: "Clarify the launch path",
+          sourceMessageId: "context-message",
+          confirmedAt: "2026-08-13T12:00:00.000Z",
+        },
+        confirmedOutcome: {
+          outcome: "A one-sentence proposition",
+          doneWhen: "It names user, problem and benefit",
+          sourceMessageId: "outcome-message",
+          confirmedAt: "2026-08-13T12:05:00.000Z",
+        },
+      },
+    });
+
+    expect(repository().getConversation("confirmed-beta")?.betaWorkflow)
+      .toMatchObject({
+        status: "recommended",
+        confirmedContext: { sourceMessageId: "context-message" },
+        confirmedOutcome: { sourceMessageId: "outcome-message" },
+      });
+  });
+
+  it("drops malformed confirmed fields and strips injected scope fields", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "normalized-beta",
+      projectId: "project-a",
+    });
+    first.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1,
+        status: "defining-outcome",
+        projectId: "project-b",
+        confirmedContext: {
+          goal: "Launch",
+          blocker: "",
+          summary: "Summary",
+          sourceMessageId: "provider-source",
+          confirmedAt: "provider-time",
+        },
+        confirmedOutcome: {
+          outcome: "Injected",
+          doneWhen: "Injected",
+          sourceMessageId: "provider-source",
+          confirmedAt: "2026-08-13T12:00:00.000Z",
+        },
+      } as never,
+    });
+
+    const restored = repository().getConversation("normalized-beta");
+    expect(restored?.projectId).toBe("project-a");
+    expect(restored?.betaWorkflow).toEqual({ version: 1, status: "defining-outcome" });
+  });
+
   it("never allows beta metadata to override the repository project association", () => {
     const first = repository();
     const conversation = createConversation(first, {

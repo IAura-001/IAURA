@@ -33,6 +33,7 @@ function renderCard(
     <I18nProvider locale="es-419">
       <AuraExperienceCard
         experience={experience}
+        sourceMessageId="assistant-1"
         onChoose={onChoose}
         onOpenSurface={onOpenSurface}
       />
@@ -59,7 +60,7 @@ describe("AuraExperienceCard", () => {
     const choice = screen.getByRole("button", { name: /Empezar por el logo/ });
     await user.click(choice);
 
-    expect(onChoose).toHaveBeenCalledWith(experience.choices[0]);
+    expect(onChoose).toHaveBeenCalledWith(experience.choices[0], "assistant-1");
     expect(choice).toHaveAttribute("aria-pressed", "true");
     expect(choice).toHaveTextContent("Elegido");
 
@@ -88,12 +89,32 @@ describe("AuraExperienceCard", () => {
 
     render(
       <I18nProvider locale="es-419">
-        <AuraExperienceCard experience={confirmable} onChoose={onChoose} />
+        <AuraExperienceCard
+          experience={confirmable}
+          sourceMessageId="assistant-confirmation"
+          onChoose={onChoose}
+        />
       </I18nProvider>,
     );
 
     expect(onChoose).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /Empezar por el logo/ }));
-    expect(onChoose).toHaveBeenCalledWith(confirmable.choices[0]);
+    expect(onChoose).toHaveBeenCalledWith(
+      confirmable.choices[0],
+      "assistant-confirmation",
+    );
+  });
+
+  it("does not mark a choice selected when its submission rejects", async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn().mockRejectedValue(new Error("confirmation failed"));
+    renderCard(onChoose);
+
+    const choice = screen.getByRole("button", { name: /Empezar por el logo/ });
+    await user.click(choice);
+
+    expect(onChoose).toHaveBeenCalled();
+    expect(choice).toHaveAttribute("aria-pressed", "false");
+    expect(choice).not.toHaveTextContent("Elegido");
   });
 });

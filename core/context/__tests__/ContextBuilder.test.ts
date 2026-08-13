@@ -175,7 +175,7 @@ describe("Creative Studio project context", () => {
     expect(context).not.toContain("Old goal");
   });
 
-  it("keeps an IAURA personal goal distinct from active Nova project state", () => {
+  it("excludes an unscoped IAURA goal from active Nova model context", () => {
     const personalContext = buildUserContext({
       ...DEFAULT_MEMORY,
       goals: ["Launch an IAURA beta"],
@@ -203,7 +203,7 @@ describe("Creative Studio project context", () => {
     expect(combinedContext).toContain(
       "PERSONAL INTELLIGENCE — GLOBAL USER CONTEXT",
     );
-    expect(combinedContext).toContain("Launch an IAURA beta");
+    expect(combinedContext).not.toContain("Launch an IAURA beta");
     expect(combinedContext).toContain(
       "ACTIVE PROJECT INTELLIGENCE — PROJECT-SCOPED",
     );
@@ -255,6 +255,6 @@ describe("Creative Studio project context", () => {
     expect(personalContext).toContain(
       "PERSONAL INTELLIGENCE — GLOBAL USER CONTEXT",
     );
-    expect(personalContext).toContain("Launch an IAURA beta");
+    expect(personalContext).not.toContain("Launch an IAURA beta");
   });
 });

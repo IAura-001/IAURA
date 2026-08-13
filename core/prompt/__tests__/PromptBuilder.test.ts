@@ -146,5 +146,8 @@ describe("PromptBuilder", () => {
     expect(prompt).toContain(
       "Use confirmation: null for ALL other choices",
     );
+    expect(prompt).toContain('kind: "beta-context"');
+    expect(prompt).toContain('kind: "beta-outcome"');
+    expect(prompt).toContain("Beta context and outcome proposals remain provisional until clicked.");
   });
 });

@@ -9,7 +9,7 @@ function choiceSchema() {
 }
 
 describe("ActionPlan", () => {
-  it("requires confirmation and restricts it to a closed project-decision object or null", () => {
+  it("requires confirmation and restricts all confirmation variants to closed objects", () => {
     const schema = choiceSchema();
 
     expect(schema.required).toContain("confirmation");
@@ -24,6 +24,16 @@ describe("ActionPlan", () => {
           content: expect.objectContaining({ minLength: 1 }),
         }),
       }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "goal", "blocker", "summary"],
+      }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "outcome", "doneWhen"],
+      }),
       { type: "null" },
     ]);
     const objectProperties =
@@ -31,6 +41,82 @@ describe("ActionPlan", () => {
     expect(objectProperties).not.toHaveProperty("projectId");
     expect(objectProperties).not.toHaveProperty("scope");
     expect(objectProperties).not.toHaveProperty("tags");
+  });
+
+  it("parses valid beta context and outcome confirmations without scope fields", () => {
+    const plan = parseAuraAssistantPlan({
+      content: "Confirm the session.",
+      actions: [],
+      memoryUpdates: [],
+      experience: {
+        kind: "decision",
+        title: "Session",
+        summary: "Confirm the proposal.",
+        phases: [],
+        choices: [
+          {
+            label: "Confirm context",
+            description: "Continue.",
+            prompt: "Continue with this context.",
+            confirmation: {
+              kind: "beta-context",
+              goal: "Launch the beta",
+              blocker: "The next step is unclear",
+              summary: "Clarify the launch path",
+              projectId: "hostile",
+              sourceMessageId: "hostile",
+            },
+          },
+          {
+            label: "Confirm outcome",
+            description: "Define it.",
+            prompt: "Continue with this outcome.",
+            confirmation: {
+              kind: "beta-outcome",
+              outcome: "A one-sentence value proposition",
+              doneWhen: "It names user, problem and benefit",
+              confirmedAt: "hostile",
+            },
+          },
+        ],
+        recommendedSurface: "presence",
+      },
+    });
+
+    expect(plan.experience.choices[0].confirmation).toEqual({
+      kind: "beta-context",
+      goal: "Launch the beta",
+      blocker: "The next step is unclear",
+      summary: "Clarify the launch path",
+    });
+    expect(plan.experience.choices[1].confirmation).toEqual({
+      kind: "beta-outcome",
+      outcome: "A one-sentence value proposition",
+      doneWhen: "It names user, problem and benefit",
+    });
+  });
+
+  it("discards incomplete beta confirmations while preserving their choices", () => {
+    const plan = parseAuraAssistantPlan({
+      content: "Adjust the proposal.",
+      actions: [],
+      memoryUpdates: [],
+      experience: {
+        kind: "decision",
+        title: "Adjust",
+        summary: "Incomplete confirmation.",
+        phases: [],
+        choices: [{
+          label: "Adjust",
+          description: "Correct it.",
+          prompt: "Adjust the context.",
+          confirmation: { kind: "beta-context", goal: "", blocker: "x", summary: "y" },
+        }],
+        recommendedSurface: "presence",
+      },
+    });
+
+    expect(plan.experience.choices[0].confirmation).toBeUndefined();
   });
 
   it("parses a valid structured response", () => {

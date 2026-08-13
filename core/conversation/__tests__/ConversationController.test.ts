@@ -38,10 +38,18 @@ import {
   BrainValidationError,
 } from "@/core/validator/ResponseValidator";
 import { conversationMemory } from "../ConversationMemory";
-import { ConversationController } from "../ConversationController";
+import {
+  assistantMessageMetadata,
+  conversationRepository,
+} from "../ConversationRepository";
+import {
+  ConversationController,
+} from "../ConversationController";
 import type { ProjectRepository } from "@/core/project/ProjectRepository";
 import type { IAuraProject } from "@/types/project";
 import { parseAuraAssistantPlan } from "@/core/actions";
+import { DEFAULT_MEMORY } from "@/constants/memory";
+import { buildUserContext } from "@/utils/context";
 
 const cognitiveRequest = {
   originalUserMessage: "Plan the next step.",
@@ -354,6 +362,164 @@ describe("ConversationController", () => {
     ]);
   });
 
+  it("returns the exact assistant message id created by the persisted write", async () => {
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(
+      createAssistantPlan("Persisted response.", []),
+    );
+    const controller = new ConversationController({
+      contextRetriever: createContextRetriever(),
+    });
+
+    const result = await controller.send("Persist this.", "Context");
+    const persisted = conversationRepository
+      .getActiveConversation(null)
+      ?.messages.find((message) => message.role === "assistant");
+
+    expect(result.plan.content).toBe("Persisted response.");
+    expect(result.assistantMessageId).toBe(persisted?.messageId);
+    expect(result.assistantMessageId).toMatch(/^message-/);
+  });
+
+  it("uses a fresh turn's returned assistant id to confirm beta context without reload", async () => {
+    const activeProject = { id: "fresh-beta", name: "Fresh Beta" } as IAuraProject;
+    const projects = {
+      getActiveProject: vi.fn(() => activeProject),
+    } as unknown as ProjectRepository;
+    const betaPlan = parseAuraAssistantPlan({
+      content: "Confirm this context.",
+      actions: [],
+      memoryUpdates: [],
+      experience: {
+        kind: "decision",
+        title: "Beta context",
+        summary: "Confirm the context.",
+        phases: [],
+        choices: [{
+          label: "Confirmar contexto",
+          description: "Continue with this context.",
+          prompt: "Continue to define the outcome.",
+          confirmation: {
+            kind: "beta-context",
+            goal: "Validate Beta 01",
+            blocker: "The next step is unclear",
+            summary: "Clarify the first verifiable step",
+          },
+        }],
+        recommendedSurface: "presence",
+      },
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse
+      .mockResolvedValueOnce(betaPlan)
+      .mockResolvedValueOnce(createAssistantPlan("Define the outcome.", []));
+    const controller = new ConversationController({
+      projects,
+      contextRetriever: createContextRetriever(),
+      now: () => "2026-08-13T15:00:00.000Z",
+    });
+
+    const freshTurn = await controller.send("Start Beta 01.", "Context");
+    await controller.sendChoice(
+      freshTurn.plan.experience.choices[0],
+      freshTurn.assistantMessageId,
+      "Context",
+    );
+
+    expect(conversationRepository.getActiveConversation("fresh-beta")?.betaWorkflow)
+      .toEqual({
+        version: 1,
+        status: "defining-outcome",
+        confirmedContext: {
+          goal: "Validate Beta 01",
+          blocker: "The next step is unclear",
+          summary: "Clarify the first verifiable step",
+          sourceMessageId: freshTurn.assistantMessageId,
+          confirmedAt: "2026-08-13T15:00:00.000Z",
+        },
+      });
+  });
+
+  it("rejects missing sources, mismatched choices and metadata write failures", async () => {
+    const activeProject = { id: "diagnostic-beta", name: "Diagnostic" } as IAuraProject;
+    const projects = { getActiveProject: vi.fn(() => activeProject) } as unknown as ProjectRepository;
+    const plan = parseAuraAssistantPlan({
+      content: "Confirm.", actions: [], memoryUpdates: [], experience: {
+        kind: "decision", title: "Context", summary: "Confirm.", phases: [],
+        choices: [{ label: "Confirm", description: "Continue.", prompt: "Continue.", confirmation: {
+          kind: "beta-context", goal: "Validate", blocker: "Unknown", summary: "Clarify",
+        } }], recommendedSurface: "presence",
+      },
+    });
+    const conversation = conversationRepository.createConversation({
+      projectId: "diagnostic-beta",
+    }).conversation!;
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "diagnostic-source", role: "assistant", content: plan.content,
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+    const controller = new ConversationController({
+      projects,
+      contextRetriever: createContextRetriever(),
+    });
+
+    await expect(controller.sendChoice(plan.experience.choices[0], "missing", "Context"))
+      .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+
+    await expect(controller.sendChoice(
+      { ...plan.experience.choices[0], label: "Different" },
+      "diagnostic-source",
+      "Context",
+    )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+
+    vi.spyOn(conversationRepository, "updateConversationMetadata").mockReturnValueOnce({
+      ok: false,
+      outcome: "failed",
+      revision: conversationRepository.getRevision(),
+      code: "IAURA_STATE_VALIDATION_FAILED",
+      persisted: false,
+    });
+    await expect(controller.sendChoice(
+      plan.experience.choices[0],
+      "diagnostic-source",
+      "Context",
+    )).rejects.toMatchObject({ code: "IAURA_CONVERSATION_PERSISTENCE_FAILED" });
+  });
+
+  it("does not infer beta confirmation from a fresh choice label", async () => {
+    const activeProject = { id: "label-only", name: "Label Only" } as IAuraProject;
+    const projects = {
+      getActiveProject: vi.fn(() => activeProject),
+    } as unknown as ProjectRepository;
+    const plan = parseAuraAssistantPlan({
+      content: "Review this.", actions: [], memoryUpdates: [], experience: {
+        kind: "decision", title: "Context", summary: "Review.", phases: [],
+        choices: [{
+          label: "Confirmar contexto", description: "Continue.",
+          prompt: "Continue normally.", confirmation: null,
+        }], recommendedSurface: "presence",
+      },
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse
+      .mockResolvedValueOnce(plan)
+      .mockResolvedValueOnce(createAssistantPlan("Continued.", []));
+    const controller = new ConversationController({
+      projects,
+      contextRetriever: createContextRetriever(),
+    });
+
+    const freshTurn = await controller.send("Review context.", "Context");
+    await controller.sendChoice(
+      freshTurn.plan.experience.choices[0],
+      freshTurn.assistantMessageId,
+      "Context",
+    );
+
+    expect(conversationRepository.getActiveConversation("label-only")?.betaWorkflow)
+      .toBeUndefined();
+  });
+
   it("executes an empty memory proposal list safely", async () => {
     const contextRetriever =
       createContextRetriever();
@@ -484,9 +650,22 @@ describe("ConversationController", () => {
         recommendedSurface: "presence",
       },
     });
+    const source = conversationRepository.createConversation({
+      projectId: "iaura-project",
+    }).conversation!;
+    const sourceMessage = conversationRepository.appendMessage(
+      source.conversationId,
+      {
+        messageId: "decision-source",
+        role: "assistant",
+        content: providerPlan.content,
+        structuredResponse: assistantMessageMetadata(providerPlan),
+      },
+    ).message!;
 
     await controller.sendChoice(
       providerPlan.experience.choices[0],
+      sourceMessage.messageId,
       "Project context",
     );
 
@@ -526,8 +705,7 @@ describe("ConversationController", () => {
       contextRetriever: createContextRetriever(),
     });
 
-    await controller.sendChoice(
-      {
+    const choice = {
         label: "Tell me more",
         description: "Continue exploring.",
         prompt: "Tell me more about the options.",
@@ -535,13 +713,35 @@ describe("ConversationController", () => {
           kind: "project-decision",
           content: "This must not become a global project decision.",
         },
+      } as const;
+    const plan = parseAuraAssistantPlan({
+      ...createAssistantPlan("Choose.", []),
+      experience: {
+        kind: "general",
+        title: "Choose",
+        summary: "Choose.",
+        phases: [],
+        choices: [choice],
+        recommendedSurface: "none",
       },
+    });
+    const source = conversationRepository.createConversation().conversation!;
+    conversationRepository.appendMessage(source.conversationId, {
+      messageId: "general-source",
+      role: "assistant",
+      content: plan.content,
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+
+    await controller.sendChoice(
+      choice,
+      "general-source",
       "General context",
     );
 
     expect(mocks.executeMemoryUpdates).toHaveBeenCalledTimes(1);
     expect(mocks.executeMemoryUpdates).toHaveBeenCalledWith([], undefined);
-    expect(conversationMemory.getHistory()[0]).toEqual({
+    expect(conversationMemory.getHistory()).toContainEqual({
       role: "user",
       content: "Tell me more about the options.",
     });
@@ -562,9 +762,7 @@ describe("ConversationController", () => {
       contextRetriever: createContextRetriever(),
     });
 
-    await expect(
-      controller.sendChoice(
-        {
+    const choice = {
           label: "Founders",
           description: "Confirm founders.",
           prompt: "Continue with founders.",
@@ -572,7 +770,32 @@ describe("ConversationController", () => {
             kind: "project-decision",
             content: "Nova's audience is founders.",
           },
-        },
+        } as const;
+    const plan = parseAuraAssistantPlan({
+      ...createAssistantPlan("Choose founders.", []),
+      experience: {
+        kind: "decision",
+        title: "Audience",
+        summary: "Choose founders.",
+        phases: [],
+        choices: [choice],
+        recommendedSurface: "presence",
+      },
+    });
+    const source = conversationRepository.createConversation({
+      projectId: "nova-project",
+    }).conversation!;
+    conversationRepository.appendMessage(source.conversationId, {
+      messageId: "nova-source",
+      role: "assistant",
+      content: plan.content,
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+
+    await expect(
+      controller.sendChoice(
+        choice,
+        "nova-source",
         "Project context",
       ),
     ).rejects.toMatchObject({ code: "IAURA_CONVERSATION_PROVIDER_FAILED" });
@@ -582,6 +805,315 @@ describe("ConversationController", () => {
       [expect.objectContaining({ content: "Nova's audience is founders." })],
       "nova-project",
     );
+  });
+
+  it("confirms beta context before follow-up generation and exposes it to Aura", async () => {
+    const conversations = conversationRepository;
+    const activeProject = { id: "iaura-project", name: "IAURA" } as IAuraProject;
+    const projects = { getActiveProject: vi.fn(() => activeProject) } as unknown as ProjectRepository;
+    const plan = parseAuraAssistantPlan({
+      content: "Confirm context.", actions: [], memoryUpdates: [],
+      experience: {
+        kind: "decision", title: "Context", summary: "Confirm it.", phases: [],
+        choices: [
+          { label: "Confirm", description: "Continue.", prompt: "Define the outcome.", confirmation: {
+            kind: "beta-context", goal: "Launch Beta 01", blocker: "No prioritized next step", summary: "Clarify the next launch step",
+          } },
+          { label: "Correct", description: "Revise it.", prompt: "Correct the context.", confirmation: null },
+        ], recommendedSurface: "presence",
+      },
+    });
+    const conversation = conversations.createConversation({
+      conversationId: "beta-conversation", projectId: "iaura-project",
+    }).conversation!;
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "context-source", role: "assistant", content: plan.content,
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+    expect(conversations.getConversation("beta-conversation")?.betaWorkflow)
+      .toBeUndefined();
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockRejectedValue(new Error("provider failed"));
+    const controller = new ConversationController({
+      conversations, projects, contextRetriever: createContextRetriever(),
+      now: () => "2026-08-13T13:00:00.000Z",
+    });
+
+    await expect(
+      controller.sendChoice(plan.experience.choices[0], "context-source", "Project context"),
+    ).rejects.toMatchObject({ code: "IAURA_CONVERSATION_PROVIDER_FAILED" });
+
+    expect(conversations.getConversation("beta-conversation")?.betaWorkflow).toEqual({
+      version: 1,
+      status: "defining-outcome",
+      confirmedContext: {
+        goal: "Launch Beta 01",
+        blocker: "No prioritized next step",
+        summary: "Clarify the next launch step",
+        sourceMessageId: "context-source",
+        confirmedAt: "2026-08-13T13:00:00.000Z",
+      },
+    });
+    expect(mocks.analyze).toHaveBeenCalledWith(expect.objectContaining({
+      userContext: expect.stringContaining("BETA 01 CONVERSATION WORKFLOW — PROJECT-SCOPED"),
+    }));
+    expect(mocks.analyze).toHaveBeenCalledWith(expect.objectContaining({
+      userContext: expect.stringContaining("Goal: Launch Beta 01"),
+    }));
+  });
+
+  it("includes the resolved confirmed workflow on a normal typed turn", async () => {
+    const projects = {
+      getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)),
+    } as unknown as ProjectRepository;
+    const conversation = conversationRepository.createConversation({
+      conversationId: "iaura-typed",
+      projectId: "iaura",
+    }).conversation!;
+    conversationRepository.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1,
+        status: "recommended",
+        confirmedContext: {
+          goal: "Launch Beta 01",
+          blocker: "No prioritized next step",
+          summary: "Clarify the next launch step",
+          sourceMessageId: "context-source",
+          confirmedAt: "2026-08-13T13:00:00.000Z",
+        },
+        confirmedOutcome: {
+          outcome: "Validate the IAURA Beta 01 direction",
+          doneWhen: "Founders complete the validation flow",
+          sourceMessageId: "outcome-source",
+          confirmedAt: "2026-08-13T14:00:00.000Z",
+        },
+      },
+    });
+    conversationRepository.setActiveConversation(conversation.conversationId);
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Confirmed.", []));
+
+    await new ConversationController({
+      conversations: conversationRepository,
+      projects,
+      contextRetriever: createContextRetriever(),
+    }).send("Recall the confirmed context.", "Project context");
+
+    expect(mocks.analyze).toHaveBeenCalledWith(expect.objectContaining({
+      conversationIdentity: {
+        conversationId: "iaura-typed",
+        projectId: "iaura",
+      },
+      userContext: expect.stringContaining(
+        "Goal: Launch Beta 01",
+      ),
+    }));
+  });
+
+  it("keeps typed-turn workflow and context isolated to the active project", async () => {
+    let activeProject = { id: "iaura", name: "IAURA" } as IAuraProject;
+    const projects = {
+      getActiveProject: vi.fn(() => activeProject),
+    } as unknown as ProjectRepository;
+    const iaura = conversationRepository.createConversation({
+      conversationId: "iaura-isolated",
+      projectId: "iaura",
+    }).conversation!;
+    conversationRepository.updateConversationMetadata(iaura.conversationId, {
+      betaWorkflow: {
+        version: 1,
+        status: "recommended",
+        confirmedContext: {
+          goal: "Launch Beta 01",
+          blocker: "No prioritized next step",
+          summary: "Clarify the next launch step",
+          sourceMessageId: "context-source",
+          confirmedAt: "2026-08-13T13:00:00.000Z",
+        },
+        confirmedOutcome: {
+          outcome: "Validate the IAURA Beta 01 direction",
+          doneWhen: "Founders complete the validation flow",
+          sourceMessageId: "outcome-source",
+          confirmedAt: "2026-08-13T14:00:00.000Z",
+        },
+      },
+    });
+    conversationRepository.setActiveConversation(iaura.conversationId);
+    const nova = conversationRepository.createConversation({
+      conversationId: "nova-isolated",
+      projectId: "nova",
+    }).conversation!;
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Ready.", []));
+    const contextRetriever = {
+      retrieve: vi.fn(async (request: ContextRetrievalRequest) =>
+        createContextPackage(request.message, [{
+          id: `${request.projectId}-memory`,
+          source: "memory" as const,
+          content: request.projectId === "iaura"
+            ? "IAURA_PROJECT_MEMORY_MARKER"
+            : "NOVA_PROJECT_MEMORY_MARKER",
+          relevanceScore: 1,
+          createdAt: new Date("2026-08-13T13:00:00.000Z"),
+          metadata: {},
+        }]),
+      ),
+    };
+    const controller = new ConversationController({
+      conversations: conversationRepository,
+      projects,
+      contextRetriever,
+    });
+    const globalContext = buildUserContext({
+      ...DEFAULT_MEMORY,
+      preferredLocale: "pt-BR",
+      goals: ["IAURA Beta 01 confirmed direction for founders"],
+      habits: ["Advance IAURA Beta 01 every day"],
+      projects: ["IAURA", "Nova"],
+      completedMissionIds: ["iaura-beta-01-context", "iaura-beta-01-outcome"],
+    });
+
+    await controller.send("IAURA turn.", globalContext);
+    activeProject = { id: "nova", name: "Nova" } as IAuraProject;
+    conversationRepository.setActiveConversation(nova.conversationId);
+    await controller.send(
+      "¿Qué contexto y resultado tenemos confirmados para esta sesión de Beta 01?",
+      globalContext,
+    );
+    activeProject = { id: "iaura", name: "IAURA" } as IAuraProject;
+    conversationRepository.setActiveConversation(iaura.conversationId);
+    await controller.send("IAURA return turn.", globalContext);
+
+    const brainInputs = mocks.analyze.mock.calls.map(([input]) => input);
+    expect(brainInputs[0].userContext).toContain("IAURA_PROJECT_MEMORY_MARKER");
+    expect(brainInputs[1].userContext).toContain("NOVA_PROJECT_MEMORY_MARKER");
+    expect(brainInputs[1].userContext).toContain(
+      "Preferred Language: Brazilian Portuguese (pt-BR)",
+    );
+    expect(brainInputs[1].userContext).not.toContain("IAURA_PROJECT_MEMORY_MARKER");
+    expect(brainInputs[1].userContext).not.toContain(
+      "IAURA Beta 01 confirmed direction for founders",
+    );
+    expect(brainInputs[1].userContext).not.toContain(
+      "iaura-beta-01-context",
+    );
+    expect(brainInputs[1].userContext).not.toContain(
+      "BETA 01 CONVERSATION WORKFLOW",
+    );
+    expect(brainInputs[2].userContext).toContain("IAURA_PROJECT_MEMORY_MARKER");
+    expect(brainInputs[2].userContext).toContain(
+      "BETA 01 CONVERSATION WORKFLOW",
+    );
+  });
+
+  it("forwards pre-existing history only from the resolved conversation", async () => {
+    const projects = {
+      getActiveProject: vi.fn(() => ({ id: "nova-history", name: "Nova" } as IAuraProject)),
+    } as unknown as ProjectRepository;
+    const conversation = conversationRepository.createConversation({
+      conversationId: "nova-contaminated-history",
+      projectId: "nova-history",
+    }).conversation!;
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "old-user",
+      role: "user",
+      content: "Continue the Nova review.",
+    });
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "old-assistant",
+      role: "assistant",
+      content: "The IAURA Beta 01 context was previously described here.",
+    });
+    conversationRepository.setActiveConversation(conversation.conversationId);
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Nova response.", []));
+
+    await new ConversationController({
+      conversations: conversationRepository,
+      projects,
+    }).send(
+      "¿Qué contexto y resultado tenemos confirmados para esta sesión de Beta 01?",
+      buildUserContext({ ...DEFAULT_MEMORY, preferredLocale: "pt-BR" }),
+    );
+
+    const brainInput = mocks.analyze.mock.calls.at(-1)?.[0];
+    expect(brainInput?.history).toContainEqual({
+      role: "assistant",
+      content: "The IAURA Beta 01 context was previously described here.",
+    });
+    expect(brainInput?.userContext).toContain(
+      "The IAURA Beta 01 context was previously described here.",
+    );
+  });
+
+  it("does not confirm a correction choice", async () => {
+    const conversations = conversationRepository;
+    const projects = { getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)) } as unknown as ProjectRepository;
+    const plan = parseAuraAssistantPlan({
+      content: "Review.", actions: [], memoryUpdates: [], experience: {
+        kind: "decision", title: "Context", summary: "Review.", phases: [],
+        choices: [{ label: "Correct", description: "Revise.", prompt: "Correct it.", confirmation: null }],
+        recommendedSurface: "presence",
+      },
+    });
+    const conversation = conversations.createConversation({ projectId: "iaura" }).conversation!;
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "correction-source", role: "assistant", content: plan.content,
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Revised.", []));
+
+    await new ConversationController({ conversations, projects, contextRetriever: createContextRetriever() })
+      .sendChoice(plan.experience.choices[0], "correction-source", "Context");
+
+    expect(conversations.getConversation(conversation.conversationId)?.betaWorkflow).toBeUndefined();
+  });
+
+  it("confirms beta outcome only after context and rejects invented or cross-project sources", async () => {
+    const conversations = conversationRepository;
+    let activeProject = { id: "iaura", name: "IAURA" } as IAuraProject;
+    const projects = { getActiveProject: vi.fn(() => activeProject) } as unknown as ProjectRepository;
+    const plan = parseAuraAssistantPlan({
+      content: "Confirm outcome.", actions: [], memoryUpdates: [], experience: {
+        kind: "decision", title: "Outcome", summary: "Confirm.", phases: [],
+        choices: [{ label: "Confirm", description: "Use it.", prompt: "Continue.", confirmation: {
+          kind: "beta-outcome", outcome: "A one-sentence proposition", doneWhen: "It names user, problem and benefit",
+        } }], recommendedSurface: "presence",
+      },
+    });
+    const conversation = conversations.createConversation({ conversationId: "iaura-beta", projectId: "iaura" }).conversation!;
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "outcome-source", role: "assistant", content: plan.content,
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+    const controller = new ConversationController({ conversations, projects, contextRetriever: createContextRetriever() });
+
+    await expect(controller.sendChoice(plan.experience.choices[0], "outcome-source", "Context"))
+      .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" });
+
+    conversations.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: { version: 1, status: "defining-outcome", confirmedContext: {
+        goal: "Launch", blocker: "Unclear step", summary: "Clarify launch", sourceMessageId: "context-source", confirmedAt: "2026-08-13T10:00:00.000Z",
+      } },
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Ready.", []));
+    await controller.sendChoice(plan.experience.choices[0], "outcome-source", "Context");
+    expect(conversations.getConversation("iaura-beta")?.betaWorkflow).toMatchObject({
+      status: "recommended",
+      confirmedOutcome: {
+        outcome: "A one-sentence proposition",
+        doneWhen: "It names user, problem and benefit",
+        sourceMessageId: "outcome-source",
+      },
+    });
+
+    activeProject = { id: "nova", name: "Nova" } as IAuraProject;
+    await expect(controller.sendChoice(plan.experience.choices[0], "outcome-source", "Context"))
+      .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+    await expect(controller.sendChoice(plan.experience.choices[0], "invented", "Context"))
+      .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
   });
 
   it("stops before Brain when every context source fails", async () => {

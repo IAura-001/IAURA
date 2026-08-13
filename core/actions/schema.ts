@@ -240,6 +240,27 @@ export const IAURA_RESPONSE_SCHEMA = {
                     },
                   },
                   {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "goal", "blocker", "summary"],
+                    properties: {
+                      kind: { type: "string", enum: ["beta-context"] },
+                      goal: { type: "string", minLength: 1 },
+                      blocker: { type: "string", minLength: 1 },
+                      summary: { type: "string", minLength: 1 },
+                    },
+                  },
+                  {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "outcome", "doneWhen"],
+                    properties: {
+                      kind: { type: "string", enum: ["beta-outcome"] },
+                      outcome: { type: "string", minLength: 1 },
+                      doneWhen: { type: "string", minLength: 1 },
+                    },
+                  },
+                  {
                     type: "null",
                   },
                 ],
