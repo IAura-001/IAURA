@@ -42,10 +42,11 @@ implements MemoryContextSource {
   async retrieveRelevantMemories(input: {
     userId: string;
     conversationId?: string;
+    projectId?: string;
     query: string;
     limit: number;
   }): Promise<RetrievedContextItem[]> {
-    return retrieveRelevantMemories(input.query)
+    return retrieveRelevantMemories(input.query, input.projectId)
       .slice(0, input.limit)
       .map(memoryToContextItem);
   }

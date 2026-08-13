@@ -8,7 +8,10 @@ import {
 } from "react";
 import type { ChatMessage } from "@/types/chat";
 import type { IAuraProject } from "@/types/project";
-import type { AuraExperienceSurface } from "@/core/actions";
+import type {
+  AuraExperienceChoice,
+  AuraExperienceSurface,
+} from "@/core/actions";
 import { BrandIdentityCard } from "../cards/BrandIdentityCard";
 import AuraExperienceCard from "./AuraExperienceCard";
 import { useI18n } from "@/core/i18n/I18nContext";
@@ -22,14 +25,14 @@ interface ConversationProps {
   isThinking?: boolean;
   project?: IAuraProject | null;
   onOpenBranding?: () => void;
-  onChoose?: (prompt: string) => void | Promise<void>;
+  onChoose?: (choice: AuraExperienceChoice) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
   isBusy?: boolean;
 }
 
 interface AnimatedMessageProps {
   message: ChatMessage;
-  onChoose?: (prompt: string) => void | Promise<void>;
+  onChoose?: (choice: AuraExperienceChoice) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
   isBusy?: boolean;
 }

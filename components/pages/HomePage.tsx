@@ -20,6 +20,7 @@ import { MISSIONS } from "@/constants/missions";
 
 import {
   formatActionReceipt,
+  type AuraExperienceChoice,
   type AuraExperienceSurface,
 } from "@/core/actions";
 import { conversationController } from "@/core/conversation";
@@ -490,10 +491,13 @@ export default function Home({
 
   const handleSend = useCallback(
     async (
-      missionOverride?: string,
+      missionOverride?: string | AuraExperienceChoice,
     ) => {
       const trimmedInput =
-        missionOverride?.trim();
+        (typeof missionOverride === "string"
+          ? missionOverride
+          : missionOverride?.prompt
+        )?.trim();
 
       if (
         !trimmedInput ||
@@ -524,10 +528,15 @@ export default function Home({
 
       try {
         const response =
-          await conversationController.send(
-            trimmedInput,
-            userContext,
-          );
+          typeof missionOverride === "object"
+            ? await conversationController.sendChoice(
+                missionOverride,
+                userContext,
+              )
+            : await conversationController.send(
+                trimmedInput,
+                userContext,
+              );
 
         const actionItems =
           executeActions(

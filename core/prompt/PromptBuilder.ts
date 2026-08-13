@@ -82,6 +82,14 @@ Action rules:
 - Use projectKind general for actions that do not create a project. Keep other unused action fields as empty strings.
 `.trim();
 
+const MEMORY_PROTOCOL = `
+# DURABLE MEMORY PROTOCOL
+
+- Emit a project memory only when the user's real current message explicitly confirms a concrete decision for the current project.
+- Never persist an unaccepted assistant proposal, hypothetical choice or recommendation as a confirmed project decision.
+- Do not create or infer project scope tags. The application assigns trusted project scope.
+`.trim();
+
 const ADAPTIVE_EXPERIENCE_PROTOCOL = `
 # ADAPTIVE EXPERIENCE PROTOCOL
 
@@ -93,6 +101,12 @@ Every response must also organize the result into an experience object for a voi
 - summary is one concise sentence.
 - phases contains 2 to 5 short phases when the work has a meaningful sequence. Use an empty array for a trivial answer.
 - choices contains up to 4 genuinely useful next decisions. Each prompt must be a complete natural-language instruction that can be sent back to IAURA by tapping once.
+- EVERY experience choice MUST include confirmation; it must never be omitted.
+- Use confirmation: { kind: "project-decision", content: "..." } only when ALL are true: the choice represents one concrete durable project decision; clicking means the user explicitly selects or confirms it; it should be remembered as part of the active project; and content is a concise standalone fact suitable for future project recall.
+- A concrete selectable durable project-decision choice MUST use that object and MUST NOT use null.
+- Use confirmation: null for ALL other choices, including navigation, exploratory actions, requests to tell the user more, analysis options, unaccepted recommendations, hypothetical directions, informational follow-ups, and actions that are not durable project decisions.
+- A normal or non-durable choice MUST use null and MUST NOT use a project-decision confirmation object.
+- Displaying a choice never confirms it. Only the user's click authorizes deterministic persistence.
 - Keep choices distinct and easy to understand without reading the full response.
 - recommendedSurface is the best optional destination: intelligence for personal goals, habits and progress; projects for general project organization; creative-direction for brand strategy; creative-image for logos, photos, palettes, visual assets or image generation; creative-website for website content; creative-library for choosing existing assets; launch for launch content; presence for continued conversation; none when no destination is useful.
 - Recommending a surface does not claim that it has already been opened or that content has already been generated.
@@ -105,6 +119,7 @@ const COMPILED_PROMPT = [
   CONTEXT_BOUNDARY,
   SUPERVISED_AUTONOMY_PROTOCOL,
   ACTION_PROTOCOL,
+  MEMORY_PROTOCOL,
   ADAPTIVE_EXPERIENCE_PROTOCOL,
 ].join("\n\n");
 

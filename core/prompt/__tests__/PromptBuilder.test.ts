@@ -129,6 +129,22 @@ describe("PromptBuilder", () => {
       "You may request only these local, reversible application actions:",
     );
     expect(prompt).toContain("Never invent an action type.");
+    expect(prompt).toContain("# DURABLE MEMORY PROTOCOL");
+    expect(prompt).toContain(
+      "Never persist an unaccepted assistant proposal, hypothetical choice or recommendation as a confirmed project decision.",
+    );
     expect(prompt).toContain("# ADAPTIVE EXPERIENCE PROTOCOL");
+    expect(prompt).toContain(
+      "Displaying a choice never confirms it. Only the user's click authorizes deterministic persistence.",
+    );
+    expect(prompt).toContain(
+      "EVERY experience choice MUST include confirmation; it must never be omitted.",
+    );
+    expect(prompt).toContain(
+      "A concrete selectable durable project-decision choice MUST use that object and MUST NOT use null.",
+    );
+    expect(prompt).toContain(
+      "Use confirmation: null for ALL other choices",
+    );
   });
 });

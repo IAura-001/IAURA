@@ -118,7 +118,7 @@ export const IAURA_RESPONSE_SCHEMA = {
           content: {
             type: "string",
             description:
-              "A concise, durable fact stated by the user. Do not include temporary requests, assistant conclusions, or speculative information.",
+              "A concise, durable fact stated by the user. A project memory must be an explicitly confirmed project decision, never an unaccepted assistant proposal. Do not include temporary requests, assistant conclusions, or speculative information.",
           },
           tags: {
             type: "array",
@@ -206,6 +206,7 @@ export const IAURA_RESPONSE_SCHEMA = {
               "label",
               "description",
               "prompt",
+              "confirmation",
             ],
             properties: {
               label: {
@@ -218,6 +219,32 @@ export const IAURA_RESPONSE_SCHEMA = {
                 type: "string",
                 description:
                   "Natural-language instruction sent back to Aura when chosen.",
+              },
+              confirmation: {
+                anyOf: [
+                  {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "content"],
+                    properties: {
+                      kind: {
+                        type: "string",
+                        enum: ["project-decision"],
+                      },
+                      content: {
+                        type: "string",
+                        minLength: 1,
+                        description:
+                          "Concise standalone durable project decision confirmed only if the user clicks this choice.",
+                      },
+                    },
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+                description:
+                  "Required on every choice. Use a project-decision object only for an explicit selectable durable project decision; use null for every ordinary choice.",
               },
             },
           },

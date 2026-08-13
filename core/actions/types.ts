@@ -73,6 +73,10 @@ export interface AuraExperienceChoice {
   label: string;
   description: string;
   prompt: string;
+  confirmation?: {
+    kind: "project-decision";
+    content: string;
+  };
 }
 
 export interface AuraExperience {

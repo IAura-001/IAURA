@@ -163,9 +163,10 @@ export class ContextRetriever {
 
     const memoryPromise =
       this.options.memorySource.retrieveRelevantMemories({
-        userId: request.userId,
-        conversationId: request.conversationId,
-        query,
+         userId: request.userId,
+         conversationId: request.conversationId,
+         projectId: request.projectId,
+         query,
         limit: this.policy.memoryLimit,
       });
 

@@ -251,6 +251,17 @@ function parseChoice(
     return null;
   }
 
+  const rawConfirmation = candidate.confirmation;
+  const confirmation =
+    typeof rawConfirmation === "object" &&
+    rawConfirmation !== null &&
+    (rawConfirmation as Record<string, unknown>).kind === "project-decision"
+      ? readText(
+          (rawConfirmation as Record<string, unknown>).content,
+          600,
+        )
+      : "";
+
   return {
     label,
     description: readText(
@@ -258,6 +269,14 @@ function parseChoice(
       220,
     ),
     prompt,
+    ...(confirmation
+      ? {
+          confirmation: {
+            kind: "project-decision" as const,
+            content: confirmation,
+          },
+        }
+      : {}),
   };
 }
 

@@ -39,6 +39,9 @@ import {
 } from "@/core/validator/ResponseValidator";
 import { conversationMemory } from "../ConversationMemory";
 import { ConversationController } from "../ConversationController";
+import type { ProjectRepository } from "@/core/project/ProjectRepository";
+import type { IAuraProject } from "@/types/project";
+import { parseAuraAssistantPlan } from "@/core/actions";
 
 const cognitiveRequest = {
   originalUserMessage: "Plan the next step.",
@@ -332,6 +335,7 @@ describe("ConversationController", () => {
       mocks.executeMemoryUpdates,
     ).toHaveBeenCalledWith(
       memoryUpdates,
+      undefined,
     );
 
     expect(
@@ -377,7 +381,7 @@ describe("ConversationController", () => {
 
     expect(
       mocks.executeMemoryUpdates,
-    ).toHaveBeenCalledWith([]);
+    ).toHaveBeenCalledWith([], undefined);
 
     expect(
       conversationMemory.getHistory(),
@@ -393,6 +397,191 @@ describe("ConversationController", () => {
           "No durable memory is needed.",
       },
     ]);
+  });
+
+  it("uses the same trusted conversation project id for retrieval and memory writes", async () => {
+    const activeProject: IAuraProject = {
+      id: "iaura-project",
+      name: "IAURA",
+      description: "Private beta",
+      goal: "Validate the beta flow",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-12T00:00:00.000Z",
+      status: "building",
+      studios: {
+        branding: false,
+        website: false,
+        app: true,
+        marketing: false,
+        documents: false,
+      },
+    };
+    const projects = {
+      getActiveProject: vi.fn(() => activeProject),
+    } as unknown as ProjectRepository;
+    const contextRetriever = createContextRetriever();
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(
+      createAssistantPlan("Decision confirmed."),
+    );
+    const controller = new ConversationController({
+      projects,
+      contextRetriever,
+    });
+
+    await controller.send("Confirm founders.", "Project context");
+
+    expect(contextRetriever.retrieve).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: "iaura-project" }),
+    );
+    expect(mocks.executeMemoryUpdates).toHaveBeenCalledWith(
+      memoryUpdates,
+      "iaura-project",
+    );
+  });
+
+  it("persists a clicked project decision before continuing its normal prompt turn", async () => {
+    const activeProject: IAuraProject = {
+      id: "iaura-project",
+      name: "IAURA",
+      description: "Private beta",
+      goal: "Validate the beta flow",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-12T00:00:00.000Z",
+      status: "building",
+      studios: { branding: false, website: false, app: true, marketing: false, documents: false },
+    };
+    const projects = {
+      getActiveProject: vi.fn(() => activeProject),
+    } as unknown as ProjectRepository;
+    const contextRetriever = createContextRetriever();
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(
+      createAssistantPlan("Decision saved.", []),
+    );
+    const controller = new ConversationController({ projects, contextRetriever });
+
+    const providerPlan = parseAuraAssistantPlan({
+      content: "Choose IAURA's primary beta audience.",
+      actions: [],
+      memoryUpdates: [],
+      experience: {
+        kind: "decision",
+        title: "Primary beta audience",
+        summary: "Choose one durable direction.",
+        phases: [],
+        choices: [
+          {
+            label: "Founders building digital products",
+            description: "Confirm this as IAURA's primary beta audience.",
+            prompt: "Continue with founders building digital products as the confirmed audience.",
+            confirmation: {
+              kind: "project-decision",
+              content: "The primary beta audience is founders building digital products.",
+            },
+          },
+        ],
+        recommendedSurface: "presence",
+      },
+    });
+
+    await controller.sendChoice(
+      providerPlan.experience.choices[0],
+      "Project context",
+    );
+
+    expect(mocks.executeMemoryUpdates).toHaveBeenNthCalledWith(
+      1,
+      [
+        {
+          operation: "remember",
+          type: "project",
+          content: "The primary beta audience is founders building digital products.",
+          tags: [],
+          reason: "The user explicitly selected this project decision.",
+          confidence: 1,
+        },
+      ],
+      "iaura-project",
+    );
+    expect(contextRetriever.retrieve).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: "iaura-project" }),
+    );
+    expect(mocks.analyze).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Continue with founders building digital products as the confirmed audience.",
+        conversationIdentity: expect.objectContaining({
+          projectId: "iaura-project",
+        }),
+      }),
+    );
+  });
+
+  it("continues an unscoped choice without persisting a project decision", async () => {
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(
+      createAssistantPlan("More detail.", []),
+    );
+    const controller = new ConversationController({
+      contextRetriever: createContextRetriever(),
+    });
+
+    await controller.sendChoice(
+      {
+        label: "Tell me more",
+        description: "Continue exploring.",
+        prompt: "Tell me more about the options.",
+        confirmation: {
+          kind: "project-decision",
+          content: "This must not become a global project decision.",
+        },
+      },
+      "General context",
+    );
+
+    expect(mocks.executeMemoryUpdates).toHaveBeenCalledTimes(1);
+    expect(mocks.executeMemoryUpdates).toHaveBeenCalledWith([], undefined);
+    expect(conversationMemory.getHistory()[0]).toEqual({
+      role: "user",
+      content: "Tell me more about the options.",
+    });
+  });
+
+  it("keeps the clicked decision persisted when the provider fails", async () => {
+    const activeProject = {
+      id: "nova-project",
+      name: "Nova",
+    } as IAuraProject;
+    const projects = {
+      getActiveProject: vi.fn(() => activeProject),
+    } as unknown as ProjectRepository;
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockRejectedValue(new Error("provider failed"));
+    const controller = new ConversationController({
+      projects,
+      contextRetriever: createContextRetriever(),
+    });
+
+    await expect(
+      controller.sendChoice(
+        {
+          label: "Founders",
+          description: "Confirm founders.",
+          prompt: "Continue with founders.",
+          confirmation: {
+            kind: "project-decision",
+            content: "Nova's audience is founders.",
+          },
+        },
+        "Project context",
+      ),
+    ).rejects.toMatchObject({ code: "IAURA_CONVERSATION_PROVIDER_FAILED" });
+
+    expect(mocks.executeMemoryUpdates).toHaveBeenCalledTimes(1);
+    expect(mocks.executeMemoryUpdates).toHaveBeenCalledWith(
+      [expect.objectContaining({ content: "Nova's audience is founders." })],
+      "nova-project",
+    );
   });
 
   it("stops before Brain when every context source fails", async () => {

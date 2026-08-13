@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import type {
   AuraExperience,
+  AuraExperienceChoice,
   AuraExperienceSurface,
 } from "@/core/actions";
 import { useI18n } from "@/core/i18n/I18nContext";
@@ -11,7 +12,7 @@ import { useI18n } from "@/core/i18n/I18nContext";
 interface AuraExperienceCardProps {
   experience: AuraExperience;
   disabled?: boolean;
-  onChoose?: (prompt: string) => void | Promise<void>;
+  onChoose?: (choice: AuraExperienceChoice) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
 }
 
@@ -107,12 +108,12 @@ export default function AuraExperienceCard({
 
   if (!hasContent) return null;
 
-  async function choose(index: number, prompt: string): Promise<void> {
+  async function choose(index: number, choice: AuraExperienceChoice): Promise<void> {
     if (!onChoose || disabled || pendingChoice !== null) return;
 
     setPendingChoice(index);
     try {
-      await onChoose(prompt);
+      await onChoose(choice);
       setChosenChoice(index);
     } finally {
       setPendingChoice(null);
@@ -189,7 +190,7 @@ export default function AuraExperienceCard({
                 <button
                   key={`${choice.label}-${index}`}
                   type="button"
-                  onClick={() => void choose(index, choice.prompt)}
+                  onClick={() => void choose(index, choice)}
                   disabled={disabled || !onChoose || pendingChoice !== null}
                   aria-pressed={isChosen}
                   aria-busy={isPending}

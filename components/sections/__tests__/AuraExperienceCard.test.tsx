@@ -59,9 +59,7 @@ describe("AuraExperienceCard", () => {
     const choice = screen.getByRole("button", { name: /Empezar por el logo/ });
     await user.click(choice);
 
-    expect(onChoose).toHaveBeenCalledWith(
-      "Genera primero un concepto de logo para Mita.",
-    );
+    expect(onChoose).toHaveBeenCalledWith(experience.choices[0]);
     expect(choice).toHaveAttribute("aria-pressed", "true");
     expect(choice).toHaveTextContent("Elegido");
 
@@ -70,5 +68,32 @@ describe("AuraExperienceCard", () => {
 
     expect(onOpenSurface).toHaveBeenCalledWith("creative-image");
     expect(open).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("does nothing with a confirmable choice until the user clicks it", async () => {
+    const user = userEvent.setup();
+    const confirmable: AuraExperience = {
+      ...experience,
+      choices: [
+        {
+          ...experience.choices[0],
+          confirmation: {
+            kind: "project-decision",
+            content: "The primary visual direction uses a monogram.",
+          },
+        },
+      ],
+    };
+    const onChoose = vi.fn();
+
+    render(
+      <I18nProvider locale="es-419">
+        <AuraExperienceCard experience={confirmable} onChoose={onChoose} />
+      </I18nProvider>,
+    );
+
+    expect(onChoose).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /Empezar por el logo/ }));
+    expect(onChoose).toHaveBeenCalledWith(confirmable.choices[0]);
   });
 });

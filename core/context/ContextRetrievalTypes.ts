@@ -7,6 +7,7 @@ export type ContextSource =
 export interface ContextRetrievalRequest {
   userId: string;
   conversationId: string;
+  projectId?: string;
   message: string;
   sessionId?: string;
   requestedAt?: Date;
@@ -33,6 +34,7 @@ export interface MemoryContextSource {
   retrieveRelevantMemories(input: {
     userId: string;
     conversationId?: string;
+    projectId?: string;
     query: string;
     limit: number;
   }): Promise<RetrievedContextItem[]>;

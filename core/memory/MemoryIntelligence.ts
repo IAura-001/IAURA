@@ -7,6 +7,11 @@ import {
   memoryEngine,
   type MemoryEntry,
 } from "@/core/memory";
+import {
+  createProjectScopeTag,
+  getProjectScope,
+  removeProjectScopeTags,
+} from "./ProjectMemoryScope";
 
 export interface MemoryExecutionItem {
   status: "remembered" | "skipped";
@@ -63,15 +68,23 @@ function mapMemoryType(
 function isDuplicate(
   proposal: PlannedMemoryUpdate,
   existing: MemoryEntry[],
+  projectId?: string,
 ): boolean {
   const normalizedProposal = normalizeText(
     proposal.content,
   );
 
+  const proposalType = mapMemoryType(proposal.type);
+  const proposalScope =
+    proposalType === MemoryType.PROJECT
+      ? projectId?.trim() || null
+      : null;
+
   return existing.some((entry) => {
     return (
-      entry.type ===
-        mapMemoryType(proposal.type) &&
+      entry.type === proposalType &&
+      (proposalType !== MemoryType.PROJECT ||
+        getProjectScope(entry.tags) === proposalScope) &&
       normalizeText(entry.content) ===
         normalizedProposal
     );
@@ -80,6 +93,7 @@ function isDuplicate(
 
 export function executeMemoryUpdates(
   updates: PlannedMemoryUpdate[] = [],
+  projectId?: string,
 ): MemoryExecutionResult {
   const remembered: MemoryEntry[] = [];
   const items: MemoryExecutionItem[] = [];
@@ -126,12 +140,31 @@ export function executeMemoryUpdates(
       continue;
     }
 
+    const memoryType = mapMemoryType(update.type);
+    const trustedProjectScope =
+      memoryType === MemoryType.PROJECT
+        ? createProjectScopeTag(projectId ?? "")
+        : null;
+
+    if (memoryType === MemoryType.PROJECT && !trustedProjectScope) {
+      items.push({
+        status: "skipped",
+        content,
+        reason:
+          "A confirmed project decision requires a trusted project scope.",
+      });
+      continue;
+    }
+
+    const tags = removeProjectScopeTags(update.tags);
+    if (trustedProjectScope) tags.push(trustedProjectScope);
+
     const existing = [
       ...memoryEngine.getAll(),
       ...remembered,
     ];
 
-    if (isDuplicate(update, existing)) {
+    if (isDuplicate(update, existing, projectId)) {
       items.push({
         status: "skipped",
         content,
@@ -143,9 +176,9 @@ export function executeMemoryUpdates(
     }
 
     const entry = memoryEngine.add(
-      mapMemoryType(update.type),
+      memoryType,
       content,
-      update.tags,
+      tags,
     );
 
     remembered.push(entry);

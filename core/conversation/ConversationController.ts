@@ -1,4 +1,8 @@
-import type { AuraAssistantPlan } from "@/core/actions";
+import type {
+  AuraAssistantPlan,
+  AuraExperienceChoice,
+  PlannedMemoryUpdate,
+} from "@/core/actions";
 import { executeMemoryUpdates } from "@/core/memory";
 import { generateCognitiveResponse } from "@/services/cognitive";
 
@@ -210,9 +214,10 @@ export class ConversationController {
     try {
       return await this.contextRetriever.retrieve({
         userId: "local-user",
-        conversationId:
-          conversation.conversationId,
-        message,
+         conversationId:
+           conversation.conversationId,
+         projectId: conversation.projectId,
+         message,
       });
     } catch {
       throw new ConversationTurnError(
@@ -224,13 +229,11 @@ export class ConversationController {
     }
   }
 
-  async send(
+  private async sendInConversation(
+    conversation: Conversation,
     message: string,
     userContext: string,
   ): Promise<AuraAssistantPlan> {
-    const conversation =
-      this.resolveConversation();
-
     const userMessage =
       this.persistUserMessage(
         conversation,
@@ -296,6 +299,7 @@ export class ConversationController {
 
     executeMemoryUpdates(
       response.memoryUpdates,
+      conversation.projectId,
     );
 
     const assistantWrite =
@@ -319,6 +323,46 @@ export class ConversationController {
     }
 
     return response;
+  }
+
+  async send(
+    message: string,
+    userContext: string,
+  ): Promise<AuraAssistantPlan> {
+    return this.sendInConversation(
+      this.resolveConversation(),
+      message,
+      userContext,
+    );
+  }
+
+  async sendChoice(
+    choice: AuraExperienceChoice,
+    userContext: string,
+  ): Promise<AuraAssistantPlan> {
+    const conversation = this.resolveConversation();
+
+    if (
+      choice.confirmation?.kind === "project-decision" &&
+      conversation.projectId
+    ) {
+      const confirmedDecision: PlannedMemoryUpdate = {
+        operation: "remember",
+        type: "project",
+        content: choice.confirmation.content,
+        tags: [],
+        reason: "The user explicitly selected this project decision.",
+        confidence: 1,
+      };
+
+      executeMemoryUpdates([confirmedDecision], conversation.projectId);
+    }
+
+    return this.sendInConversation(
+      conversation,
+      choice.prompt,
+      userContext,
+    );
   }
 }
 
