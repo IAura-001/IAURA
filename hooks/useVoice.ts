@@ -222,35 +222,7 @@ export function useVoice() {
       null
     );
   const speechOperationRef = useRef(0);
-
-  const setVoiceMode = useCallback(
-    (enabled: boolean) => {
-      if (typeof window === "undefined") {
-        return;
-      }
-
-      try {
-        window.localStorage.setItem(
-          VOICE_MODE_STORAGE_KEY,
-          String(enabled)
-        );
-      } catch {
-        // Voice still works when storage is unavailable.
-      }
-
-      window.dispatchEvent(
-        new Event(VOICE_MODE_EVENT)
-      );
-
-      if (enabled) {
-        void voiceEngine.unlock();
-      } else {
-        voiceEngine.stop();
-        setState("idle");
-      }
-    },
-    []
-  );
+  const listeningOperationRef = useRef(0);
 
   const releaseVoiceActivity =
     useCallback((keepContext = false) => {
@@ -300,6 +272,60 @@ export function useVoice() {
     recorderRef.current = null;
     chunksRef.current = [];
   }, [releaseVoiceActivity]);
+
+  const cancelListeningResources = useCallback(() => {
+    continuousListeningRef.current = false;
+
+    if (
+      recorderRef.current?.state ===
+      "recording"
+    ) {
+      discardRecordingRef.current = true;
+      recorderRef.current.stop();
+      return;
+    }
+
+    recognitionRef.current?.abort();
+    releaseRecording(false);
+  }, [releaseRecording]);
+
+  const setVoiceMode = useCallback(
+    (enabled: boolean) => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      try {
+        window.localStorage.setItem(
+          VOICE_MODE_STORAGE_KEY,
+          String(enabled)
+        );
+      } catch {
+        // Voice still works when storage is unavailable.
+      }
+
+      window.dispatchEvent(
+        new Event(VOICE_MODE_EVENT)
+      );
+
+      if (enabled) {
+        void voiceEngine.unlock();
+      } else {
+        speechOperationRef.current += 1;
+        listeningOperationRef.current += 1;
+        try {
+          cancelListeningResources();
+        } finally {
+          try {
+            voiceEngine.stop();
+          } finally {
+            setState("idle");
+          }
+        }
+      }
+    },
+    [cancelListeningResources]
+  );
 
   const startVoiceActivityDetection =
     useCallback(
@@ -604,11 +630,20 @@ console.info(
     recognition.interimResults = false;
 
     recognition.onstart = () => {
+      if (!getVoiceModeSnapshot()) {
+        recognition.abort();
+        return;
+      }
+
       setVoiceError(null);
       setState("listening");
     };
 
     recognition.onresult = (event) => {
+      if (!getVoiceModeSnapshot()) {
+        return;
+      }
+
       const text =
         event.results[0]?.[0]?.transcript
           ?.trim();
@@ -672,7 +707,7 @@ console.info(
   );
 
   const startMediaRecording =
-    useCallback(async () => {
+    useCallback(async (operation: number) => {
       if (
         !window.isSecureContext
       ) {
@@ -716,6 +751,17 @@ console.info(
                 video: false,
               }
             );
+
+        if (
+          listeningOperationRef.current !== operation ||
+          !getVoiceModeSnapshot()
+        ) {
+          stream
+            .getTracks()
+            .forEach((track) => track.stop());
+          return;
+        }
+
         const mimeType =
           chooseRecordingMimeType();
         const recorder = mimeType
@@ -793,6 +839,13 @@ console.info(
             }
           }, MAX_RECORDING_MS);
       } catch (error) {
+        if (
+          listeningOperationRef.current !== operation ||
+          !getVoiceModeSnapshot()
+        ) {
+          return;
+        }
+
         continuousListeningRef.current =
           false;
         const errorName =
@@ -828,6 +881,8 @@ console.info(
 
   const startListening = useCallback(
     async () => {
+      const operation =
+        ++listeningOperationRef.current;
       void voiceEngine.unlock();
       setVoiceError(null);
       setVoiceMode(true);
@@ -845,7 +900,7 @@ console.info(
         captureMode ===
         "media-recorder"
       ) {
-        await startMediaRecording();
+        await startMediaRecording(operation);
         return;
       }
 

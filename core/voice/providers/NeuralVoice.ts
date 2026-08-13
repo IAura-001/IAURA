@@ -61,7 +61,7 @@ export class NeuralVoiceProvider implements VoiceProvider {
     const chunks = splitSpeechText(
       normalizedText
     );
-    let pendingAudio = this.requestAudio(
+    let pendingAudio = this.startAudioRequest(
       chunks[0],
       mode,
       language,
@@ -77,10 +77,15 @@ export class NeuralVoiceProvider implements VoiceProvider {
         index += 1
       ) {
         const audioBlob = await pendingAudio;
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
         const nextChunk = chunks[index + 1];
 
         if (nextChunk) {
-          pendingAudio = this.requestAudio(
+          pendingAudio = this.startAudioRequest(
             nextChunk,
             mode,
             language,
@@ -110,16 +115,50 @@ export class NeuralVoiceProvider implements VoiceProvider {
   }
 
   stop(): void {
-    this.requestController?.abort();
+    const controller = this.requestController;
     this.requestController = null;
 
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio.currentTime = 0;
+    try {
+      controller?.abort();
+    } catch (error) {
+      if (!isAbortError(error)) {
+        throw error;
+      }
+    } finally {
+      try {
+        if (this.currentAudio) {
+          this.currentAudio.pause();
+          this.currentAudio.currentTime = 0;
+        }
+      } finally {
+        this.settlePlayback();
+        this.releaseAudioUrl();
+      }
     }
+  }
 
-    this.settlePlayback();
-    this.releaseAudioUrl();
+  private startAudioRequest(
+    text: string,
+    mode: AuraVoiceMode,
+    language: SupportedLocale,
+    signal: AbortSignal,
+    previousText: string,
+    nextText: string
+  ): Promise<Blob> {
+    const request = this.requestAudio(
+      text,
+      mode,
+      language,
+      signal,
+      previousText,
+      nextText
+    );
+
+    // Prefetched requests can reject before the loop awaits them.
+    // Observe them immediately while preserving the original rejection.
+    void request.catch(() => undefined);
+
+    return request;
   }
 
   private getAudioElement(): HTMLAudioElement {
