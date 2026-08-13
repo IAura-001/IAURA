@@ -23,7 +23,10 @@ import {
   type AuraExperienceChoice,
   type AuraExperienceSurface,
 } from "@/core/actions";
-import { conversationController } from "@/core/conversation";
+import {
+  conversationController,
+  conversationRepository,
+} from "@/core/conversation";
 import { useVoiceContext } from "@/core/context/VoiceContext";
 import {
   I18nProvider,
@@ -47,6 +50,11 @@ import { buildPrompt } from "@/utils/prompt";
 import { generateRecommendation } from "@/utils/recommendations";
 
 import Workspace from "@/components/pages/Workspace";
+import {
+  canApplyConversationHydration,
+  didActiveProjectChange,
+  loadVisibleConversation,
+} from "@/components/pages/conversationHydration";
 import { ActionCenter } from "@/components/sections/ActionCenter";
 import { AIActionBar } from "@/components/sections/AIActionBar";
 import AssistantCard from "@/components/sections/AssistantCard";
@@ -166,6 +174,8 @@ export default function Home({
   const auraLiveRestartTimerRef =
     useRef<number | null>(null);
   const workspaceRequestIdRef = useRef(0);
+  const activeProjectIdRef = useRef<string | null>(null);
+  const messageGenerationRef = useRef(0);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -195,6 +205,35 @@ export default function Home({
   }, []);
 
   const activeProject = memory.activeProject;
+  const activeProjectId = activeProject?.id ?? null;
+
+  useEffect(() => {
+    activeProjectIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const requestedProjectId = activeProjectId;
+    const scheduledMessageGeneration = messageGenerationRef.current;
+    const hydrationTimer = window.setTimeout(() => {
+      if (!canApplyConversationHydration({
+        requestedProjectId,
+        activeProjectId: activeProjectIdRef.current,
+        scheduledMessageGeneration,
+        currentMessageGeneration: messageGenerationRef.current,
+      })) {
+        return;
+      }
+
+      setMessages(loadVisibleConversation(
+        conversationRepository,
+        requestedProjectId,
+      ));
+    }, 0);
+
+    return () => window.clearTimeout(hydrationTimer);
+  }, [activeProjectId, isLoaded]);
 
   const openCreativeStudio = useCallback(
     (
@@ -269,11 +308,18 @@ export default function Home({
       (
         project: IAuraProject | null,
       ) => {
+        const nextProjectId = project?.id ?? null;
+
+        if (didActiveProjectChange(activeProjectId, nextProjectId)) {
+          messageGenerationRef.current += 1;
+          setMessages([]);
+        }
+
         updateMemory({
           activeProject: project,
         });
       },
-      [updateMemory],
+      [activeProjectId, updateMemory],
     );
 
   const handleWelcomeContinue =
@@ -519,6 +565,7 @@ export default function Home({
         content: trimmedInput,
       };
 
+      messageGenerationRef.current += 1;
       setMessages((previous) => [
         ...previous,
         userMessage,
@@ -569,6 +616,7 @@ export default function Home({
               response.experience,
           };
 
+        messageGenerationRef.current += 1;
         setMessages((previous) => [
           ...previous,
           assistantMessage,
@@ -623,6 +671,7 @@ export default function Home({
             content: errorContent,
           };
 
+        messageGenerationRef.current += 1;
         setMessages((previous) => [
           ...previous,
           errorMessage,

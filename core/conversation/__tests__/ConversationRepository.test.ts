@@ -62,6 +62,178 @@ describe("LocalConversationRepository", () => {
     });
   });
 
+  it("keeps existing conversations without beta workflow metadata readable", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "pre-beta",
+      projectId: "project-1",
+    });
+    first.appendMessage(conversation.conversationId, {
+      role: "assistant",
+      content: "Existing response",
+      structuredResponse: {
+        actionTypes: [],
+        experienceKind: "general",
+        recommendedSurface: "none",
+      },
+    });
+
+    const restored = repository().getConversation("pre-beta");
+
+    expect(restored?.betaWorkflow).toBeUndefined();
+    expect(restored?.messages[0].structuredResponse).toEqual({
+      actionTypes: [],
+      experienceKind: "general",
+      recommendedSurface: "none",
+    });
+  });
+
+  it("persists valid v1 beta workflow metadata across reconstruction", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "beta-1",
+      projectId: "project-1",
+    });
+
+    expect(first.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: { version: 1, status: "capturing" },
+    }).ok).toBe(true);
+
+    expect(repository().getConversation("beta-1")?.betaWorkflow).toEqual({
+      version: 1,
+      status: "capturing",
+    });
+  });
+
+  it("never allows beta metadata to override the repository project association", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "trusted-scope",
+      projectId: "project-a",
+    });
+    first.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1,
+        status: "capturing",
+        projectId: "project-b",
+      } as never,
+    });
+
+    const restored = repository().getConversation("trusted-scope");
+
+    expect(restored?.projectId).toBe("project-a");
+    expect(restored?.betaWorkflow).toEqual({
+      version: 1,
+      status: "capturing",
+    });
+    expect(restored?.betaWorkflow).not.toHaveProperty("projectId");
+  });
+
+  it("drops malformed beta metadata without dropping its conversation", () => {
+    const first = repository();
+    createConversation(first, {
+      conversationId: "safe-conversation",
+      projectId: "project-a",
+    });
+    const stored = JSON.parse(
+      window.localStorage.getItem(CONVERSATION_STATE_STORAGE_KEY) ?? "{}",
+    ) as { conversations: Array<Record<string, unknown>> };
+    stored.conversations[0].betaWorkflow = {
+      version: 1,
+      status: "provider-invented-status",
+      projectId: "project-b",
+    };
+    window.localStorage.setItem(
+      CONVERSATION_STATE_STORAGE_KEY,
+      JSON.stringify(stored),
+    );
+
+    const restored = repository().getConversation("safe-conversation");
+
+    expect(restored).toMatchObject({ projectId: "project-a" });
+    expect(restored?.betaWorkflow).toBeUndefined();
+  });
+
+  it("fails safely without overwriting an unsupported future workflow version", () => {
+    const first = repository();
+    createConversation(first, { conversationId: "future-beta" });
+    const stored = JSON.parse(
+      window.localStorage.getItem(CONVERSATION_STATE_STORAGE_KEY) ?? "{}",
+    ) as { conversations: Array<Record<string, unknown>> };
+    stored.conversations[0].betaWorkflow = {
+      version: 2,
+      status: "capturing",
+    };
+    const future = JSON.stringify(stored);
+    window.localStorage.setItem(CONVERSATION_STATE_STORAGE_KEY, future);
+
+    const restored = repository();
+
+    expect(restored.getConversation("future-beta")).toBeNull();
+    expect(restored.createConversation()).toMatchObject({
+      ok: false,
+      code: "IAURA_STATE_UNSUPPORTED_VERSION",
+    });
+    expect(window.localStorage.getItem(CONVERSATION_STATE_STORAGE_KEY)).toBe(future);
+  });
+
+  it("persists only the validated complete assistant experience", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "structured",
+      projectId: "project-a",
+    });
+    first.appendMessage(conversation.conversationId, {
+      role: "assistant",
+      content: "Choose a direction.",
+      structuredResponse: {
+        actionTypes: ["create_project"],
+        experienceKind: "decision",
+        recommendedSurface: "presence",
+        experience: {
+          kind: "decision",
+          title: "Direction",
+          summary: "Choose one durable direction.",
+          phases: [{ title: "Review", description: "Review the choice." }],
+          choices: [{
+            label: "Founders",
+            description: "Use founders as the audience.",
+            prompt: "Continue with founders.",
+            confirmation: {
+              kind: "project-decision",
+              content: "The audience is founders.",
+              projectId: "provider-controlled-project",
+            } as never,
+          }],
+          recommendedSurface: "presence",
+        },
+      },
+    });
+
+    const persisted = repository()
+      .getConversation("structured")
+      ?.messages[0].structuredResponse;
+
+    expect(persisted?.experience).toEqual({
+      kind: "decision",
+      title: "Direction",
+      summary: "Choose one durable direction.",
+      phases: [{ title: "Review", description: "Review the choice." }],
+      choices: [{
+        label: "Founders",
+        description: "Use founders as the audience.",
+        prompt: "Continue with founders.",
+        confirmation: {
+          kind: "project-decision",
+          content: "The audience is founders.",
+        },
+      }],
+      recommendedSurface: "presence",
+    });
+    expect(persisted?.experience?.choices[0].confirmation)
+      .not.toHaveProperty("projectId");
+  });
+
   it("keeps two conversations and two project associations isolated", () => {
     const repo = repository();
     const first = createConversation(repo, {

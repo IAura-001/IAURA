@@ -8,6 +8,8 @@ export {
   CONVERSATION_STAGING_STORAGE_KEY,
   CONVERSATION_STATE_STORAGE_KEY,
   CONVERSATION_STATE_VERSION,
+  BETA_WORKFLOW_STATUSES,
+  BETA_WORKFLOW_VERSION,
   MAX_WORKING_HISTORY_CHARACTERS,
   MAX_WORKING_HISTORY_MESSAGES,
   LocalConversationRepository,
@@ -24,6 +26,8 @@ export type {
   ConversationRepository,
   ConversationRepositorySnapshot,
   ConversationStatus,
+  BetaWorkflowMetadata,
+  BetaWorkflowStatus,
   ConversationWriteResult,
   WorkingHistoryOptions,
 } from "./ConversationRepository";

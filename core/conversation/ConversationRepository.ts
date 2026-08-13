@@ -16,6 +16,7 @@ import {
   AURA_EXPERIENCE_SURFACES,
   IAURA_ACTION_TYPES,
   type AuraAssistantPlan,
+  type AuraExperience,
   type AuraExperienceKind,
   type AuraExperienceSurface,
   type IAuraActionType,
@@ -40,16 +41,39 @@ const MAX_RECEIPT_HISTORY_CHARACTERS = 3_000;
 export type ConversationStatus = "active" | "archived" | "deleted";
 export type ConversationRole = "user" | "assistant";
 
+export const BETA_WORKFLOW_VERSION = 1;
+export const BETA_WORKFLOW_STATUSES = [
+  "capturing",
+  "confirming-context",
+  "defining-outcome",
+  "recommended",
+  "started",
+  "pending",
+  "evaluated",
+  "closed",
+] as const;
+
+export type BetaWorkflowStatus =
+  (typeof BETA_WORKFLOW_STATUSES)[number];
+
+export interface BetaWorkflowMetadata {
+  version: typeof BETA_WORKFLOW_VERSION;
+  status: BetaWorkflowStatus;
+}
+
+export interface ConversationStructuredResponse {
+  actionTypes: IAuraActionType[];
+  experienceKind: AuraExperienceKind;
+  recommendedSurface: AuraExperienceSurface;
+  experience?: AuraExperience;
+}
+
 export interface ConversationMessage {
   messageId: string;
   role: ConversationRole;
   content: string;
   createdAt: string;
-  structuredResponse?: {
-    actionTypes: IAuraActionType[];
-    experienceKind: AuraExperienceKind;
-    recommendedSurface: AuraExperienceSurface;
-  };
+  structuredResponse?: ConversationStructuredResponse;
   verifiedActionReceiptReferences?: string[];
 }
 
@@ -72,6 +96,7 @@ export interface Conversation {
   revision: number;
   messages: ConversationMessage[];
   summary?: ConversationSummaryMetadata;
+  betaWorkflow?: BetaWorkflowMetadata;
 }
 
 export interface ConversationRepositorySnapshot {
@@ -106,6 +131,7 @@ export interface ConversationMetadataUpdate {
   goalId?: string | null;
   missionId?: string | null;
   summary?: ConversationSummaryMetadata | null;
+  betaWorkflow?: BetaWorkflowMetadata | null;
 }
 
 export interface ConversationWriteResult extends StateOperationResult {
@@ -223,6 +249,114 @@ function isExperienceSurface(value: unknown): value is AuraExperienceSurface {
   );
 }
 
+function isBetaWorkflowStatus(value: unknown): value is BetaWorkflowStatus {
+  return (
+    typeof value === "string" &&
+    BETA_WORKFLOW_STATUSES.includes(value as BetaWorkflowStatus)
+  );
+}
+
+function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    value.version !== BETA_WORKFLOW_VERSION ||
+    !isBetaWorkflowStatus(value.status)
+  ) {
+    return undefined;
+  }
+
+  return {
+    version: BETA_WORKFLOW_VERSION,
+    status: value.status,
+  };
+}
+
+function hasUnsupportedBetaWorkflowVersion(value: unknown): boolean {
+  if (!isRecord(value) || !Array.isArray(value.conversations)) return false;
+
+  return value.conversations.some((conversation) => {
+    if (!isRecord(conversation) || !isRecord(conversation.betaWorkflow)) {
+      return false;
+    }
+    const version = conversation.betaWorkflow.version;
+    return (
+      typeof version === "number" &&
+      Number.isInteger(version) &&
+      version > BETA_WORKFLOW_VERSION
+    );
+  });
+}
+
+function normalizeExperience(value: unknown): AuraExperience | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    !isExperienceKind(value.kind) ||
+    typeof value.title !== "string" ||
+    typeof value.summary !== "string" ||
+    !Array.isArray(value.phases) ||
+    !Array.isArray(value.choices) ||
+    !isExperienceSurface(value.recommendedSurface)
+  ) {
+    return undefined;
+  }
+
+  const phases = value.phases.slice(0, 5).flatMap((phase) => {
+    if (
+      !isRecord(phase) ||
+      typeof phase.title !== "string" ||
+      typeof phase.description !== "string"
+    ) {
+      return [];
+    }
+    return [{
+      title: phase.title.trim().slice(0, 100),
+      description: phase.description.trim().slice(0, 240),
+    }];
+  }).filter((phase) => phase.title.length > 0);
+
+  const choices = value.choices.slice(0, 4).flatMap((choice) => {
+    if (
+      !isRecord(choice) ||
+      typeof choice.label !== "string" ||
+      typeof choice.description !== "string" ||
+      typeof choice.prompt !== "string"
+    ) {
+      return [];
+    }
+    const label = choice.label.trim().slice(0, 80);
+    const prompt = choice.prompt.trim().slice(0, 600);
+    if (!label || !prompt) return [];
+
+    const rawConfirmation = choice.confirmation;
+    const confirmation =
+      isRecord(rawConfirmation) &&
+      rawConfirmation.kind === "project-decision" &&
+      typeof rawConfirmation.content === "string" &&
+      rawConfirmation.content.trim()
+        ? {
+            kind: "project-decision" as const,
+            content: rawConfirmation.content.trim().slice(0, 600),
+          }
+        : undefined;
+
+    return [{
+      label,
+      description: choice.description.trim().slice(0, 220),
+      prompt,
+      ...(confirmation ? { confirmation } : {}),
+    }];
+  });
+
+  return {
+    kind: value.kind,
+    title: value.title.trim().slice(0, 120),
+    summary: value.summary.trim().slice(0, 400),
+    phases,
+    choices,
+    recommendedSurface: value.recommendedSurface,
+  };
+}
+
 function normalizeStringReferences(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
 
@@ -243,10 +377,12 @@ function normalizeStructuredResponse(
     return undefined;
   }
 
+  const experience = normalizeExperience(value.experience);
   return {
     actionTypes: [...new Set(value.actionTypes)],
     experienceKind: value.experienceKind,
     recommendedSurface: value.recommendedSurface,
+    ...(experience ? { experience } : {}),
   };
 }
 
@@ -324,6 +460,7 @@ function normalizeConversation(value: unknown): Conversation | null {
   }
 
   const summary = normalizeSummary(value.summary);
+  const betaWorkflow = normalizeBetaWorkflow(value.betaWorkflow);
   return {
     conversationId: value.conversationId.trim(),
     ...(isNonEmptyString(value.projectId) ? { projectId: value.projectId.trim() } : {}),
@@ -337,6 +474,7 @@ function normalizeConversation(value: unknown): Conversation | null {
     revision: value.revision as number,
     messages,
     ...(summary ? { summary } : {}),
+    ...(betaWorkflow ? { betaWorkflow } : {}),
   };
 }
 
@@ -421,6 +559,24 @@ function cloneMessage(message: ConversationMessage): ConversationMessage {
           structuredResponse: {
             ...message.structuredResponse,
             actionTypes: [...message.structuredResponse.actionTypes],
+            ...(message.structuredResponse.experience
+              ? {
+                  experience: {
+                    ...message.structuredResponse.experience,
+                    phases: message.structuredResponse.experience.phases.map(
+                      (phase) => ({ ...phase }),
+                    ),
+                    choices: message.structuredResponse.experience.choices.map(
+                      (choice) => ({
+                        ...choice,
+                        ...(choice.confirmation
+                          ? { confirmation: { ...choice.confirmation } }
+                          : {}),
+                      }),
+                    ),
+                  },
+                }
+              : {}),
           },
         }
       : {}),
@@ -439,6 +595,9 @@ function cloneConversation(conversation: Conversation): Conversation {
     ...conversation,
     messages: conversation.messages.map(cloneMessage),
     ...(conversation.summary ? { summary: { ...conversation.summary } } : {}),
+    ...(conversation.betaWorkflow
+      ? { betaWorkflow: { ...conversation.betaWorkflow } }
+      : {}),
   };
 }
 
@@ -478,6 +637,14 @@ function structuredResponseFromPlan(
     actionTypes: [...new Set(plan.actions.map((action) => action.type))],
     experienceKind: plan.experience.kind,
     recommendedSurface: plan.experience.recommendedSurface,
+    experience: normalizeExperience(plan.experience) ?? {
+      kind: "general",
+      title: "",
+      summary: "",
+      phases: [],
+      choices: [],
+      recommendedSurface: "none",
+    },
   };
 }
 
@@ -551,6 +718,16 @@ export class LocalConversationRepository implements ConversationRepository {
       );
       return fallback;
     }
+    if (hasUnsupportedBetaWorkflowVersion(canonicalValue)) {
+      this.blockedByFutureVersion = true;
+      this.migrationOutcome = "failed_safely";
+      reportStateDiagnostic(
+        "conversation",
+        "IAURA_STATE_FUTURE_VERSION_REJECTED",
+        { betaWorkflowVersion: "unsupported" },
+      );
+      return fallback;
+    }
 
     const canonical = normalizeCurrentState(canonicalValue);
     if (canonical) {
@@ -569,9 +746,15 @@ export class LocalConversationRepository implements ConversationRepository {
     }
 
     const backupRead = readLocalState(CONVERSATION_BACKUP_STORAGE_KEY);
-    const backup = normalizeCurrentState(parseLocalState(backupRead.value));
+    const backupValue = parseLocalState(backupRead.value);
+    const backup = hasUnsupportedBetaWorkflowVersion(backupValue)
+      ? null
+      : normalizeCurrentState(backupValue);
     const stagedRead = readLocalState(CONVERSATION_STAGING_STORAGE_KEY);
-    const staged = normalizeCurrentState(parseLocalState(stagedRead.value));
+    const stagedValue = parseLocalState(stagedRead.value);
+    const staged = hasUnsupportedBetaWorkflowVersion(stagedValue)
+      ? null
+      : normalizeCurrentState(stagedValue);
     const recovered = backup ?? staged;
     if (recovered) {
       const raw = backup ? backupRead.value : stagedRead.value;
@@ -960,6 +1143,11 @@ export class LocalConversationRepository implements ConversationRepository {
         ? { summary: undefined }
         : update.summary
           ? { summary: { ...update.summary } }
+          : {}),
+      ...(update.betaWorkflow === null
+        ? { betaWorkflow: undefined }
+        : update.betaWorkflow
+          ? { betaWorkflow: { ...update.betaWorkflow } }
           : {}),
       updatedAt: now,
       lastAccessedAt: now,
