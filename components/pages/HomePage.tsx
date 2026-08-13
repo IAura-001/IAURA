@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -55,6 +56,11 @@ import {
   didActiveProjectChange,
   loadVisibleConversation,
 } from "@/components/pages/conversationHydration";
+import {
+  initialConversationVisibleStart,
+  loadOlderConversationStart,
+  visibleConversationMessages,
+} from "@/components/pages/conversationWindowing";
 import { ActionCenter } from "@/components/sections/ActionCenter";
 import { AIActionBar } from "@/components/sections/AIActionBar";
 import AssistantCard from "@/components/sections/AssistantCard";
@@ -165,6 +171,10 @@ export default function Home({
     useState(false);
   const [messages, setMessages] =
     useState<ChatMessage[]>([]);
+  const [visibleStartIndex, setVisibleStartIndex] =
+    useState(0);
+  const [animatedMessageIds, setAnimatedMessageIds] =
+    useState<ReadonlySet<string>>(() => new Set());
   const [isSending, setIsSending] =
     useState(false);
   const [isAuraLive, setIsAuraLive] =
@@ -226,10 +236,15 @@ export default function Home({
         return;
       }
 
-      setMessages(loadVisibleConversation(
+      const hydratedMessages = loadVisibleConversation(
         conversationRepository,
         requestedProjectId,
-      ));
+      );
+      setMessages(hydratedMessages);
+      setVisibleStartIndex(
+        initialConversationVisibleStart(hydratedMessages.length),
+      );
+      setAnimatedMessageIds(new Set());
     }, 0);
 
     return () => window.clearTimeout(hydrationTimer);
@@ -313,6 +328,8 @@ export default function Home({
         if (didActiveProjectChange(activeProjectId, nextProjectId)) {
           messageGenerationRef.current += 1;
           setMessages([]);
+          setVisibleStartIndex(0);
+          setAnimatedMessageIds(new Set());
         }
 
         updateMemory({
@@ -421,6 +438,14 @@ export default function Home({
 
   const userContext =
     buildUserContext(memory);
+
+  const visibleMessages = useMemo(
+    () => visibleConversationMessages(messages, visibleStartIndex),
+    [messages, visibleStartIndex],
+  );
+  const handleLoadOlderMessages = useCallback(() => {
+    setVisibleStartIndex((current) => loadOlderConversationStart(current));
+  }, []);
 
   const recommendation =
     generateRecommendation(
@@ -567,6 +592,9 @@ export default function Home({
       };
 
       messageGenerationRef.current += 1;
+      setAnimatedMessageIds((current) =>
+        new Set([...current, userMessage.id]),
+      );
       setMessages((previous) => [
         ...previous,
         userMessage,
@@ -618,6 +646,9 @@ export default function Home({
           };
 
         messageGenerationRef.current += 1;
+        setAnimatedMessageIds((current) =>
+          new Set([...current, assistantMessage.id]),
+        );
         setMessages((previous) => [
           ...previous,
           assistantMessage,
@@ -673,6 +704,9 @@ export default function Home({
           };
 
         messageGenerationRef.current += 1;
+        setAnimatedMessageIds((current) =>
+          new Set([...current, errorMessage.id]),
+        );
         setMessages((previous) => [
           ...previous,
           errorMessage,
@@ -794,8 +828,11 @@ export default function Home({
                   <section className="min-w-0 space-y-5 rounded-[28px] border border-white/[0.07] bg-[#09090f] p-4 sm:p-6">
                     <Conversation
                       messages={
-                        messages
+                        visibleMessages
                       }
+                      olderMessageCount={visibleStartIndex}
+                      onLoadOlder={handleLoadOlderMessages}
+                      animatedMessageIds={animatedMessageIds}
                       isThinking={
                         isSending
                       }

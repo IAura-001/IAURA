@@ -6,10 +6,41 @@ import {
   didActiveProjectChange,
   loadVisibleConversation,
 } from "../conversationHydration";
+import {
+  initialConversationVisibleStart,
+  visibleConversationMessages,
+} from "../conversationWindowing";
 
 describe("project conversation hydration", () => {
   beforeEach(() => {
     window.localStorage.clear();
+  });
+
+  it("keeps complete hydrated history while deriving a recent presentation window", () => {
+    const conversations = new LocalConversationRepository();
+    const created = conversations.createConversation({
+      projectId: "long-project",
+    }).conversation!;
+    for (let index = 1; index <= 35; index += 1) {
+      conversations.appendMessage(created.conversationId, {
+        messageId: `long-${index}`,
+        role: index % 2 === 0 ? "assistant" : "user",
+        content: `Long message ${index}`,
+      });
+    }
+
+    const reloaded = new LocalConversationRepository();
+    const complete = loadVisibleConversation(reloaded, "long-project");
+    const visible = visibleConversationMessages(
+      complete,
+      initialConversationVisibleStart(complete.length),
+    );
+
+    expect(reloaded.getActiveConversation("long-project")?.messages).toHaveLength(35);
+    expect(complete).toHaveLength(35);
+    expect(visible).toHaveLength(10);
+    expect(visible[0].id).toBe("long-26");
+    expect(visible.at(-1)?.id).toBe("long-35");
   });
 
   it("distinguishes a same-project object refresh from a real project change", () => {

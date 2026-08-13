@@ -22,6 +22,9 @@ import {
 
 interface ConversationProps {
   messages: ChatMessage[];
+  olderMessageCount?: number;
+  onLoadOlder?: () => void;
+  animatedMessageIds?: ReadonlySet<string>;
   isThinking?: boolean;
   project?: IAuraProject | null;
   onOpenBranding?: () => void;
@@ -32,6 +35,7 @@ interface ConversationProps {
 
 interface AnimatedMessageProps {
   message: ChatMessage;
+  animate?: boolean;
   onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
   isBusy?: boolean;
@@ -40,6 +44,7 @@ interface AnimatedMessageProps {
 const AnimatedMessage = memo(
   function AnimatedMessage({
     message,
+    animate = false,
     onChoose,
     onOpenSurface,
     isBusy = false,
@@ -49,7 +54,7 @@ const AnimatedMessage = memo(
       message.role === "assistant";
     const [visibleContent, setVisibleContent] =
       useState(
-        isAssistant ? "" : message.content
+        isAssistant && animate ? "" : message.content
       );
     const words = useMemo(
       () => message.content.split(" "),
@@ -57,7 +62,7 @@ const AnimatedMessage = memo(
     );
 
     useEffect(() => {
-      if (!isAssistant) return;
+      if (!isAssistant || !animate) return;
 
       let wordIndex = 0;
       const typingTimer =
@@ -77,13 +82,13 @@ const AnimatedMessage = memo(
       return () => {
         window.clearInterval(typingTimer);
       };
-    }, [isAssistant, words]);
+    }, [animate, isAssistant, words]);
 
     return (
       <article
         className={[
           "aura-message relative overflow-hidden rounded-2xl border p-5",
-          "animate-[message-enter_500ms_ease-out]",
+          animate ? "animate-[message-enter_500ms_ease-out]" : "",
           isAssistant
             ? "border-purple-400/20 bg-purple-500/[0.04]"
             : "border-white/10 bg-white/[0.03]",
@@ -217,6 +222,9 @@ function AuraThinking() {
 
 export function Conversation({
   messages,
+  olderMessageCount = 0,
+  onLoadOlder,
+  animatedMessageIds,
   isThinking = false,
   project,
   onOpenBranding,
@@ -246,10 +254,23 @@ export function Conversation({
         <div className="h-px flex-1 bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
       </div>
 
+      {olderMessageCount > 0 && onLoadOlder ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={onLoadOlder}
+            className="min-h-10 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-medium text-zinc-400 transition hover:border-purple-400/30 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/70"
+          >
+            Cargar mensajes anteriores
+          </button>
+        </div>
+      ) : null}
+
       {messages.map((message) => (
         <AnimatedMessage
           key={message.id}
           message={message}
+          animate={animatedMessageIds?.has(message.id) ?? false}
           onChoose={onChoose}
           onOpenSurface={onOpenSurface}
           isBusy={isBusy}
