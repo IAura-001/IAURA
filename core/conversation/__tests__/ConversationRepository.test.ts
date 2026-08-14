@@ -300,6 +300,38 @@ describe("LocalConversationRepository", () => {
       .not.toHaveProperty("projectId");
   });
 
+  it("persists and reloads a complete assistant next-step proposal", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "next-step",
+      projectId: "iaura",
+    });
+    first.appendMessage(conversation.conversationId, {
+      role: "assistant",
+      content: "One next step.",
+      structuredResponse: {
+        actionTypes: [],
+        experienceKind: "project",
+        recommendedSurface: "presence",
+        betaNextStep: {
+          action: "Build the recommendation card.",
+          whyNow: "The outcome is confirmed.",
+          result: "One next step is visible.",
+          doneWhen: "It remains after reload.",
+        },
+      },
+    });
+
+    expect(repository().getActiveConversation("iaura")?.messages[0]
+      .structuredResponse?.betaNextStep).toEqual({
+        action: "Build the recommendation card.",
+        whyNow: "The outcome is confirmed.",
+        result: "One next step is visible.",
+        doneWhen: "It remains after reload.",
+      });
+    expect(repository().getActiveConversation("nova")).toBeNull();
+  });
+
   it("keeps two conversations and two project associations isolated", () => {
     const repo = repository();
     const first = createConversation(repo, {

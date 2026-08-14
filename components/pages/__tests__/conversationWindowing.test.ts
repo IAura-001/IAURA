@@ -84,4 +84,28 @@ describe("conversation windowing", () => {
       initialConversationVisibleStart(nova.length),
     ).every(({ id }) => id.startsWith("nova-"))).toBe(true);
   });
+
+  it("keeps a recommendation attached when its message is visible or revealed", () => {
+    const complete = messages(21);
+    complete[5] = {
+      ...complete[5],
+      role: "assistant",
+      betaNextStep: {
+        action: "Build one card",
+        whyNow: "The outcome is confirmed",
+        result: "One recommendation appears",
+        doneWhen: "The card is visible",
+      },
+    };
+    complete[20] = { ...complete[20], betaNextStep: complete[5].betaNextStep };
+
+    let start = initialConversationVisibleStart(complete.length);
+    expect(visibleConversationMessages(complete, start).at(-1)?.betaNextStep)
+      .toEqual(complete[5].betaNextStep);
+
+    start = loadOlderConversationStart(start);
+    expect(visibleConversationMessages(complete, start)
+      .find(({ id }) => id === complete[5].id)?.betaNextStep)
+      .toEqual(complete[5].betaNextStep);
+  });
 });

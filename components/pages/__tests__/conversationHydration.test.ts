@@ -162,4 +162,28 @@ describe("project conversation hydration", () => {
       recommendedSurface: "projects",
     });
   });
+
+  it("hydrates a project-isolated next-step card from its assistant message", () => {
+    const conversations = new LocalConversationRepository();
+    const iaura = conversations.createConversation({ projectId: "iaura" }).conversation!;
+    conversations.appendMessage(iaura.conversationId, {
+      role: "assistant",
+      content: "Recommended.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "project", recommendedSurface: "presence",
+        betaNextStep: {
+          action: "Ship one card", whyNow: "The outcome is clear",
+          result: "A visible recommendation", doneWhen: "It survives reload",
+        },
+      },
+    });
+    conversations.createConversation({ projectId: "nova" });
+
+    expect(loadVisibleConversation(conversations, "iaura")[0].betaNextStep)
+      .toEqual({
+        action: "Ship one card", whyNow: "The outcome is clear",
+        result: "A visible recommendation", doneWhen: "It survives reload",
+      });
+    expect(loadVisibleConversation(conversations, "nova")).toEqual([]);
+  });
 });

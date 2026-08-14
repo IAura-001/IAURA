@@ -16,6 +16,7 @@ import {
   AURA_EXPERIENCE_SURFACES,
   IAURA_ACTION_TYPES,
   type AuraAssistantPlan,
+  type BetaNextStepRecommendation,
   type AuraExperience,
   type AuraExperienceKind,
   type AuraExperienceSurface,
@@ -79,6 +80,7 @@ export interface ConversationStructuredResponse {
   experienceKind: AuraExperienceKind;
   recommendedSurface: AuraExperienceSurface;
   experience?: AuraExperience;
+  betaNextStep?: BetaNextStepRecommendation;
 }
 
 export interface ConversationMessage {
@@ -420,6 +422,22 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
   };
 }
 
+function normalizeBetaNextStep(
+  value: unknown,
+): BetaNextStepRecommendation | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const fields = [value.action, value.whyNow, value.result, value.doneWhen];
+  if (!fields.every(isNonEmptyString)) return undefined;
+
+  return {
+    action: (value.action as string).trim().slice(0, 1000),
+    whyNow: (value.whyNow as string).trim().slice(0, 1000),
+    result: (value.result as string).trim().slice(0, 1000),
+    doneWhen: (value.doneWhen as string).trim().slice(0, 1000),
+  };
+}
+
 function normalizeStringReferences(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
 
@@ -441,11 +459,13 @@ function normalizeStructuredResponse(
   }
 
   const experience = normalizeExperience(value.experience);
+  const betaNextStep = normalizeBetaNextStep(value.betaNextStep);
   return {
     actionTypes: [...new Set(value.actionTypes)],
     experienceKind: value.experienceKind,
     recommendedSurface: value.recommendedSurface,
     ...(experience ? { experience } : {}),
+    ...(betaNextStep ? { betaNextStep } : {}),
   };
 }
 
@@ -640,6 +660,9 @@ function cloneMessage(message: ConversationMessage): ConversationMessage {
                   },
                 }
               : {}),
+            ...(message.structuredResponse.betaNextStep
+              ? { betaNextStep: { ...message.structuredResponse.betaNextStep } }
+              : {}),
           },
         }
       : {}),
@@ -718,6 +741,9 @@ function structuredResponseFromPlan(
       choices: [],
       recommendedSurface: "none",
     },
+    ...(plan.betaNextStep
+      ? { betaNextStep: normalizeBetaNextStep(plan.betaNextStep) }
+      : {}),
   };
 }
 

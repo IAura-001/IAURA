@@ -643,6 +643,9 @@ export default function Home({
             content,
             experience:
               response.experience,
+            ...(response.betaNextStep
+              ? { betaNextStep: response.betaNextStep }
+              : {}),
           };
 
         messageGenerationRef.current += 1;

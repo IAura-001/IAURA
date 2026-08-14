@@ -34,5 +34,9 @@ export function loadVisibleConversation(
     message.structuredResponse?.experience
       ? { experience: message.structuredResponse.experience }
       : {}),
+    ...(message.role === "assistant" &&
+    message.structuredResponse?.betaNextStep
+      ? { betaNextStep: message.structuredResponse.betaNextStep }
+      : {}),
   })) ?? [];
 }

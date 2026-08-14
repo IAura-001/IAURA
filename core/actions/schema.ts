@@ -6,6 +6,7 @@ export const IAURA_RESPONSE_SCHEMA = {
   "actions",
   "memoryUpdates",
   "experience",
+  "betaNextStep",
 ],
   properties: {
     content: {
@@ -287,6 +288,40 @@ export const IAURA_RESPONSE_SCHEMA = {
             "Best optional application surface for the next step.",
         },
       },
+    },
+    betaNextStep: {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["action", "whyNow", "result", "doneWhen"],
+          properties: {
+            action: {
+              type: "string",
+              minLength: 1,
+              description: "The single concrete action the founder should begin next.",
+            },
+            whyNow: {
+              type: "string",
+              minLength: 1,
+              description: "Why this is the highest-priority next step now.",
+            },
+            result: {
+              type: "string",
+              minLength: 1,
+              description: "The concrete result this action should produce.",
+            },
+            doneWhen: {
+              type: "string",
+              minLength: 1,
+              description: "The observable criterion that verifies completion.",
+            },
+          },
+        },
+        { type: "null" },
+      ],
+      description:
+        "Exactly one Beta 01 next-step proposal when confirmed context and confirmed outcome exist; otherwise null.",
     },
   },
 } as const;

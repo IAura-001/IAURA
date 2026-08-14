@@ -102,6 +102,13 @@ export interface AuraExperience {
   recommendedSurface: AuraExperienceSurface;
 }
 
+export interface BetaNextStepRecommendation {
+  action: string;
+  whyNow: string;
+  result: string;
+  doneWhen: string;
+}
+
 export interface PlannedAuraAction {
   type: IAuraActionType;
   value: string;
@@ -128,6 +135,7 @@ export interface AuraAssistantPlan {
   actions: PlannedAuraAction[];
   memoryUpdates: PlannedMemoryUpdate[];
   experience: AuraExperience;
+  betaNextStep?: BetaNextStepRecommendation;
 }
 
 export interface ActionExecutionItem {

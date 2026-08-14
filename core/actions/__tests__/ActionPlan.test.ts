@@ -9,6 +9,48 @@ function choiceSchema() {
 }
 
 describe("ActionPlan", () => {
+  it("defines one nullable closed next-step object with all four required fields", () => {
+    const schema = IAURA_RESPONSE_SCHEMA.properties.betaNextStep;
+    const recommendation = schema.anyOf[0];
+
+    expect(IAURA_RESPONSE_SCHEMA.required).toContain("betaNextStep");
+    expect(recommendation).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+      required: ["action", "whyNow", "result", "doneWhen"],
+    });
+    expect(schema.anyOf).toHaveLength(2);
+    expect(schema.anyOf[1]).toEqual({ type: "null" });
+  });
+
+  it("parses one complete recommendation and normalizes its fields", () => {
+    const plan = parseAuraAssistantPlan({
+      content: "Here is the next step.",
+      betaNextStep: {
+        action: "  Build the first card. ",
+        whyNow: " Context and outcome are confirmed. ",
+        result: " One prioritized action is visible. ",
+        doneWhen: " The card survives reload. ",
+      },
+    });
+
+    expect(plan.betaNextStep).toEqual({
+      action: "Build the first card.",
+      whyNow: "Context and outcome are confirmed.",
+      result: "One prioritized action is visible.",
+      doneWhen: "The card survives reload.",
+    });
+  });
+
+  it.each([
+    { action: "Act", whyNow: "Now", result: "Result" },
+    { action: "   ", whyNow: "Now", result: "Result", doneWhen: "Visible" },
+    [{ action: "One", whyNow: "Now", result: "One", doneWhen: "Done" }],
+  ])("rejects incomplete, empty, or multiple recommendation shapes", (betaNextStep) => {
+    const plan = parseAuraAssistantPlan({ content: "Continue.", betaNextStep });
+    expect(plan.betaNextStep).toBeUndefined();
+  });
+
   it("requires confirmation and restricts all confirmation variants to closed objects", () => {
     const schema = choiceSchema();
 

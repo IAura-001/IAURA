@@ -5,6 +5,7 @@ import {
   IAURA_MEMORY_OPERATIONS,
   IAURA_MEMORY_TYPES,
   type AuraAssistantPlan,
+  type BetaNextStepRecommendation,
   type AuraExperience,
   type AuraExperienceChoice,
   type AuraExperienceKind,
@@ -371,6 +372,24 @@ function parseExperience(
   };
 }
 
+function parseBetaNextStep(
+  value: unknown,
+): BetaNextStepRecommendation | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const action = readText(candidate.action, 1000);
+  const whyNow = readText(candidate.whyNow, 1000);
+  const result = readText(candidate.result, 1000);
+  const doneWhen = readText(candidate.doneWhen, 1000);
+
+  return action && whyNow && result && doneWhen
+    ? { action, whyNow, result, doneWhen }
+    : undefined;
+}
+
 export function parseAuraAssistantPlan(
   value: unknown,
 ): AuraAssistantPlan {
@@ -432,6 +451,8 @@ export function parseAuraAssistantPlan(
         )
     : [];
 
+  const betaNextStep = parseBetaNextStep(candidate.betaNextStep);
+
   return {
     content,
     actions,
@@ -439,5 +460,6 @@ export function parseAuraAssistantPlan(
     experience: parseExperience(
       candidate.experience,
     ),
+    ...(betaNextStep ? { betaNextStep } : {}),
   };
 }

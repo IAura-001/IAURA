@@ -62,4 +62,27 @@ describe("Conversation windowing controls", () => {
 
     expect(screen.getByText("Persisted answer")).toBeVisible();
   });
+
+  it("renders one recommendation card with all four dimensions", () => {
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation messages={[{
+          id: "recommendation", role: "assistant", content: "Next step",
+          betaNextStep: {
+            action: "Build the card",
+            whyNow: "The outcome is confirmed",
+            result: "One action is visible",
+            doneWhen: "The card survives reload",
+          },
+        }]} />
+      </I18nProvider>,
+    );
+
+    const card = screen.getByRole("region", { name: "Siguiente paso recomendado" });
+    expect(card).toHaveTextContent("Acción");
+    expect(card).toHaveTextContent("Build the card");
+    expect(card).toHaveTextContent("Por qué ahora");
+    expect(card).toHaveTextContent("Resultado esperado");
+    expect(card).toHaveTextContent("Terminado cuando");
+  });
 });

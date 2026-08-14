@@ -61,6 +61,14 @@ function countOccurrences(source: string, value: string): number {
 }
 
 describe("PromptBuilder", () => {
+  it("requires one provisional next step grounded in confirmed workflow facts", () => {
+    const prompt = new PromptBuilder().build();
+
+    expect(prompt).toContain("BETA 01 SINGLE NEXT-STEP PROTOCOL");
+    expect(prompt).toContain("BOTH confirmed context and confirmed outcome");
+    expect(prompt).toContain("exactly ONE prioritized betaNextStep object");
+    expect(prompt).toContain("never a confirmed user decision");
+  });
   it("composes the official personality exactly once", () => {
     const prompt = new PromptBuilder().build(input);
 

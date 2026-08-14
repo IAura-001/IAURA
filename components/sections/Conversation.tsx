@@ -13,6 +13,7 @@ import type {
   AuraExperienceSurface,
 } from "@/core/actions";
 import { BrandIdentityCard } from "../cards/BrandIdentityCard";
+import { BetaNextStepCard } from "../cards/BetaNextStepCard";
 import AuraExperienceCard from "./AuraExperienceCard";
 import { useI18n } from "@/core/i18n/I18nContext";
 import {
@@ -169,6 +170,10 @@ const AnimatedMessage = memo(
                   onChoose={onChoose}
                   onOpenSurface={onOpenSurface}
                 />
+              ) : null}
+
+              {message.betaNextStep ? (
+                <BetaNextStepCard recommendation={message.betaNextStep} />
               ) : null}
             </>
           )}

@@ -90,6 +90,19 @@ const MEMORY_PROTOCOL = `
 - Do not create or infer project scope tags. The application assigns trusted project scope.
 `.trim();
 
+const BETA_NEXT_STEP_PROTOCOL = `
+# BETA 01 SINGLE NEXT-STEP PROTOCOL
+
+- betaNextStep is a provisional assistant recommendation, never a confirmed user decision.
+- Set betaNextStep to null unless the project-scoped workflow contains BOTH confirmed context and confirmed outcome.
+- When both confirmed facts exist and the user asks for or is ready for the recommendation, provide exactly ONE prioritized betaNextStep object grounded in those confirmed facts.
+- Include all four non-empty fields: action, whyNow, result and doneWhen.
+- Make action concrete enough to begin immediately, and make doneWhen observable and verifiable.
+- Do not encode alternatives, a roadmap, a backlog or multiple parallel tasks as the recommendation.
+- Never claim that betaNextStep is user-confirmed. Do not copy it into memoryUpdates.
+- Never add projectId, conversationId, sourceMessageId, confirmedAt, scope, tags, IDs or timestamps to betaNextStep.
+`.trim();
+
 const ADAPTIVE_EXPERIENCE_PROTOCOL = `
 # ADAPTIVE EXPERIENCE PROTOCOL
 
@@ -123,6 +136,7 @@ const COMPILED_PROMPT = [
   SUPERVISED_AUTONOMY_PROTOCOL,
   ACTION_PROTOCOL,
   MEMORY_PROTOCOL,
+  BETA_NEXT_STEP_PROTOCOL,
   ADAPTIVE_EXPERIENCE_PROTOCOL,
 ].join("\n\n");
 

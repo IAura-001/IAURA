@@ -908,6 +908,38 @@ describe("ConversationController", () => {
         "Goal: Launch Beta 01",
       ),
     }));
+    expect(mocks.analyze).toHaveBeenCalledWith(expect.objectContaining({
+      userContext: expect.stringContaining(
+        "Outcome: Validate the IAURA Beta 01 direction",
+      ),
+    }));
+    expect(cognitiveRequest.compiledPrompt).toBe("Canonical IAURA prompt.");
+  });
+
+  it("persists the provider recommendation with the authoritative assistant message", async () => {
+    const projects = {
+      getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)),
+    } as unknown as ProjectRepository;
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue({
+      ...createAssistantPlan("One recommendation.", []),
+      betaNextStep: {
+        action: "Build the first recommendation card.",
+        whyNow: "Context and outcome are confirmed.",
+        result: "The founder sees one action.",
+        doneWhen: "The card survives reload.",
+      },
+    });
+
+    const turn = await new ConversationController({
+      conversations: conversationRepository,
+      projects,
+      contextRetriever: createContextRetriever(),
+    }).send("Recommend one next step.", "Project context");
+
+    const persisted = conversationRepository.getActiveConversation("iaura")
+      ?.messages.find(({ messageId }) => messageId === turn.assistantMessageId);
+    expect(persisted?.structuredResponse?.betaNextStep).toEqual(turn.plan.betaNextStep);
   });
 
   it("keeps typed-turn workflow and context isolated to the active project", async () => {

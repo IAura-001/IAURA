@@ -29,6 +29,7 @@ export {
   type AuraExperienceSurface,
   type AuraActionHistoryEntry,
   type AuraAssistantPlan,
+  type BetaNextStepRecommendation,
   type IAuraActionType,
   type IAuraMemoryOperation,
   type IAuraMemoryType,
