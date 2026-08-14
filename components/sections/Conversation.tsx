@@ -1,8 +1,11 @@
 "use client";
 
 import {
+  useCallback,
   memo,
   useEffect,
+  useLayoutEffect,
+  useRef,
   useMemo,
   useState,
 } from "react";
@@ -20,9 +23,17 @@ import {
   BRAND_PALETTE_PRESETS,
   DEFAULT_BRAND_LOGO,
 } from "@/core/branding/brandProfile";
+import {
+  anchoredDocumentScrollTop,
+  conversationGrowthDecision,
+  conversationScrollDecision,
+  isConversationNearBottom,
+  returnToLatestScrollBehavior,
+} from "./conversationAutoScroll";
 
 interface ConversationProps {
   messages: ChatMessage[];
+  conversationKey?: string | null;
   olderMessageCount?: number;
   onLoadOlder?: () => void;
   animatedMessageIds?: ReadonlySet<string>;
@@ -236,6 +247,7 @@ function AuraThinking() {
 
 export function Conversation({
   messages,
+  conversationKey = null,
   olderMessageCount = 0,
   onLoadOlder,
   animatedMessageIds,
@@ -248,6 +260,197 @@ export function Conversation({
 }: ConversationProps) {
   const { t } = useI18n();
   const branding = project?.branding;
+  const contentRef = useRef<HTMLElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const autoFollowRef = useRef(true);
+  const loadOlderAnchorRef = useRef<{
+    scrollHeight: number;
+    scrollTop: number;
+  } | null>(null);
+  const suppressHistoricalResizeRef = useRef(false);
+  const frameRef = useRef<number | null>(null);
+  const initialPositionFrameRef = useRef<number | null>(null);
+  const initialPositionInnerFrameRef = useRef<number | null>(null);
+  const initialPositionReleaseFrameRef = useRef<number | null>(null);
+  const initialPositionReadyRef = useRef(false);
+  const initialPositionScrollRef = useRef(false);
+  const currentConversationKeyRef = useRef(conversationKey);
+  const latestMessageIdRef = useRef(messages.at(-1)?.id);
+  const [unseenContent, setUnseenContent] = useState<{
+    conversationKey: string | null;
+    visible: boolean;
+  }>({ conversationKey, visible: false });
+  const hasUnseenNewContent =
+    unseenContent.conversationKey === conversationKey && unseenContent.visible;
+  const latestMessageId = messages.at(-1)?.id;
+  const setHasUnseenNewContent = useCallback((visible: boolean) => {
+    setUnseenContent((current) =>
+      current.conversationKey === conversationKey && current.visible === visible
+        ? current
+        : { conversationKey, visible },
+    );
+  }, [conversationKey]);
+
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = "auto") => {
+    autoFollowRef.current = true;
+    setHasUnseenNewContent(false);
+    endRef.current?.scrollIntoView?.({ behavior, block: "end" });
+  }, [setHasUnseenNewContent]);
+
+  useLayoutEffect(() => {
+    autoFollowRef.current = true;
+    initialPositionReadyRef.current = false;
+    currentConversationKeyRef.current = conversationKey;
+  }, [conversationKey]);
+
+  useLayoutEffect(() => {
+    latestMessageIdRef.current = latestMessageId;
+  }, [latestMessageId]);
+
+  useEffect(() => {
+    if (!latestMessageId || initialPositionReadyRef.current) return;
+
+    const requestedConversationKey = conversationKey;
+    initialPositionFrameRef.current = window.requestAnimationFrame(() => {
+      initialPositionFrameRef.current = null;
+      initialPositionInnerFrameRef.current = window.requestAnimationFrame(() => {
+        initialPositionInnerFrameRef.current = null;
+        if (
+          currentConversationKeyRef.current !== requestedConversationKey ||
+          latestMessageIdRef.current !== latestMessageId ||
+          !contentRef.current ||
+          !endRef.current
+        ) {
+          return;
+        }
+        initialPositionReadyRef.current = true;
+        autoFollowRef.current = true;
+        setHasUnseenNewContent(false);
+        initialPositionScrollRef.current = true;
+        contentRef.current.scrollIntoView?.({ behavior: "auto", block: "start" });
+        initialPositionReleaseFrameRef.current = window.requestAnimationFrame(() => {
+          initialPositionReleaseFrameRef.current = window.requestAnimationFrame(() => {
+            initialPositionReleaseFrameRef.current = null;
+            initialPositionScrollRef.current = false;
+          });
+        });
+      });
+    });
+
+    return () => {
+      if (initialPositionFrameRef.current !== null) {
+        window.cancelAnimationFrame(initialPositionFrameRef.current);
+        initialPositionFrameRef.current = null;
+      }
+      if (initialPositionInnerFrameRef.current !== null) {
+        window.cancelAnimationFrame(initialPositionInnerFrameRef.current);
+        initialPositionInnerFrameRef.current = null;
+      }
+      if (initialPositionReleaseFrameRef.current !== null) {
+        window.cancelAnimationFrame(initialPositionReleaseFrameRef.current);
+        initialPositionReleaseFrameRef.current = null;
+      }
+      initialPositionScrollRef.current = false;
+    };
+  }, [conversationKey, latestMessageId, setHasUnseenNewContent]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (frameRef.current !== null) return;
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        if (initialPositionScrollRef.current) return;
+        const end = endRef.current;
+        if (!end) return;
+        const nearBottom = isConversationNearBottom(
+          end.getBoundingClientRect().bottom,
+          window.innerHeight,
+        );
+        const decision = conversationScrollDecision(
+          nearBottom,
+          hasUnseenNewContent,
+        );
+        autoFollowRef.current = decision.autoFollowEnabled;
+        setHasUnseenNewContent(decision.hasUnseenNewContent);
+      });
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+    };
+  }, [hasUnseenNewContent, setHasUnseenNewContent]);
+
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content || typeof ResizeObserver === "undefined") return;
+
+    let previousHeight = content.getBoundingClientRect().height;
+    const observer = new ResizeObserver(() => {
+      const nextHeight = content.getBoundingClientRect().height;
+      if (nextHeight === previousHeight) return;
+      previousHeight = nextHeight;
+
+      if (suppressHistoricalResizeRef.current) {
+        suppressHistoricalResizeRef.current = false;
+        return;
+      }
+
+      const decision = conversationGrowthDecision(autoFollowRef.current);
+      if (decision.shouldFollow) {
+        scrollToLatest();
+      } else {
+        setHasUnseenNewContent(decision.hasUnseenNewContent);
+      }
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [conversationKey, scrollToLatest, setHasUnseenNewContent]);
+
+  useLayoutEffect(() => {
+    if (messages.length === 0) return;
+    const anchor = loadOlderAnchorRef.current;
+    if (anchor) {
+      loadOlderAnchorRef.current = null;
+      suppressHistoricalResizeRef.current = true;
+      window.scrollTo({
+        top: anchoredDocumentScrollTop(
+          anchor.scrollTop,
+          anchor.scrollHeight,
+          document.documentElement.scrollHeight,
+        ),
+        behavior: "auto",
+      });
+      return;
+    }
+
+    if (!initialPositionReadyRef.current) return;
+
+    const decision = conversationGrowthDecision(autoFollowRef.current);
+    if (decision.shouldFollow) scrollToLatest();
+    else setHasUnseenNewContent(decision.hasUnseenNewContent);
+  }, [
+    conversationKey,
+    messages.length,
+    scrollToLatest,
+    setHasUnseenNewContent,
+  ]);
+
+  const handleLoadOlder = useCallback(() => {
+    if (!onLoadOlder) return;
+    autoFollowRef.current = false;
+    loadOlderAnchorRef.current = {
+      scrollHeight: document.documentElement.scrollHeight,
+      scrollTop: window.scrollY,
+    };
+    onLoadOlder();
+  }, [onLoadOlder]);
+
+  const handleReturnToLatest = useCallback(() => {
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    scrollToLatest(returnToLatestScrollBehavior(reducedMotion ?? false));
+  }, [scrollToLatest]);
 
   if (
     messages.length === 0 &&
@@ -257,7 +460,11 @@ export function Conversation({
   }
 
   return (
-    <section className="relative space-y-4">
+    <section
+      ref={contentRef}
+      data-testid="conversation-window"
+      className="relative space-y-4"
+    >
       <div className="mb-5 flex items-center gap-3">
         <div className="h-px flex-1 bg-gradient-to-r from-transparent via-purple-500/30 to-transparent" />
 
@@ -272,7 +479,7 @@ export function Conversation({
         <div className="flex justify-center">
           <button
             type="button"
-            onClick={onLoadOlder}
+            onClick={handleLoadOlder}
             className="min-h-10 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-medium text-zinc-400 transition hover:border-purple-400/30 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/70"
           >
             Cargar mensajes anteriores
@@ -323,6 +530,25 @@ export function Conversation({
       )}
 
       {isThinking && <AuraThinking />}
+
+      <div
+        ref={endRef}
+        data-testid="conversation-end"
+        aria-hidden="true"
+        className="h-px"
+      />
+
+      {hasUnseenNewContent ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex justify-center px-4">
+          <button
+            type="button"
+            onClick={handleReturnToLatest}
+            className="pointer-events-auto min-h-10 rounded-full border border-purple-400/30 bg-[#11111a]/95 px-4 py-2 text-sm font-medium text-purple-100 shadow-[0_10px_30px_rgba(0,0,0,0.4)] backdrop-blur transition hover:border-purple-300/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/70"
+          >
+            Volver al final ↓
+          </button>
+        </div>
+      ) : null}
 
       <style jsx>{`
         .aura-response-line,

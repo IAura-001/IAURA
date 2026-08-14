@@ -851,6 +851,7 @@ export default function Home({
 
                   <section className="min-w-0 space-y-5 rounded-[28px] border border-white/[0.07] bg-[#09090f] p-4 sm:p-6">
                     <Conversation
+                      conversationKey={activeProjectId}
                       messages={
                         visibleMessages
                       }
