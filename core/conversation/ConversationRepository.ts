@@ -17,6 +17,7 @@ import {
   IAURA_ACTION_TYPES,
   type AuraAssistantPlan,
   type BetaExecutionEvaluation,
+  type BetaIncompleteExecutionRecoveryDecision,
   type BetaPostClosureDecision,
   type BetaSessionEvaluation,
   type BetaExecutionResult,
@@ -102,6 +103,12 @@ export interface BetaWorkflowMetadata {
     sourceMessageId: string;
     verifiedAt: string;
   }>;
+  incompleteExecutionRecoveries?: Array<{
+    decision: BetaIncompleteExecutionRecoveryDecision;
+    sourceMessageId: string;
+    confirmedAt: string;
+    evidenceId: string;
+  }>;
   sessionEvaluation?: {
     outcomeSatisfied: boolean;
     summary: string;
@@ -117,6 +124,17 @@ export interface BetaWorkflowMetadata {
     sourceMessageId: string;
     confirmedAt: string;
   };
+}
+
+function isRestartedAfterRetryLater(
+  sessionDecision: BetaWorkflowMetadata["sessionDecision"],
+  recovery: NonNullable<
+    BetaWorkflowMetadata["incompleteExecutionRecoveries"]
+  >[number] | undefined,
+): boolean {
+  return recovery?.decision === "retry-later" &&
+    sessionDecision?.kind === "start-now" &&
+    Date.parse(sessionDecision.decidedAt) > Date.parse(recovery.confirmedAt);
 }
 
 export interface ConversationStructuredResponse {
@@ -429,6 +447,39 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
   const hasCompletedStep =
     latestVerifiedExecution?.result === "passed" &&
     latestVerifiedExecution.doneWhenSatisfied;
+  const incompleteEvidenceIds = new Set(
+    trustedVerifiedExecutions
+      .filter((evidence) => evidence.result !== "passed" || !evidence.doneWhenSatisfied)
+      .map((evidence) => evidence.evidenceId),
+  );
+  const recoveredEvidenceIds = new Set<string>();
+  const recoverySourceMessageIds = new Set<string>();
+  const incompleteExecutionRecoveries = Array.isArray(value.incompleteExecutionRecoveries)
+    ? value.incompleteExecutionRecoveries.slice(0, 100).flatMap((candidate) => {
+        if (
+          !isRecord(candidate) ||
+          (candidate.decision !== "retry-now" && candidate.decision !== "retry-later") ||
+          !isNonEmptyString(candidate.sourceMessageId) ||
+          !isIsoDate(candidate.confirmedAt) ||
+          !isNonEmptyString(candidate.evidenceId)
+        ) return [];
+        const evidenceId = candidate.evidenceId.trim();
+        const sourceMessageId = candidate.sourceMessageId.trim();
+        if (
+          !incompleteEvidenceIds.has(evidenceId) ||
+          recoveredEvidenceIds.has(evidenceId) ||
+          recoverySourceMessageIds.has(sourceMessageId)
+        ) return [];
+        recoveredEvidenceIds.add(evidenceId);
+        recoverySourceMessageIds.add(sourceMessageId);
+        return [{
+          decision: candidate.decision as BetaIncompleteExecutionRecoveryDecision,
+          sourceMessageId,
+          confirmedAt: candidate.confirmedAt,
+          evidenceId,
+        }];
+      })
+    : [];
   const sessionEvaluation = isRecord(value.sessionEvaluation) &&
     typeof value.sessionEvaluation.outcomeSatisfied === "boolean" &&
     isNonEmptyString(value.sessionEvaluation.summary) &&
@@ -462,11 +513,25 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
       : undefined;
   const canRemainClosed = hasCompletedStep && sessionEvaluation?.outcomeSatisfied === true &&
     Boolean(sessionClosure);
-  const status = value.status === "closed" && !canRemainClosed
+  const baseStatus = value.status === "closed" && !canRemainClosed
     ? hasCompletedStep ? "evaluated" : "started"
     : value.status === "evaluated" && !hasCompletedStep
       ? "started"
       : value.status;
+  const latestRecovery = latestVerifiedExecution
+    ? incompleteExecutionRecoveries.find(
+        (recovery) => recovery.evidenceId === latestVerifiedExecution.evidenceId,
+      )
+    : undefined;
+  const status = latestRecovery?.decision === "retry-later"
+    ? isRestartedAfterRetryLater(sessionDecision, latestRecovery)
+      ? "started"
+      : "deferred"
+    : latestRecovery?.decision === "retry-now"
+      ? "started"
+      : baseStatus === "deferred" && sessionDecision?.kind !== "continue-later"
+        ? "started"
+        : baseStatus;
 
   return {
     version: BETA_WORKFLOW_VERSION,
@@ -479,6 +544,9 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
       : {}),
     ...(trustedVerifiedExecutions.length && nextStep && outcome && context
       ? { verifiedExecutions: trustedVerifiedExecutions }
+      : {}),
+    ...(incompleteExecutionRecoveries.length && nextStep && outcome && context
+      ? { incompleteExecutionRecoveries }
       : {}),
     ...(sessionEvaluation && hasCompletedStep && nextStep && outcome && context
       ? { sessionEvaluation }
@@ -656,6 +724,14 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
         outcomeSatisfied: rawConfirmation.outcomeSatisfied,
         summary: rawConfirmation.summary.trim().slice(0, 2000),
       };
+      if (
+        rawConfirmation.kind === "beta-incomplete-execution-recovery" &&
+        (rawConfirmation.decision === "retry-now" ||
+          rawConfirmation.decision === "retry-later")
+      ) return {
+        kind: "beta-incomplete-execution-recovery" as const,
+        decision: rawConfirmation.decision as BetaIncompleteExecutionRecoveryDecision,
+      };
       if (rawConfirmation.kind === "beta-session-closure") return {
         kind: "beta-session-closure" as const,
       };
@@ -823,12 +899,13 @@ function bindVerifiedExecutionsToMessages(
   const latest = verifiedExecutions.at(-1);
   const hasBoundCompletedStep =
     latest?.result === "passed" && latest.doneWhenSatisfied;
-  const status = workflow.status === "evaluated" &&
+  const boundStatus = workflow.status === "evaluated" &&
     !hasBoundCompletedStep
     ? "started"
     : workflow.status;
   const baseWorkflow = { ...workflow };
   delete baseWorkflow.verifiedExecutions;
+  delete baseWorkflow.incompleteExecutionRecoveries;
   delete baseWorkflow.sessionEvaluation;
   delete baseWorkflow.sessionClosure;
   delete baseWorkflow.postClosureHandoff;
@@ -883,13 +960,53 @@ function bindVerifiedExecutionsToMessages(
     handoffSourceIndex > closureSourceIndex && hasPersistedHandoffChoice
     ? workflow.postClosureHandoff
     : undefined;
+  const incompleteExecutionRecoveries = (workflow.incompleteExecutionRecoveries ?? [])
+    .filter((recovery) => {
+      const evidenceIndex = verifiedExecutions.findIndex(
+        (evidence) => evidence.evidenceId === recovery.evidenceId,
+      );
+      const evidence = verifiedExecutions[evidenceIndex];
+      if (!evidence || (evidence.result === "passed" && evidence.doneWhenSatisfied)) return false;
+      const evidenceSourceIndex = messages.findIndex(
+        (message) => message.messageId === evidence.sourceMessageId,
+      );
+      const recoverySourceIndex = messages.findIndex(
+        (message) => message.messageId === recovery.sourceMessageId && message.role === "assistant",
+      );
+      const nextEvidenceSourceIndex = verifiedExecutions[evidenceIndex + 1]
+        ? messages.findIndex(
+            (message) =>
+              message.messageId === verifiedExecutions[evidenceIndex + 1].sourceMessageId,
+          )
+        : -1;
+      const hasPersistedRecoveryChoice = messages[recoverySourceIndex]
+        ?.structuredResponse?.experience?.choices.some(
+          (choice) =>
+            choice.confirmation?.kind === "beta-incomplete-execution-recovery" &&
+            choice.confirmation.decision === recovery.decision,
+        );
+      return recoverySourceIndex > evidenceSourceIndex &&
+        (nextEvidenceSourceIndex < 0 || recoverySourceIndex < nextEvidenceSourceIndex) &&
+        hasPersistedRecoveryChoice;
+    });
+  const latestRecovery = incompleteExecutionRecoveries.find(
+    (recovery) => recovery.evidenceId === latest?.evidenceId,
+  );
+  const recoveryStatus = latestRecovery?.decision === "retry-later"
+    ? isRestartedAfterRetryLater(workflow.sessionDecision, latestRecovery)
+      ? "started"
+      : "deferred"
+    : latestRecovery?.decision === "retry-now"
+      ? "started"
+      : boundStatus;
   const reconstructedStatus = workflow.status === "closed" && !sessionClosure
     ? hasBoundCompletedStep ? "evaluated" : "started"
-    : status;
+    : recoveryStatus;
   return {
     ...baseWorkflow,
     status: reconstructedStatus,
     ...(verifiedExecutions.length ? { verifiedExecutions } : {}),
+    ...(incompleteExecutionRecoveries.length ? { incompleteExecutionRecoveries } : {}),
     ...(sessionEvaluation ? { sessionEvaluation } : {}),
     ...(sessionClosure && reconstructedStatus === "closed" ? { sessionClosure } : {}),
     ...(postClosureHandoff && reconstructedStatus === "closed"
@@ -1166,6 +1283,13 @@ function cloneBetaWorkflow(workflow: BetaWorkflowMetadata): BetaWorkflowMetadata
       : {}),
     ...(workflow.verifiedExecutions
       ? { verifiedExecutions: workflow.verifiedExecutions.map((evidence) => ({ ...evidence })) }
+      : {}),
+    ...(workflow.incompleteExecutionRecoveries
+      ? {
+          incompleteExecutionRecoveries: workflow.incompleteExecutionRecoveries.map(
+            (recovery) => ({ ...recovery }),
+          ),
+        }
       : {}),
     ...(workflow.sessionEvaluation
       ? { sessionEvaluation: { ...workflow.sessionEvaluation } }

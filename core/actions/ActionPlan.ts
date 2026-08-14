@@ -6,6 +6,7 @@ import {
   IAURA_MEMORY_TYPES,
   type AuraAssistantPlan,
   type BetaExecutionEvaluation,
+  type BetaIncompleteExecutionRecoveryDecision,
   type BetaPostClosureDecision,
   type BetaSessionEvaluation,
   type BetaNextStepRecommendation,
@@ -315,6 +316,16 @@ function parseChoice(
             doneWhenSatisfied: rawConfirmation.doneWhenSatisfied,
           }
         : undefined;
+    }
+    if (
+      rawConfirmation.kind === "beta-incomplete-execution-recovery" &&
+      (rawConfirmation.decision === "retry-now" ||
+        rawConfirmation.decision === "retry-later")
+    ) {
+      return {
+        kind: "beta-incomplete-execution-recovery" as const,
+        decision: rawConfirmation.decision as BetaIncompleteExecutionRecoveryDecision,
+      };
     }
     if (
       rawConfirmation.kind === "beta-session-evaluation" &&

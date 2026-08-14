@@ -187,5 +187,9 @@ describe("PromptBuilder", () => {
     expect(prompt).toContain('kind: "beta-context"');
     expect(prompt).toContain('kind: "beta-outcome"');
     expect(prompt).toContain("Beta context and outcome proposals remain provisional until clicked.");
+    expect(prompt).toContain('"Reintentar ahora"');
+    expect(prompt).toContain('kind: "beta-incomplete-execution-recovery"');
+    expect(prompt).toContain("same confirmed step remains active");
+    expect(prompt).toContain("Do not propose a replacement step");
   });
 });

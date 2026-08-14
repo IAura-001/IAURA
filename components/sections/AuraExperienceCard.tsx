@@ -6,6 +6,7 @@ import type {
   AuraExperience,
   AuraExperienceChoice,
   AuraExperienceSurface,
+  BetaIncompleteExecutionRecoveryDecision,
 } from "@/core/actions";
 import { useI18n } from "@/core/i18n/I18nContext";
 
@@ -16,6 +17,7 @@ interface AuraExperienceCardProps {
   onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
   showChoices?: boolean;
+  confirmedRecoveryDecision?: BetaIncompleteExecutionRecoveryDecision;
 }
 
 const copy = {
@@ -96,6 +98,7 @@ export default function AuraExperienceCard({
   onChoose,
   onOpenSurface,
   showChoices = true,
+  confirmedRecoveryDecision,
 }: AuraExperienceCardProps) {
   const { locale } = useI18n();
   const text = copy[locale];
@@ -179,16 +182,25 @@ export default function AuraExperienceCard({
         </ol>
       ) : null}
 
-      {(showChoices && experience.choices.length) || experience.recommendedSurface !== "none" ? (
+      {confirmedRecoveryDecision ? (
+        <p className="border-t border-white/[0.07] px-5 py-4 text-sm text-zinc-300 sm:px-6">
+          {confirmedRecoveryDecision === "retry-now"
+            ? "Reintento listo para el mismo paso confirmado. La evidencia anterior permanece registrada."
+            : "Continuación aplazada para el mismo paso confirmado. La evidencia anterior permanece registrada."}
+        </p>
+      ) : null}
+
+      {((showChoices && !confirmedRecoveryDecision && experience.choices.length) ||
+        experience.recommendedSurface !== "none") ? (
         <div className="space-y-3 p-5 sm:p-6">
-          {showChoices && experience.choices.length ? (
+          {showChoices && !confirmedRecoveryDecision && experience.choices.length ? (
             <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-500">
               {text.next}
             </p>
           ) : null}
 
           <div className="grid gap-2 sm:grid-cols-2">
-            {showChoices ? experience.choices.map((choice, index) => {
+            {showChoices && !confirmedRecoveryDecision ? experience.choices.map((choice, index) => {
               const isPending = pendingChoice === index;
               const isChosen = chosenChoice === index;
 

@@ -626,11 +626,18 @@ export default function Home({
               (message) => Boolean(message.betaNextStep),
             );
             return previous.map((message, index) =>
-              index === recommendationIndex
+              message.id === sourceMessageId || index === recommendationIndex
                 ? {
                     ...message,
-                    betaNextStepConfirmed: true,
-                    betaSessionDecision: decision,
+                    ...(message.id === sourceMessageId
+                      ? { betaSessionDecisionConfirmed: true }
+                      : {}),
+                    ...(index === recommendationIndex
+                      ? {
+                          betaNextStepConfirmed: true,
+                          betaSessionDecision: decision,
+                        }
+                      : {}),
                   }
                 : message,
             );
@@ -645,6 +652,19 @@ export default function Home({
           setMessages((previous) => previous.map((message) =>
             message.id === sourceMessageId
               ? { ...message, betaExecutionVerified: true }
+              : message,
+          ));
+        }
+
+        if (
+          typeof missionOverride === "object" &&
+          missionOverride.confirmation?.kind === "beta-incomplete-execution-recovery" &&
+          sourceMessageId
+        ) {
+          const decision = missionOverride.confirmation.decision;
+          setMessages((previous) => previous.map((message) =>
+            message.id === sourceMessageId
+              ? { ...message, betaIncompleteExecutionRecoveryDecision: decision }
               : message,
           ));
         }

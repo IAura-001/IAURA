@@ -105,6 +105,18 @@ export function loadVisibleConversation(
       ? { betaExecutionVerified: true }
       : {}),
     ...(message.role === "assistant" &&
+    workflows.some((workflow) => workflow.incompleteExecutionRecoveries?.some(
+      (recovery) => recovery.sourceMessageId === message.messageId))
+      ? {
+          betaIncompleteExecutionRecoveryDecision: workflows.find((workflow) =>
+            workflow.incompleteExecutionRecoveries?.some(
+              (recovery) => recovery.sourceMessageId === message.messageId,
+            ))!.incompleteExecutionRecoveries!.find(
+              (recovery) => recovery.sourceMessageId === message.messageId,
+            )!.decision,
+        }
+      : {}),
+    ...(message.role === "assistant" &&
     workflows.some(
       (workflow) => workflow.confirmedNextStep?.sourceMessageId === message.messageId,
     )
@@ -119,6 +131,16 @@ export function loadVisibleConversation(
             workflow.confirmedNextStep?.sourceMessageId === message.messageId &&
             workflow.sessionDecision)!.sessionDecision!.kind,
         }
+      : {}),
+    ...(message.role === "assistant" &&
+    workflows.some((workflow) =>
+      workflow.sessionDecision?.sourceMessageId === message.messageId &&
+      message.structuredResponse?.experience?.choices.some(
+        (choice) =>
+          choice.confirmation?.kind === "beta-session-decision" &&
+          choice.confirmation.decision === workflow.sessionDecision?.kind,
+      ))
+      ? { betaSessionDecisionConfirmed: true }
       : {}),
   })) ?? [];
 }

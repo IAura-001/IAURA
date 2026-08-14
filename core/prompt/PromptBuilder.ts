@@ -112,6 +112,11 @@ const BETA_NEXT_STEP_PROTOCOL = `
 - Whenever betaExecutionEvaluation exists, describe the evaluation as provisional in content and throughout the experience title, summary and phases. Preserve relevant dynamic project or mission naming, but never call that evaluation or step confirmed, verified, completed, finished or closed.
 - When betaExecutionEvaluation exists, include "Confirmar evaluación" with confirmation { kind: "beta-execution-evaluation", result, observation, doneWhenSatisfied } exactly matching the evaluation, plus a "Corregir" choice with confirmation: null.
 - Verified failed or partial evidence does not complete the confirmed step. Passed evidence with doneWhenSatisfied false also does not complete it.
+- Immediately after founder-confirmed incomplete evidence, offer exactly "Reintentar ahora" with confirmation { kind: "beta-incomplete-execution-recovery", decision: "retry-now" } and "Continuar después" with confirmation { kind: "beta-incomplete-execution-recovery", decision: "retry-later" }. Do not offer ordinary alternatives in that response.
+- Describe that the evidence is preserved, the same confirmed step remains active, and completion has not been established. Do not propose a replacement step or infer a recovery decision from prose.
+- A retry-now confirmation only makes another attempt ready; it never means the retry occurred. Wait for a new founder execution report before emitting a new betaExecutionEvaluation.
+- A retry-later confirmation defers the same confirmed step with all evidence preserved. On an explicit later restart, reuse the existing guarded beta-session-decision start-now choice.
+- Do not offer incomplete-execution recovery before evidence is confirmed, after completed evidence, or again for evidence that already has a recorded recovery decision.
 - Only founder-confirmed passed evidence with doneWhenSatisfied true establishes confirmed-step completion. Confirmed-step completion never means the Beta session is closed.
 - Only when project-scoped workflow status is evaluated from founder-confirmed evidence may you call the confirmed STEP completed or verified. Never describe the Beta session itself as finished or closed.
 - Use clean plain prose for Beta workflow content and visual experience fields. Do not emit Markdown emphasis markers such as ** or __ around result words or status labels.
@@ -151,6 +156,7 @@ Every response must also organize the result into an experience object for a voi
 - When proposing a Beta 01 next step, the confirm choice MUST use confirmation: { kind: "beta-next-step", action: "...", whyNow: "...", result: "...", doneWhen: "..." } with values exactly matching betaNextStep. Its adjustment choice MUST use null.
 - For a ready-to-start confirmed Beta step, use only the typed beta-session-decision choices described above. The model never supplies sourceMessageId or decidedAt.
 - For a provisional Beta execution evaluation, the confirm choice MUST exactly match betaExecutionEvaluation and use kind beta-execution-evaluation. Its correction choice MUST use null.
+- For newly confirmed incomplete execution evidence, use only the two typed beta-incomplete-execution-recovery choices described above. The model never supplies evidenceId, sourceMessageId or confirmedAt.
 - For a provisional Beta session evaluation, the confirm choice MUST exactly match betaSessionEvaluation and use kind beta-session-evaluation. Its correction choice MUST use null. A close choice MUST use beta-session-closure.
 - For a trusted closed session with no handoff, use only the two typed beta-post-closure-handoff choices described above. The model never supplies sourceMessageId or confirmedAt.
 - Beta context and outcome proposals remain provisional until clicked. Never emit them through memoryUpdates and never add projectId, conversationId, sourceMessageId, confirmedAt, scope or tags.

@@ -289,6 +289,100 @@ describe("LocalConversationRepository", () => {
       .toBe("started");
   });
 
+  it("persists and binds incomplete-execution recovery to its exact trusted evidence", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "recovery-persistence", projectId: "iaura",
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "report", role: "user", content: "Partial result.",
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "evaluation", role: "assistant", content: "Review.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        sourceUserMessageId: "report",
+        betaExecutionEvaluation: {
+          result: "partial", observation: "Partial result", doneWhenSatisfied: false,
+        },
+      },
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "recovery", role: "assistant", content: "Choose recovery.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        experience: {
+          kind: "decision", title: "Recovery", summary: "Same step", phases: [],
+          choices: [{ label: "Continuar después", description: "Later", prompt: "Later", confirmation: {
+            kind: "beta-incomplete-execution-recovery", decision: "retry-later",
+          } }], recommendedSurface: "presence",
+        },
+      },
+    });
+    first.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "deferred",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      verifiedExecutions: [{ evidenceId: "evidence", result: "partial", observation: "Partial result", doneWhenSatisfied: false, sourceUserMessageId: "report", sourceMessageId: "evaluation", verifiedAt: "2026-08-13T12:04:00Z" }],
+      incompleteExecutionRecoveries: [{ decision: "retry-later", evidenceId: "evidence", sourceMessageId: "recovery", confirmedAt: "2026-08-13T12:05:00Z" }],
+    } });
+
+    const restored = repository().getConversation("recovery-persistence")!;
+    expect(restored.betaWorkflow).toMatchObject({
+      status: "deferred",
+      verifiedExecutions: [{ evidenceId: "evidence" }],
+      incompleteExecutionRecoveries: [{
+        decision: "retry-later", evidenceId: "evidence", sourceMessageId: "recovery",
+      }],
+    });
+    restored.betaWorkflow!.incompleteExecutionRecoveries![0].decision = "retry-now";
+    expect(repository().getConversation("recovery-persistence")?.betaWorkflow
+      ?.incompleteExecutionRecoveries?.[0].decision).toBe("retry-later");
+
+    first.appendMessage(conversation.conversationId, {
+      messageId: "resume", role: "assistant", content: "Resume?",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        experience: {
+          kind: "decision", title: "Resume", summary: "Resume", phases: [],
+          choices: [{ label: "Empezar ahora", description: "Resume", prompt: "Resume", confirmation: {
+            kind: "beta-session-decision", decision: "start-now",
+          } }], recommendedSurface: "presence",
+        },
+      },
+    });
+    first.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        ...first.getConversation(conversation.conversationId)!.betaWorkflow!,
+        status: "started",
+        sessionDecision: {
+          kind: "start-now", sourceMessageId: "resume", decidedAt: "2026-08-13T12:06:00Z",
+        },
+      },
+    });
+    expect(repository().getConversation("recovery-persistence")?.betaWorkflow)
+      .toMatchObject({
+        status: "started",
+        verifiedExecutions: [{ evidenceId: "evidence" }],
+        incompleteExecutionRecoveries: [{
+          decision: "retry-later", evidenceId: "evidence",
+        }],
+      });
+
+    const stored = JSON.parse(
+      window.localStorage.getItem(CONVERSATION_STATE_STORAGE_KEY) ?? "{}",
+    ) as { conversations: Array<{ betaWorkflow: { incompleteExecutionRecoveries: unknown[] } }> };
+    stored.conversations[0].betaWorkflow.incompleteExecutionRecoveries.push({
+      decision: "retry-now", evidenceId: "missing", sourceMessageId: "forged",
+      confirmedAt: "not-a-date",
+    });
+    window.localStorage.setItem(CONVERSATION_STATE_STORAGE_KEY, JSON.stringify(stored));
+    expect(repository().getConversation("recovery-persistence")?.betaWorkflow
+      ?.incompleteExecutionRecoveries).toHaveLength(1);
+  });
+
   it("reconstructs trusted session evaluation and explicit closure source chains", () => {
     const first = repository();
     const conversation = createConversation(first, {

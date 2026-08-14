@@ -31,6 +31,7 @@ export {
   type AuraAssistantPlan,
   type BetaExecutionEvaluation,
   type BetaExecutionResult,
+  type BetaIncompleteExecutionRecoveryDecision,
   type BetaPostClosureDecision,
   type BetaSessionEvaluation,
   type BetaNextStepRecommendation,

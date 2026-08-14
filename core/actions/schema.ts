@@ -311,6 +311,21 @@ export const IAURA_RESPONSE_SCHEMA = {
                   {
                     type: "object",
                     additionalProperties: false,
+                    required: ["kind", "decision"],
+                    properties: {
+                      kind: {
+                        type: "string",
+                        enum: ["beta-incomplete-execution-recovery"],
+                      },
+                      decision: {
+                        type: "string",
+                        enum: ["retry-now", "retry-later"],
+                      },
+                    },
+                  },
+                  {
+                    type: "object",
+                    additionalProperties: false,
                     required: ["kind"],
                     properties: {
                       kind: { type: "string", enum: ["beta-session-closure"] },

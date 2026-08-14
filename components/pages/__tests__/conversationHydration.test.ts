@@ -268,6 +268,18 @@ describe("project conversation hydration", () => {
         },
       },
     });
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "recovery", role: "assistant", content: "Choose recovery.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        experience: {
+          kind: "decision", title: "Recovery", summary: "Same step", phases: [],
+          choices: [{ label: "Continuar después", description: "Later", prompt: "Later", confirmation: {
+            kind: "beta-incomplete-execution-recovery", decision: "retry-later",
+          } }], recommendedSurface: "presence",
+        },
+      },
+    });
     conversations.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
       version: 1, status: "started",
       confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
@@ -275,7 +287,31 @@ describe("project conversation hydration", () => {
       confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
       sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
       verifiedExecutions: [{ evidenceId: "e", result: "partial", observation: "Some behavior worked", doneWhenSatisfied: false, sourceUserMessageId: "report", sourceMessageId: "evaluation", verifiedAt: "2026-08-13T12:04:00Z" }],
+      incompleteExecutionRecoveries: [{ decision: "retry-later", evidenceId: "e", sourceMessageId: "recovery", confirmedAt: "2026-08-13T12:05:00Z" }],
     } });
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "resume", role: "assistant", content: "Resume the same step.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        experience: {
+          kind: "decision", title: "Resume", summary: "Pending", phases: [],
+          choices: [{ label: "Empezar ahora", description: "Resume", prompt: "Resume", confirmation: {
+            kind: "beta-session-decision", decision: "start-now",
+          } }], recommendedSurface: "presence",
+        },
+      },
+    });
+    expect(loadVisibleConversation(conversations, "iaura")[3])
+      .not.toHaveProperty("betaSessionDecisionConfirmed");
+    conversations.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        ...conversations.getConversation(conversation.conversationId)!.betaWorkflow!,
+        status: "started",
+        sessionDecision: {
+          kind: "start-now", sourceMessageId: "resume", decidedAt: "2026-08-13T12:06:00Z",
+        },
+      },
+    });
     conversations.createConversation({ projectId: "nova" });
 
     expect(loadVisibleConversation(conversations, "iaura")[1]).toMatchObject({
@@ -283,6 +319,17 @@ describe("project conversation hydration", () => {
       betaExecutionEvaluation: { result: "partial", doneWhenSatisfied: false },
       betaExecutionVerified: true,
     });
+    expect(loadVisibleConversation(new LocalConversationRepository(), "iaura")[2])
+      .toMatchObject({
+        id: "recovery",
+        betaIncompleteExecutionRecoveryDecision: "retry-later",
+      });
+    expect(loadVisibleConversation(new LocalConversationRepository(), "iaura")[3])
+      .toMatchObject({
+        id: "resume",
+        content: "Resume the same step.",
+        betaSessionDecisionConfirmed: true,
+      });
     expect(loadVisibleConversation(conversations, "nova")).toEqual([]);
   });
 

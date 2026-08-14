@@ -101,6 +101,15 @@ describe("ActionPlan", () => {
       expect.objectContaining({
         type: "object",
         additionalProperties: false,
+        required: ["kind", "decision"],
+        properties: expect.objectContaining({
+          kind: expect.objectContaining({ enum: ["beta-incomplete-execution-recovery"] }),
+          decision: expect.objectContaining({ enum: ["retry-now", "retry-later"] }),
+        }),
+      }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
         required: ["kind"],
       }),
       expect.objectContaining({
@@ -138,6 +147,32 @@ describe("ActionPlan", () => {
       kind: "decision", title: "Session", summary: "Choose", phases: [],
       choices: [{ label: "Choose", description: "Choose", prompt: "Continue", confirmation: {
         kind: "beta-session-decision", decision: "completed",
+      } }], recommendedSurface: "presence",
+    } });
+    expect(plan.experience.choices[0].confirmation).toBeUndefined();
+  });
+
+  it.each(["retry-now", "retry-later"] as const)(
+    "parses incomplete-execution recovery %s and strips trusted fields",
+    (decision) => {
+      const plan = parseAuraAssistantPlan({ content: "Recover.", experience: {
+        kind: "decision", title: "Recovery", summary: "Choose", phases: [],
+        choices: [{ label: "Choose", description: "Choose", prompt: "Continue", confirmation: {
+          kind: "beta-incomplete-execution-recovery", decision,
+          evidenceId: "hostile", sourceMessageId: "hostile", confirmedAt: "hostile",
+        } }], recommendedSurface: "presence",
+      } });
+      expect(plan.experience.choices[0].confirmation).toEqual({
+        kind: "beta-incomplete-execution-recovery", decision,
+      });
+    },
+  );
+
+  it("rejects an unknown incomplete-execution recovery decision", () => {
+    const plan = parseAuraAssistantPlan({ content: "Recover.", experience: {
+      kind: "decision", title: "Recovery", summary: "Choose", phases: [],
+      choices: [{ label: "Choose", description: "Choose", prompt: "Continue", confirmation: {
+        kind: "beta-incomplete-execution-recovery", decision: "replace-step",
       } }], recommendedSurface: "presence",
     } });
     expect(plan.experience.choices[0].confirmation).toBeUndefined();

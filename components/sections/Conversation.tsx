@@ -185,6 +185,10 @@ const AnimatedMessage = memo(
                   showChoices={
                     !message.betaNextStep && !message.betaExecutionEvaluation
                     && !message.betaSessionEvaluation
+                    && !message.betaSessionDecisionConfirmed
+                  }
+                  confirmedRecoveryDecision={
+                    message.betaIncompleteExecutionRecoveryDecision
                   }
                 />
               ) : null}

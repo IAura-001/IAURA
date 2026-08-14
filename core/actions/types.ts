@@ -78,6 +78,10 @@ export interface AuraExperienceChoice {
 
 export type BetaExecutionResult = "passed" | "failed" | "partial";
 
+export type BetaIncompleteExecutionRecoveryDecision =
+  | "retry-now"
+  | "retry-later";
+
 export interface BetaExecutionEvaluation {
   result: BetaExecutionResult;
   observation: string;
@@ -125,6 +129,10 @@ export type AuraExperienceConfirmation =
       result: BetaExecutionResult;
       observation: string;
       doneWhenSatisfied: boolean;
+    }
+  | {
+      kind: "beta-incomplete-execution-recovery";
+      decision: BetaIncompleteExecutionRecoveryDecision;
     }
   | {
       kind: "beta-session-evaluation";

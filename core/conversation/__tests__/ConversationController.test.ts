@@ -1502,11 +1502,26 @@ describe("ConversationController", () => {
         } }],
       },
     });
+    const recoveryPlan = parseAuraAssistantPlan({
+      content: "The incomplete evidence is preserved and the same step remains active.",
+      experience: {
+        kind: "decision", title: "Recover the same step", summary: "Choose explicitly", phases: [],
+        choices: [
+          { label: "Reintentar ahora", description: "Retry", prompt: "Retry the same step now", confirmation: {
+            kind: "beta-incomplete-execution-recovery", decision: "retry-now",
+          } },
+          { label: "Continuar después", description: "Later", prompt: "Continue the same step later", confirmation: {
+            kind: "beta-incomplete-execution-recovery", decision: "retry-later",
+          } },
+        ], recommendedSurface: "presence",
+      },
+    });
     mocks.analyze.mockReturnValue(cognitiveRequest);
     mocks.generateCognitiveResponse
       .mockResolvedValueOnce(evaluationPlan)
-      .mockResolvedValueOnce({ ...evaluationPlan, content: "Recorded." })
-      .mockResolvedValueOnce({ ...evaluationPlan, content: "Already recorded." })
+      .mockResolvedValueOnce(recoveryPlan)
+      .mockResolvedValueOnce(recoveryPlan)
+      .mockResolvedValueOnce({ ...recoveryPlan, content: "Retry ready." })
       .mockResolvedValueOnce(nextEvaluationPlan)
       .mockResolvedValueOnce({ ...nextEvaluationPlan, content: "Second attempt recorded." });
     let evidenceSequence = 0;
@@ -1529,8 +1544,24 @@ describe("ConversationController", () => {
       "Context",
     );
     expect(replay.plan).not.toHaveProperty("betaExecutionEvaluation");
+    expect(replay.plan.experience.choices.map((choice) => choice.label))
+      .toEqual(["Reintentar ahora", "Continuar después"]);
     expect(conversationRepository.getConversation(conversation.conversationId)
       ?.betaWorkflow?.verifiedExecutions).toHaveLength(1);
+    await controller.sendChoice(
+      replay.plan.experience.choices[0],
+      replay.assistantMessageId,
+      "Context",
+    );
+    expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
+      .toMatchObject({
+        status: "started",
+        incompleteExecutionRecoveries: [{
+          decision: "retry-now",
+          evidenceId: "evidence-1",
+          sourceMessageId: replay.assistantMessageId,
+        }],
+      });
     const nextProvisional = await controller.send("New execution report", "Context");
 
     expect(nextProvisional.plan.betaExecutionEvaluation).toEqual({
@@ -1546,6 +1577,154 @@ describe("ConversationController", () => {
     expect(secondAcknowledgment.plan).not.toHaveProperty("betaExecutionEvaluation");
     expect(conversationRepository.getConversation(conversation.conversationId)
       ?.betaWorkflow?.verifiedExecutions).toHaveLength(2);
+  });
+
+  it("defers only through a trusted latest incomplete-evidence recovery choice", async () => {
+    const projects = {
+      getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)),
+    } as unknown as ProjectRepository;
+    const conversation = conversationRepository.createConversation({
+      conversationId: "retry-later", projectId: "iaura",
+    }).conversation!;
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "report", role: "user", content: "It failed.",
+    });
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "evaluation", role: "assistant", content: "Failed evidence.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        sourceUserMessageId: "report",
+        betaExecutionEvaluation: {
+          result: "failed", observation: "It failed", doneWhenSatisfied: false,
+        },
+      },
+    });
+    conversationRepository.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1, status: "started",
+        confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+        confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+        confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+        sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+        verifiedExecutions: [{ evidenceId: "failed-evidence", result: "failed", observation: "It failed", doneWhenSatisfied: false, sourceUserMessageId: "report", sourceMessageId: "evaluation", verifiedAt: "2026-08-13T12:04:00Z" }],
+      },
+    });
+    const recoveryPlan = parseAuraAssistantPlan({
+      content: "Evidence preserved; choose for the same step.",
+      experience: {
+        kind: "decision", title: "Recovery", summary: "Same step", phases: [],
+        choices: [
+          { label: "Reintentar ahora", description: "Retry", prompt: "Retry", confirmation: { kind: "beta-incomplete-execution-recovery", decision: "retry-now" } },
+          { label: "Continuar después", description: "Later", prompt: "Later", confirmation: { kind: "beta-incomplete-execution-recovery", decision: "retry-later" } },
+          { label: "Replace", description: "Unsafe", prompt: "Replace", confirmation: null },
+        ], recommendedSurface: "presence",
+      },
+    });
+    const resumePlan = parseAuraAssistantPlan({
+      content: "Resume the preserved step.",
+      experience: {
+        kind: "decision", title: "Resume", summary: "Resume pending", phases: [],
+        choices: [{
+          label: "Empezar ahora", description: "Resume", prompt: "Resume now", confirmation: {
+            kind: "beta-session-decision", decision: "start-now",
+          },
+        }], recommendedSurface: "presence",
+      },
+    });
+    const passedPlan = parseAuraAssistantPlan({
+      content: "Review the resumed attempt.",
+      betaExecutionEvaluation: {
+        result: "passed", observation: "Resumed attempt passed", doneWhenSatisfied: true,
+      },
+      experience: {
+        kind: "decision", title: "Evaluation", summary: "Review", phases: [],
+        choices: [{ label: "Confirm", description: "Confirm", prompt: "Confirm", confirmation: {
+          kind: "beta-execution-evaluation", result: "passed",
+          observation: "Resumed attempt passed", doneWhenSatisfied: true,
+        } }], recommendedSurface: "presence",
+      },
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse
+      .mockResolvedValueOnce(recoveryPlan)
+      .mockResolvedValueOnce({ ...recoveryPlan, content: "Deferred." })
+      .mockResolvedValueOnce(resumePlan)
+      .mockResolvedValueOnce(resumePlan)
+      .mockResolvedValueOnce(passedPlan)
+      .mockResolvedValueOnce({ ...passedPlan, content: "Passed evidence recorded." });
+    let now = "2026-08-13T12:05:00Z";
+    const controller = new ConversationController({
+      conversations: conversationRepository, projects,
+      contextRetriever: createContextRetriever(),
+      now: () => now,
+    });
+
+    const offered = await controller.send("What should I do?", "Context");
+    expect(offered.plan).not.toHaveProperty("betaExecutionEvaluation");
+    expect(offered.plan.experience.choices.map((choice) => choice.label))
+      .toEqual(["Reintentar ahora", "Continuar después"]);
+    await controller.sendChoice(
+      offered.plan.experience.choices[1], offered.assistantMessageId, "Context",
+    );
+    expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
+      .toMatchObject({
+        status: "deferred",
+        verifiedExecutions: [{ evidenceId: "failed-evidence" }],
+        incompleteExecutionRecoveries: [{
+          decision: "retry-later", evidenceId: "failed-evidence",
+          sourceMessageId: offered.assistantMessageId,
+        }],
+      });
+    await expect(controller.sendChoice(
+      offered.plan.experience.choices[1], offered.assistantMessageId, "Context",
+    )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" });
+
+    const resumeOffer = await controller.send("Resume the paused step", "Context");
+    expect(resumeOffer.plan.experience.choices).toEqual([
+      expect.objectContaining({
+        confirmation: { kind: "beta-session-decision", decision: "start-now" },
+      }),
+    ]);
+    now = "2026-08-13T12:06:00Z";
+    const resumed = await controller.sendChoice(
+      resumeOffer.plan.experience.choices[0], resumeOffer.assistantMessageId, "Context",
+    );
+    expect(resumed.plan.experience.choices).toEqual([]);
+    expect(mocks.analyze).toHaveBeenLastCalledWith(expect.objectContaining({
+      userContext: expect.stringContaining("Status: started"),
+    }));
+    expect(mocks.analyze).toHaveBeenLastCalledWith(expect.objectContaining({
+      userContext: expect.not.stringContaining("Status: deferred"),
+    }));
+    expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
+      .toMatchObject({
+        status: "started",
+        sessionDecision: { kind: "start-now", sourceMessageId: resumeOffer.assistantMessageId },
+        verifiedExecutions: [{ evidenceId: "failed-evidence" }],
+        incompleteExecutionRecoveries: [{
+          decision: "retry-later", evidenceId: "failed-evidence",
+        }],
+      });
+    await expect(controller.sendChoice(
+      resumeOffer.plan.experience.choices[0], resumeOffer.assistantMessageId, "Context",
+    )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" });
+
+    now = "2026-08-13T12:07:00Z";
+    const resumedAttempt = await controller.send("The resumed attempt passed", "Context");
+    expect(resumedAttempt.plan.betaExecutionEvaluation).toMatchObject({
+      result: "passed", doneWhenSatisfied: true,
+    });
+    await controller.sendChoice(
+      resumedAttempt.plan.experience.choices[0], resumedAttempt.assistantMessageId, "Context",
+    );
+    expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
+      .toMatchObject({
+        status: "evaluated",
+        verifiedExecutions: [
+          { evidenceId: "failed-evidence" },
+          { result: "passed", doneWhenSatisfied: true },
+        ],
+      });
   });
 
   it.each([false, true])(

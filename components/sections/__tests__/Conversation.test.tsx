@@ -406,6 +406,86 @@ describe("Conversation windowing controls", () => {
       .not.toBeInTheDocument();
   });
 
+  it("shows incomplete recovery choices once and renders the hydrated disposition", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const onChoose = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    const recoveryMessage = {
+      id: "recovery", role: "assistant" as const, content: "Evidence preserved.",
+      experience: {
+        kind: "decision" as const, title: "Recovery", summary: "Same confirmed step",
+        phases: [],
+        choices: [
+          { label: "Reintentar ahora", description: "Retry", prompt: "Retry", confirmation: { kind: "beta-incomplete-execution-recovery" as const, decision: "retry-now" as const } },
+          { label: "Continuar después", description: "Later", prompt: "Later", confirmation: { kind: "beta-incomplete-execution-recovery" as const, decision: "retry-later" as const } },
+        ], recommendedSurface: "presence" as const,
+      },
+    };
+    const { rerender } = render(
+      <I18nProvider locale="es-419">
+        <Conversation onChoose={onChoose} messages={[recoveryMessage]} />
+      </I18nProvider>,
+    );
+    const retry = screen.getByRole("button", { name: /Reintentar ahora/ });
+    await user.click(retry);
+    await user.click(screen.getByRole("button", { name: /Continuar después/ }));
+    expect(onChoose).toHaveBeenCalledTimes(1);
+    release();
+    rerender(
+      <I18nProvider locale="es-419">
+        <Conversation messages={[{
+          ...recoveryMessage,
+          betaIncompleteExecutionRecoveryDecision: "retry-now",
+        }]} />
+      </I18nProvider>,
+    );
+    expect(screen.queryByRole("button", { name: /Reintentar ahora/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Continuar después/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Reintento listo para el mismo paso confirmado/)).toBeVisible();
+    expect(screen.getByText(/evidencia anterior permanece registrada/i)).toBeVisible();
+  });
+
+  it("keeps a consumed deferred-resume card visible while suppressing only its stale CTA", () => {
+    const resumeMessage = {
+      id: "resume", role: "assistant" as const, content: "Historical resume prompt",
+      experience: {
+        kind: "decision" as const, title: "Reanudar Mission 9",
+        summary: "Reanudación pendiente", phases: [],
+        choices: [{
+          label: "Empezar ahora", description: "Resume", prompt: "Resume", confirmation: {
+            kind: "beta-session-decision" as const, decision: "start-now" as const,
+          },
+        }], recommendedSurface: "presence" as const,
+      },
+    };
+    const { rerender } = render(
+      <I18nProvider locale="es-419">
+        <Conversation messages={[resumeMessage]} />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole("button", { name: /Empezar ahora/ })).toBeVisible();
+
+    rerender(
+      <I18nProvider locale="es-419">
+        <Conversation messages={[
+          { ...resumeMessage, betaSessionDecisionConfirmed: true },
+          {
+            id: "active", role: "assistant", content: "Current choice",
+            experience: {
+              kind: "decision", title: "Current", summary: "Still actionable", phases: [],
+              choices: [{ label: "Acción vigente", description: "Valid", prompt: "Act" }],
+              recommendedSurface: "presence",
+            },
+          },
+        ]} />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("Historical resume prompt")).toBeVisible();
+    expect(screen.getByText("Reanudar Mission 9")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Empezar ahora/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Acción vigente/ })).toBeVisible();
+  });
+
   it("renders and confirms a provisional session review without closing it", async () => {
     const user = userEvent.setup();
     const onChoose = vi.fn().mockResolvedValue(undefined);

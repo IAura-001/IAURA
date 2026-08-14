@@ -30,6 +30,7 @@ import {
   type Conversation,
   type ConversationMessage,
   type ConversationRepository,
+  type BetaWorkflowMetadata,
 } from "./ConversationRepository";
 
 export type ConversationTurnErrorCode =
@@ -113,6 +114,11 @@ function serializeBetaWorkflow(conversation: Conversation): string {
 
   const verifiedEvidence = workflow.verifiedExecutions ?? [];
   const latestEvidence = verifiedEvidence.at(-1);
+  const latestRecovery = latestEvidence
+    ? workflow.incompleteExecutionRecoveries?.find(
+        (recovery) => recovery.evidenceId === latestEvidence.evidenceId,
+      )
+    : undefined;
 
   return [
     "BETA 01 CONVERSATION WORKFLOW — PROJECT-SCOPED",
@@ -134,6 +140,13 @@ function serializeBetaWorkflow(conversation: Conversation): string {
     latestEvidence
       ? `Verified execution evidence (${verifiedEvidence.length} record${verifiedEvidence.length === 1 ? "" : "s"}):\n- Result: ${latestEvidence.result}\n- Observation: ${latestEvidence.observation}\n- Done-when satisfied: ${latestEvidence.doneWhenSatisfied ? "yes" : "no"}\n- Verification recorded.`
       : "Verified execution evidence: none",
+    latestRecovery?.decision === "retry-now"
+      ? "Incomplete-execution recovery: Founder chose to retry the same confirmed step now. Previous evidence remains preserved; a new founder report is required."
+      : latestRecovery?.decision === "retry-later"
+        ? "Incomplete-execution recovery: Founder chose to continue the same confirmed step later. Previous evidence remains preserved."
+        : latestEvidence && (latestEvidence.result !== "passed" || !latestEvidence.doneWhenSatisfied)
+          ? "Incomplete-execution recovery: pending explicit founder choice between retrying now and continuing later."
+          : "Incomplete-execution recovery: not applicable.",
     workflow.status === "evaluated"
       ? "Confirmed-step verification: Done-when criterion satisfied by founder-confirmed evidence. The Beta session is not closed."
       : "Confirmed-step verification: not established.",
@@ -206,6 +219,45 @@ function isBetaConfirmation(
   confirmation: AuraExperienceChoice["confirmation"],
 ): boolean {
   return Boolean(confirmation?.kind.startsWith("beta-"));
+}
+
+function incompleteExecutionRecoveryChoices(): AuraExperienceChoice[] {
+  return [
+    {
+      label: "Reintentar ahora",
+      description: "Mantiene el mismo paso activo y espera un nuevo reporte de ejecución.",
+      prompt: "Reintentar ahora el mismo paso confirmado.",
+      confirmation: {
+        kind: "beta-incomplete-execution-recovery",
+        decision: "retry-now",
+      },
+    },
+    {
+      label: "Continuar después",
+      description: "Conserva el paso y toda la evidencia para retomarlo más adelante.",
+      prompt: "Continuar después con el mismo paso confirmado.",
+      confirmation: {
+        kind: "beta-incomplete-execution-recovery",
+        decision: "retry-later",
+      },
+    },
+  ];
+}
+
+function latestIncompleteEvidenceIsReadyForReport(
+  workflow: BetaWorkflowMetadata,
+): boolean {
+  const latestEvidence = workflow.verifiedExecutions?.at(-1);
+  if (!latestEvidence || (latestEvidence.result === "passed" && latestEvidence.doneWhenSatisfied)) {
+    return true;
+  }
+  const recovery = workflow.incompleteExecutionRecoveries?.find(
+    (candidate) => candidate.evidenceId === latestEvidence.evidenceId,
+  );
+  return recovery?.decision === "retry-now" ||
+    (recovery?.decision === "retry-later" &&
+      workflow.sessionDecision?.kind === "start-now" &&
+      Date.parse(workflow.sessionDecision.decidedAt) > Date.parse(recovery.confirmedAt));
 }
 
 function toBrainHistory(
@@ -430,7 +482,8 @@ export class ConversationController {
     const evaluationAllowed =
       options.allowBetaExecutionEvaluation !== false &&
       conversation.betaWorkflow?.status === "started" &&
-      Boolean(conversation.betaWorkflow.confirmedNextStep);
+      Boolean(conversation.betaWorkflow.confirmedNextStep) &&
+      latestIncompleteEvidenceIsReadyForReport(conversation.betaWorkflow);
     const sessionEvaluationAllowed =
       options.allowBetaSessionEvaluation !== false &&
       conversation.betaWorkflow?.status === "evaluated" &&
@@ -450,12 +503,25 @@ export class ConversationController {
       conversation.betaWorkflow?.status === "closed" &&
       Boolean(conversation.betaWorkflow.sessionClosure) &&
       !conversation.betaWorkflow.postClosureHandoff;
+    const latestEvidence = conversation.betaWorkflow?.verifiedExecutions?.at(-1);
+    const recoveryChoiceAllowed =
+      conversation.betaWorkflow?.status === "started" &&
+      Boolean(conversation.betaWorkflow.confirmedNextStep) &&
+      Boolean(latestEvidence) &&
+      (latestEvidence?.result !== "passed" || !latestEvidence.doneWhenSatisfied) &&
+      !conversation.betaWorkflow.incompleteExecutionRecoveries?.some(
+        (recovery) => recovery.evidenceId === latestEvidence?.evidenceId,
+      );
     const response: AuraAssistantPlan = {
       ...generatedResponse,
       experience: {
         ...generatedResponse.experience,
-        choices: generatedResponse.experience.choices.filter(
+        choices: recoveryChoiceAllowed
+          ? incompleteExecutionRecoveryChoices()
+          : generatedResponse.experience.choices.filter(
           (choice) =>
+            (choice.confirmation?.kind !== "beta-incomplete-execution-recovery" ||
+              recoveryChoiceAllowed) &&
             (choice.confirmation?.kind !== "beta-session-closure" || closureChoiceAllowed) &&
             (choice.confirmation?.kind !== "beta-next-step" || nextStepAllowed) &&
             (choice.confirmation?.kind !== "beta-session-decision" ||
@@ -467,7 +533,7 @@ export class ConversationController {
             (conversation.betaWorkflow?.status !== "closed" ||
               !isBetaConfirmation(choice.confirmation) ||
               choice.confirmation?.kind === "beta-post-closure-handoff"),
-        ),
+          ),
       },
     };
     if (!evaluationAllowed) delete response.betaExecutionEvaluation;
@@ -811,6 +877,67 @@ export class ConversationController {
       }
     }
 
+    if (confirmation?.kind === "beta-incomplete-execution-recovery") {
+      const workflow = conversation.betaWorkflow;
+      const latestEvidence = workflow?.verifiedExecutions?.at(-1);
+      const sourceMessageIndex = conversation.messages.findIndex(
+        (message) => message.messageId === sourceMessage.messageId,
+      );
+      const evidenceSourceIndex = latestEvidence
+        ? conversation.messages.findIndex(
+            (message) => message.messageId === latestEvidence.sourceMessageId,
+          )
+        : -1;
+      const latestAssistantMessage = conversation.messages.findLast(
+        (message) => message.role === "assistant",
+      );
+      if (
+        !workflow?.confirmedContext ||
+        !workflow.confirmedOutcome ||
+        !workflow.confirmedNextStep ||
+        workflow.status !== "started" ||
+        !latestEvidence ||
+        (latestEvidence.result === "passed" && latestEvidence.doneWhenSatisfied) ||
+        workflow.incompleteExecutionRecoveries?.some(
+          (recovery) => recovery.evidenceId === latestEvidence.evidenceId,
+        ) ||
+        sourceMessageIndex <= evidenceSourceIndex ||
+        latestAssistantMessage?.messageId !== sourceMessage.messageId
+      ) {
+        throw new ConversationTurnError(
+          "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+
+      const write = this.conversations.updateConversationMetadata(
+        conversation.conversationId,
+        {
+          betaWorkflow: {
+            ...workflow,
+            status: confirmation.decision === "retry-now" ? "started" : "deferred",
+            incompleteExecutionRecoveries: [
+              ...(workflow.incompleteExecutionRecoveries ?? []),
+              {
+                decision: confirmation.decision,
+                sourceMessageId: sourceMessage.messageId,
+                confirmedAt: this.now(),
+                evidenceId: latestEvidence.evidenceId,
+              },
+            ],
+          },
+        },
+      );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
     if (confirmation?.kind === "beta-session-evaluation") {
       const workflow = conversation.betaWorkflow;
       if (
@@ -955,7 +1082,8 @@ export class ConversationController {
       userContext,
       {
         allowBetaExecutionEvaluation:
-          confirmation?.kind !== "beta-execution-evaluation",
+          confirmation?.kind !== "beta-execution-evaluation" &&
+          confirmation?.kind !== "beta-incomplete-execution-recovery",
         allowBetaSessionEvaluation:
           confirmation?.kind !== "beta-session-evaluation",
       },
