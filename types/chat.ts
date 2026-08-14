@@ -9,4 +9,5 @@ export interface ChatMessage {
   content: string;
   experience?: AuraExperience;
   betaNextStep?: BetaNextStepRecommendation;
+  betaNextStepConfirmed?: boolean;
 }

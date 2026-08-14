@@ -85,4 +85,67 @@ describe("Conversation windowing controls", () => {
     expect(card).toHaveTextContent("Resultado esperado");
     expect(card).toHaveTextContent("Terminado cuando");
   });
+
+  it("marks a next step confirmed only after successful submission", async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn().mockResolvedValue(undefined);
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation onChoose={onChoose} messages={[{
+          id: "source", role: "assistant", content: "Next",
+          betaNextStep: { action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible" },
+          experience: {
+            kind: "decision", title: "Next", summary: "Confirm", phases: [],
+            choices: [{ label: "Confirmar siguiente paso", description: "Confirm", prompt: "Continue", confirmation: {
+              kind: "beta-next-step", action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible",
+            } }], recommendedSurface: "none",
+          },
+        }]} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Confirmar siguiente paso/ }));
+    expect(onChoose).toHaveBeenCalledWith(expect.objectContaining({
+      confirmation: expect.objectContaining({ kind: "beta-next-step" }),
+    }), "source");
+    expect(screen.getByRole("region", { name: "Siguiente paso confirmado" }))
+      .toBeVisible();
+  });
+
+  it("keeps a rejected next step visibly provisional", async () => {
+    const user = userEvent.setup();
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation onChoose={vi.fn().mockRejectedValue(new Error("rejected"))} messages={[{
+          id: "source", role: "assistant", content: "Next",
+          betaNextStep: { action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible" },
+          experience: {
+            kind: "decision", title: "Next", summary: "Confirm", phases: [],
+            choices: [{ label: "Confirmar siguiente paso", description: "Confirm", prompt: "Continue", confirmation: {
+              kind: "beta-next-step", action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible",
+            } }], recommendedSurface: "none",
+          },
+        }]} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Confirmar siguiente paso/ }));
+    expect(screen.getByRole("region", { name: "Siguiente paso recomendado" }))
+      .toBeVisible();
+    expect(screen.queryByRole("region", { name: "Siguiente paso confirmado" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("renders a hydrated confirmed next step without implying execution", () => {
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation messages={[{
+          id: "source", role: "assistant", content: "Next", betaNextStepConfirmed: true,
+          betaNextStep: { action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible" },
+        }]} />
+      </I18nProvider>,
+    );
+    const card = screen.getByRole("region", { name: "Siguiente paso confirmado" });
+    expect(card).toHaveTextContent("todavía no iniciado");
+  });
 });

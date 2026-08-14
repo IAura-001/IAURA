@@ -48,6 +48,7 @@ export const BETA_WORKFLOW_STATUSES = [
   "confirming-context",
   "defining-outcome",
   "recommended",
+  "ready-to-start",
   "started",
   "pending",
   "evaluated",
@@ -69,6 +70,14 @@ export interface BetaWorkflowMetadata {
   };
   confirmedOutcome?: {
     outcome: string;
+    doneWhen: string;
+    sourceMessageId: string;
+    confirmedAt: string;
+  };
+  confirmedNextStep?: {
+    action: string;
+    whyNow: string;
+    result: string;
     doneWhen: string;
     sourceMessageId: string;
     confirmedAt: string;
@@ -306,12 +315,29 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
           confirmedAt: value.confirmedOutcome.confirmedAt,
         }
       : undefined;
+  const nextStep = isRecord(value.confirmedNextStep) &&
+    isNonEmptyString(value.confirmedNextStep.action) &&
+    isNonEmptyString(value.confirmedNextStep.whyNow) &&
+    isNonEmptyString(value.confirmedNextStep.result) &&
+    isNonEmptyString(value.confirmedNextStep.doneWhen) &&
+    isNonEmptyString(value.confirmedNextStep.sourceMessageId) &&
+    isIsoDate(value.confirmedNextStep.confirmedAt)
+      ? {
+          action: value.confirmedNextStep.action.trim().slice(0, 1000),
+          whyNow: value.confirmedNextStep.whyNow.trim().slice(0, 1000),
+          result: value.confirmedNextStep.result.trim().slice(0, 1000),
+          doneWhen: value.confirmedNextStep.doneWhen.trim().slice(0, 1000),
+          sourceMessageId: value.confirmedNextStep.sourceMessageId.trim(),
+          confirmedAt: value.confirmedNextStep.confirmedAt,
+        }
+      : undefined;
 
   return {
     version: BETA_WORKFLOW_VERSION,
     status: value.status,
     ...(context ? { confirmedContext: context } : {}),
     ...(outcome && context ? { confirmedOutcome: outcome } : {}),
+    ...(nextStep && outcome && context ? { confirmedNextStep: nextStep } : {}),
   };
 }
 
@@ -399,6 +425,19 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
       ) return {
         kind: "beta-outcome" as const,
         outcome: rawConfirmation.outcome.trim().slice(0, 1000),
+        doneWhen: rawConfirmation.doneWhen.trim().slice(0, 1000),
+      };
+      if (
+        rawConfirmation.kind === "beta-next-step" &&
+        isNonEmptyString(rawConfirmation.action) &&
+        isNonEmptyString(rawConfirmation.whyNow) &&
+        isNonEmptyString(rawConfirmation.result) &&
+        isNonEmptyString(rawConfirmation.doneWhen)
+      ) return {
+        kind: "beta-next-step" as const,
+        action: rawConfirmation.action.trim().slice(0, 1000),
+        whyNow: rawConfirmation.whyNow.trim().slice(0, 1000),
+        result: rawConfirmation.result.trim().slice(0, 1000),
         doneWhen: rawConfirmation.doneWhen.trim().slice(0, 1000),
       };
       return undefined;
@@ -690,6 +729,9 @@ function cloneConversation(conversation: Conversation): Conversation {
               : {}),
             ...(conversation.betaWorkflow.confirmedOutcome
               ? { confirmedOutcome: { ...conversation.betaWorkflow.confirmedOutcome } }
+              : {}),
+            ...(conversation.betaWorkflow.confirmedNextStep
+              ? { confirmedNextStep: { ...conversation.betaWorkflow.confirmedNextStep } }
               : {}),
           },
         }

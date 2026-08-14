@@ -90,6 +90,7 @@ describe("conversation windowing", () => {
     complete[5] = {
       ...complete[5],
       role: "assistant",
+      betaNextStepConfirmed: true,
       betaNextStep: {
         action: "Build one card",
         whyNow: "The outcome is confirmed",
@@ -107,5 +108,8 @@ describe("conversation windowing", () => {
     expect(visibleConversationMessages(complete, start)
       .find(({ id }) => id === complete[5].id)?.betaNextStep)
       .toEqual(complete[5].betaNextStep);
+    expect(visibleConversationMessages(complete, start)
+      .find(({ id }) => id === complete[5].id)?.betaNextStepConfirmed)
+      .toBe(true);
   });
 });

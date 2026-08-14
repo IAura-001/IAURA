@@ -76,6 +76,11 @@ describe("ActionPlan", () => {
         additionalProperties: false,
         required: ["kind", "outcome", "doneWhen"],
       }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "action", "whyNow", "result", "doneWhen"],
+      }),
       { type: "null" },
     ]);
     const objectProperties =
@@ -83,6 +88,44 @@ describe("ActionPlan", () => {
     expect(objectProperties).not.toHaveProperty("projectId");
     expect(objectProperties).not.toHaveProperty("scope");
     expect(objectProperties).not.toHaveProperty("tags");
+  });
+
+  it("parses complete beta-next-step confirmation and strips trusted fields", () => {
+    const plan = parseAuraAssistantPlan({
+      content: "Confirm it.",
+      experience: {
+        kind: "decision", title: "Next", summary: "One step", phases: [],
+        choices: [{
+          label: "Confirmar siguiente paso", description: "Use it", prompt: "Continue",
+          confirmation: {
+            kind: "beta-next-step", action: "Build", whyNow: "Now",
+            result: "Card", doneWhen: "Visible", sourceMessageId: "hostile",
+            confirmedAt: "hostile", projectId: "hostile",
+          },
+        }], recommendedSurface: "presence",
+      },
+    });
+
+    expect(plan.experience.choices[0].confirmation).toEqual({
+      kind: "beta-next-step", action: "Build", whyNow: "Now",
+      result: "Card", doneWhen: "Visible",
+    });
+  });
+
+  it.each([
+    { kind: "beta-next-step", action: "Build", whyNow: "Now", result: "Card" },
+    { kind: "beta-next-step", action: " ", whyNow: "Now", result: "Card", doneWhen: "Visible" },
+    [{ kind: "beta-next-step", action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible" }],
+    { kind: "beta-next-steps", action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible" },
+  ])("rejects invalid beta-next-step confirmation metadata", (confirmation) => {
+    const plan = parseAuraAssistantPlan({
+      content: "Adjust.", experience: {
+        kind: "decision", title: "Next", summary: "Review", phases: [],
+        choices: [{ label: "Adjust", description: "Change", prompt: "Adjust", confirmation }],
+        recommendedSurface: "presence",
+      },
+    });
+    expect(plan.experience.choices[0].confirmation).toBeUndefined();
   });
 
   it("parses valid beta context and outcome confirmations without scope fields", () => {

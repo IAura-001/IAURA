@@ -108,6 +108,9 @@ function serializeBetaWorkflow(conversation: Conversation): string {
     workflow.confirmedOutcome
       ? `Confirmed outcome:\n- Outcome: ${workflow.confirmedOutcome.outcome}\n- Done when: ${workflow.confirmedOutcome.doneWhen}`
       : "Confirmed outcome: none",
+    workflow.confirmedNextStep
+      ? `Confirmed next step:\n- Action: ${workflow.confirmedNextStep.action}\n- Why now: ${workflow.confirmedNextStep.whyNow}\n- Result: ${workflow.confirmedNextStep.result}\n- Done when: ${workflow.confirmedNextStep.doneWhen}`
+      : "Confirmed next step: none",
   ].join("\n");
 }
 
@@ -116,6 +119,19 @@ function sameChoice(
   right: AuraExperienceChoice,
 ): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function sameNextStep(
+  recommendation: NonNullable<ConversationMessage["structuredResponse"]>["betaNextStep"],
+  confirmation: Extract<AuraExperienceChoice["confirmation"], { kind: "beta-next-step" }>,
+): boolean {
+  return Boolean(
+    recommendation &&
+    recommendation.action === confirmation.action &&
+    recommendation.whyNow === confirmation.whyNow &&
+    recommendation.result === confirmation.result &&
+    recommendation.doneWhen === confirmation.doneWhen,
+  );
 }
 
 function toBrainHistory(
@@ -482,6 +498,56 @@ export class ConversationController {
           },
         },
       );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
+    if (confirmation?.kind === "beta-next-step") {
+      if (
+        !conversation.betaWorkflow?.confirmedContext ||
+        !conversation.betaWorkflow.confirmedOutcome ||
+        !sameNextStep(sourceMessage.structuredResponse?.betaNextStep, confirmation)
+      ) {
+        throw new ConversationTurnError(
+          "IAURA_BETA_CONFIRMATION_INVALID",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+
+      const existing = conversation.betaWorkflow.confirmedNextStep;
+      const alreadyConfirmed =
+        existing?.sourceMessageId === sourceMessage.messageId &&
+        existing.action === confirmation.action &&
+        existing.whyNow === confirmation.whyNow &&
+        existing.result === confirmation.result &&
+        existing.doneWhen === confirmation.doneWhen &&
+        conversation.betaWorkflow.status === "ready-to-start";
+      const write = alreadyConfirmed
+        ? { ok: true, outcome: "unchanged" as const }
+        : this.conversations.updateConversationMetadata(
+          conversation.conversationId,
+          {
+            betaWorkflow: {
+              ...conversation.betaWorkflow,
+              version: 1,
+              status: "ready-to-start",
+              confirmedNextStep: {
+                action: confirmation.action,
+                whyNow: confirmation.whyNow,
+                result: confirmation.result,
+                doneWhen: confirmation.doneWhen,
+                sourceMessageId: sourceMessage.messageId,
+                confirmedAt: this.now(),
+              },
+            },
+          },
+        );
       if (!write.ok) {
         throw new ConversationTurnError(
           "IAURA_CONVERSATION_PERSISTENCE_FAILED",

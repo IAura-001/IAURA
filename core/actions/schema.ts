@@ -262,6 +262,18 @@ export const IAURA_RESPONSE_SCHEMA = {
                     },
                   },
                   {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "action", "whyNow", "result", "doneWhen"],
+                    properties: {
+                      kind: { type: "string", enum: ["beta-next-step"] },
+                      action: { type: "string", minLength: 1 },
+                      whyNow: { type: "string", minLength: 1 },
+                      result: { type: "string", minLength: 1 },
+                      doneWhen: { type: "string", minLength: 1 },
+                    },
+                  },
+                  {
                     type: "null",
                   },
                 ],

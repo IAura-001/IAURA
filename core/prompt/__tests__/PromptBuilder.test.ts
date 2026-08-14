@@ -68,6 +68,9 @@ describe("PromptBuilder", () => {
     expect(prompt).toContain("BOTH confirmed context and confirmed outcome");
     expect(prompt).toContain("exactly ONE prioritized betaNextStep object");
     expect(prompt).toContain("never a confirmed user decision");
+    expect(prompt).toContain("Confirmar siguiente paso");
+    expect(prompt).toContain("Confirmed next step in workflow context is authoritative");
+    expect(prompt).toContain("never as started or executed");
   });
   it("composes the official personality exactly once", () => {
     const prompt = new PromptBuilder().build(input);

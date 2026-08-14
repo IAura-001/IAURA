@@ -186,4 +186,27 @@ describe("project conversation hydration", () => {
       });
     expect(loadVisibleConversation(conversations, "nova")).toEqual([]);
   });
+
+  it("hydrates confirmed state only onto its trusted source recommendation", () => {
+    const conversations = new LocalConversationRepository();
+    const conversation = conversations.createConversation({ projectId: "iaura" }).conversation!;
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "source", role: "assistant", content: "Next",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        betaNextStep: { action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible" },
+      },
+    });
+    conversations.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1, status: "ready-to-start",
+        confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+        confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+        confirmedNextStep: { action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible", sourceMessageId: "source", confirmedAt: "2026-08-13T12:02:00Z" },
+      },
+    });
+
+    expect(loadVisibleConversation(new LocalConversationRepository(), "iaura")[0])
+      .toMatchObject({ id: "source", betaNextStepConfirmed: true });
+  });
 });

@@ -15,6 +15,7 @@ interface AuraExperienceCardProps {
   disabled?: boolean;
   onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
+  showChoices?: boolean;
 }
 
 const copy = {
@@ -94,6 +95,7 @@ export default function AuraExperienceCard({
   disabled = false,
   onChoose,
   onOpenSurface,
+  showChoices = true,
 }: AuraExperienceCardProps) {
   const { locale } = useI18n();
   const text = copy[locale];
@@ -177,16 +179,16 @@ export default function AuraExperienceCard({
         </ol>
       ) : null}
 
-      {experience.choices.length || experience.recommendedSurface !== "none" ? (
+      {(showChoices && experience.choices.length) || experience.recommendedSurface !== "none" ? (
         <div className="space-y-3 p-5 sm:p-6">
-          {experience.choices.length ? (
+          {showChoices && experience.choices.length ? (
             <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-500">
               {text.next}
             </p>
           ) : null}
 
           <div className="grid gap-2 sm:grid-cols-2">
-            {experience.choices.map((choice, index) => {
+            {showChoices ? experience.choices.map((choice, index) => {
               const isPending = pendingChoice === index;
               const isChosen = chosenChoice === index;
 
@@ -212,7 +214,7 @@ export default function AuraExperienceCard({
                   </span>
                 </button>
               );
-            })}
+            }) : null}
           </div>
 
           {experience.recommendedSurface !== "none" ? (

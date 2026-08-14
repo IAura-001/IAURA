@@ -169,11 +169,19 @@ const AnimatedMessage = memo(
                   disabled={isBusy}
                   onChoose={onChoose}
                   onOpenSurface={onOpenSurface}
+                  showChoices={!message.betaNextStep}
                 />
               ) : null}
 
               {message.betaNextStep ? (
-                <BetaNextStepCard recommendation={message.betaNextStep} />
+                <BetaNextStepCard
+                  recommendation={message.betaNextStep}
+                  choices={message.experience?.choices ?? []}
+                  sourceMessageId={message.id}
+                  confirmed={message.betaNextStepConfirmed}
+                  disabled={isBusy}
+                  onChoose={onChoose}
+                />
               ) : null}
             </>
           )}

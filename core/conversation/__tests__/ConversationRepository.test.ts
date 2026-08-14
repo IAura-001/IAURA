@@ -139,6 +139,42 @@ describe("LocalConversationRepository", () => {
       });
   });
 
+  it("persists an authoritative confirmed next step across reconstruction", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "confirmed-next-step", projectId: "iaura",
+    });
+    first.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1, status: "ready-to-start",
+        confirmedContext: {
+          goal: "Launch", blocker: "No step", summary: "Choose one",
+          sourceMessageId: "context", confirmedAt: "2026-08-13T12:00:00.000Z",
+        },
+        confirmedOutcome: {
+          outcome: "Working card", doneWhen: "Visible",
+          sourceMessageId: "outcome", confirmedAt: "2026-08-13T12:05:00.000Z",
+        },
+        confirmedNextStep: {
+          action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible",
+          sourceMessageId: "recommendation", confirmedAt: "2026-08-13T12:10:00.000Z",
+        },
+      },
+    });
+
+    expect(repository().getActiveConversation("iaura")?.betaWorkflow)
+      .toMatchObject({
+        status: "ready-to-start",
+        confirmedContext: { sourceMessageId: "context" },
+        confirmedOutcome: { sourceMessageId: "outcome" },
+        confirmedNextStep: {
+          action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible",
+          sourceMessageId: "recommendation", confirmedAt: "2026-08-13T12:10:00.000Z",
+        },
+      });
+    expect(repository().getActiveConversation("nova")).toBeNull();
+  });
+
   it("drops malformed confirmed fields and strips injected scope fields", () => {
     const first = repository();
     const conversation = createConversation(first, {

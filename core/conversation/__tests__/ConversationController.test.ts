@@ -1148,6 +1148,110 @@ describe("ConversationController", () => {
       .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
   });
 
+  it("confirms only the exact persisted next-step choice and preserves prior workflow", async () => {
+    let activeProject = { id: "iaura", name: "IAURA" } as IAuraProject;
+    const projects = { getActiveProject: vi.fn(() => activeProject) } as unknown as ProjectRepository;
+    const recommendation = {
+      action: "Build the card", whyNow: "The outcome is confirmed",
+      result: "One action is visible", doneWhen: "The card survives reload",
+    };
+    const plan = parseAuraAssistantPlan({
+      content: "One next step.", betaNextStep: recommendation,
+      experience: {
+        kind: "decision", title: "Next", summary: "Confirm", phases: [],
+        choices: [{
+          label: "Confirmar siguiente paso", description: "Confirm", prompt: "Continue",
+          confirmation: { kind: "beta-next-step", ...recommendation },
+        }], recommendedSurface: "presence",
+      },
+    });
+    const conversation = conversationRepository.createConversation({
+      conversationId: "iaura-next-step", projectId: "iaura",
+    }).conversation!;
+    conversationRepository.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1, status: "recommended",
+        confirmedContext: {
+          goal: "Launch", blocker: "No step", summary: "Choose one",
+          sourceMessageId: "context", confirmedAt: "2026-08-13T12:00:00.000Z",
+        },
+        confirmedOutcome: {
+          outcome: "Working card", doneWhen: "Visible",
+          sourceMessageId: "outcome", confirmedAt: "2026-08-13T12:05:00.000Z",
+        },
+      },
+    });
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "recommendation-source", role: "assistant", content: plan.content,
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Ready to start.", []));
+    const controller = new ConversationController({
+      conversations: conversationRepository, projects,
+      contextRetriever: createContextRetriever(), now: () => "2026-08-13T12:10:00.000Z",
+    });
+
+    await expect(controller.sendChoice(
+      { ...plan.experience.choices[0], label: "Invented" },
+      "recommendation-source", "Context",
+    )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+    await expect(controller.sendChoice(
+      plan.experience.choices[0], "missing", "Context",
+    )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+
+    await controller.sendChoice(plan.experience.choices[0], "recommendation-source", "Context");
+    expect(conversationRepository.getConversation("iaura-next-step")?.betaWorkflow)
+      .toMatchObject({
+        status: "ready-to-start",
+        confirmedContext: { sourceMessageId: "context" },
+        confirmedOutcome: { sourceMessageId: "outcome" },
+        confirmedNextStep: {
+          ...recommendation,
+          sourceMessageId: "recommendation-source",
+          confirmedAt: "2026-08-13T12:10:00.000Z",
+        },
+      });
+    expect(mocks.analyze).toHaveBeenCalledWith(expect.objectContaining({
+      userContext: expect.stringContaining("Confirmed next step:\n- Action: Build the card"),
+    }));
+
+    activeProject = { id: "nova", name: "Nova" } as IAuraProject;
+    await expect(controller.sendChoice(
+      plan.experience.choices[0], "recommendation-source", "Context",
+    )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+    expect(conversationRepository.getActiveConversation("nova")?.betaWorkflow)
+      .toBeUndefined();
+  });
+
+  it("rejects a persisted next-step choice that does not match its persisted proposal", async () => {
+    const projects = { getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)) } as unknown as ProjectRepository;
+    const plan = parseAuraAssistantPlan({
+      content: "Review", betaNextStep: {
+        action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible",
+      }, experience: {
+        kind: "decision", title: "Next", summary: "Review", phases: [],
+        choices: [{ label: "Confirm", description: "Confirm", prompt: "Continue", confirmation: {
+          kind: "beta-next-step", action: "Different", whyNow: "Now", result: "Card", doneWhen: "Visible",
+        } }], recommendedSurface: "presence",
+      },
+    });
+    const conversation = conversationRepository.createConversation({ projectId: "iaura" }).conversation!;
+    conversationRepository.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: { version: 1, status: "recommended",
+        confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+        confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      },
+    });
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "source", role: "assistant", content: plan.content,
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+    await expect(new ConversationController({ conversations: conversationRepository, projects })
+      .sendChoice(plan.experience.choices[0], "source", "Context"))
+      .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+  });
+
   it("stops before Brain when every context source fails", async () => {
     const contextRetriever = {
       retrieve: vi.fn().mockRejectedValue(

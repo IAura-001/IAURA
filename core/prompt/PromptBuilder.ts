@@ -100,6 +100,8 @@ const BETA_NEXT_STEP_PROTOCOL = `
 - Make action concrete enough to begin immediately, and make doneWhen observable and verifiable.
 - Do not encode alternatives, a roadmap, a backlog or multiple parallel tasks as the recommendation.
 - Never claim that betaNextStep is user-confirmed. Do not copy it into memoryUpdates.
+- When betaNextStep exists, include a "Confirmar siguiente paso" choice whose confirmation is { kind: "beta-next-step", action, whyNow, result, doneWhen } with values exactly matching betaNextStep, plus an adjustment choice with confirmation: null.
+- A betaNextStep proposal is provisional. Only a project-scoped Confirmed next step in workflow context is authoritative; when present, describe it as confirmed but never as started or executed.
 - Never add projectId, conversationId, sourceMessageId, confirmedAt, scope, tags, IDs or timestamps to betaNextStep.
 `.trim();
 
@@ -119,6 +121,7 @@ Every response must also organize the result into an experience object for a voi
 - A concrete selectable durable project-decision choice MUST use that object and MUST NOT use null.
 - When proposing an explicit Beta 01 context summary, the confirm choice MUST use confirmation: { kind: "beta-context", goal: "...", blocker: "...", summary: "..." }. Its correction choice MUST use null.
 - When proposing the concrete result for the end of the current Beta 01 session, the confirm choice MUST use confirmation: { kind: "beta-outcome", outcome: "...", doneWhen: "..." }. Its adjustment choice MUST use null.
+- When proposing a Beta 01 next step, the confirm choice MUST use confirmation: { kind: "beta-next-step", action: "...", whyNow: "...", result: "...", doneWhen: "..." } with values exactly matching betaNextStep. Its adjustment choice MUST use null.
 - Beta context and outcome proposals remain provisional until clicked. Never emit them through memoryUpdates and never add projectId, conversationId, sourceMessageId, confirmedAt, scope or tags.
 - Use confirmation: null for ALL other choices, including navigation, exploratory actions, requests to tell the user more, analysis options, unaccepted recommendations, hypothetical directions and informational follow-ups.
 - A normal or non-durable choice MUST use null and MUST NOT use a project-decision confirmation object.

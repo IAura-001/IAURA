@@ -38,5 +38,9 @@ export function loadVisibleConversation(
     message.structuredResponse?.betaNextStep
       ? { betaNextStep: message.structuredResponse.betaNextStep }
       : {}),
+    ...(message.role === "assistant" &&
+    conversation.betaWorkflow?.confirmedNextStep?.sourceMessageId === message.messageId
+      ? { betaNextStepConfirmed: true }
+      : {}),
   })) ?? [];
 }

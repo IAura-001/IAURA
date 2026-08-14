@@ -277,6 +277,15 @@ function parseChoice(
         ? { kind: "beta-outcome" as const, outcome, doneWhen }
         : undefined;
     }
+    if (rawConfirmation.kind === "beta-next-step") {
+      const action = readText(rawConfirmation.action, 1000);
+      const whyNow = readText(rawConfirmation.whyNow, 1000);
+      const result = readText(rawConfirmation.result, 1000);
+      const doneWhen = readText(rawConfirmation.doneWhen, 1000);
+      return action && whyNow && result && doneWhen
+        ? { kind: "beta-next-step" as const, action, whyNow, result, doneWhen }
+        : undefined;
+    }
     return undefined;
   })();
 

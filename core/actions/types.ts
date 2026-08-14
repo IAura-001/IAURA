@@ -91,6 +91,13 @@ export type AuraExperienceConfirmation =
       kind: "beta-outcome";
       outcome: string;
       doneWhen: string;
+    }
+  | {
+      kind: "beta-next-step";
+      action: string;
+      whyNow: string;
+      result: string;
+      doneWhen: string;
     };
 
 export interface AuraExperience {
