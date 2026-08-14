@@ -17,6 +17,7 @@ import type {
 } from "@/core/actions";
 import { BrandIdentityCard } from "../cards/BrandIdentityCard";
 import { BetaNextStepCard } from "../cards/BetaNextStepCard";
+import { BetaExecutionEvaluationCard } from "../cards/BetaExecutionEvaluationCard";
 import AuraExperienceCard from "./AuraExperienceCard";
 import { useI18n } from "@/core/i18n/I18nContext";
 import {
@@ -180,7 +181,9 @@ const AnimatedMessage = memo(
                   disabled={isBusy}
                   onChoose={onChoose}
                   onOpenSurface={onOpenSurface}
-                  showChoices={!message.betaNextStep}
+                  showChoices={
+                    !message.betaNextStep && !message.betaExecutionEvaluation
+                  }
                 />
               ) : null}
 
@@ -193,6 +196,17 @@ const AnimatedMessage = memo(
                   disabled={isBusy}
                   onChoose={onChoose}
                   sessionDecision={message.betaSessionDecision}
+                />
+              ) : null}
+
+              {message.betaExecutionEvaluation ? (
+                <BetaExecutionEvaluationCard
+                  evaluation={message.betaExecutionEvaluation}
+                  choices={message.experience?.choices ?? []}
+                  sourceMessageId={message.id}
+                  verified={message.betaExecutionVerified}
+                  disabled={isBusy}
+                  onChoose={onChoose}
                 />
               ) : null}
             </>

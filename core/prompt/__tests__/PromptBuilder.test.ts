@@ -77,6 +77,16 @@ describe("PromptBuilder", () => {
     expect(prompt).toContain("use only the typed beta-session-decision choices");
     expect(prompt).toContain("never means the action was executed, completed or verified");
     expect(prompt).toContain("intentionally preserved for later");
+    expect(prompt).toContain("betaExecutionEvaluation is provisional");
+    expect(prompt).toContain("not a new founder execution report");
+    expect(prompt).toContain("describe the evaluation as provisional");
+    expect(prompt).toContain("never call that evaluation or step confirmed, verified, completed, finished or closed");
+    expect(prompt).toContain("passed evidence with doneWhenSatisfied true");
+    expect(prompt).toContain("workflow status is evaluated from founder-confirmed evidence");
+    expect(prompt).toContain("confirmed STEP completed or verified");
+    expect(prompt).toContain("Beta session is closed");
+    expect(prompt).toContain("Do not emit Markdown emphasis markers");
+    expect(prompt).toContain("beta-execution-evaluation");
   });
   it("composes the official personality exactly once", () => {
     const prompt = new PromptBuilder().build(input);

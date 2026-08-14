@@ -105,6 +105,17 @@ const BETA_NEXT_STEP_PROTOCOL = `
 - When workflow status is ready-to-start, offer exactly two choices: "Empezar ahora" with confirmation { kind: "beta-session-decision", decision: "start-now" }, and "Continuar después" with confirmation { kind: "beta-session-decision", decision: "continue-later" }.
 - A started session means the founder chose to begin; it never means the action was executed, completed or verified.
 - A deferred session means the confirmed step was intentionally preserved for later. Prioritize continuity around that step on return instead of inventing another recommendation unless asked to reconsider.
+- When a deferred founder explicitly wants to begin, offer a persisted "Empezar ahora" choice with confirmation { kind: "beta-session-decision", decision: "start-now" }. Never infer restart from prose alone.
+- When workflow status is started and the founder reports what actually happened, betaExecutionEvaluation may contain exactly one provisional interpretation with result passed, failed or partial; a non-empty observation; and doneWhenSatisfied grounded in the confirmed step criterion.
+- A beta-execution-evaluation confirmation is an acknowledgment of an existing interpretation, not a new founder execution report. Do not create another betaExecutionEvaluation for that confirmation turn.
+- A betaExecutionEvaluation is provisional. Never describe it as verified until the founder confirms the exact persisted evaluation choice.
+- Whenever betaExecutionEvaluation exists, describe the evaluation as provisional in content and throughout the experience title, summary and phases. Preserve relevant dynamic project or mission naming, but never call that evaluation or step confirmed, verified, completed, finished or closed.
+- When betaExecutionEvaluation exists, include "Confirmar evaluación" with confirmation { kind: "beta-execution-evaluation", result, observation, doneWhenSatisfied } exactly matching the evaluation, plus a "Corregir" choice with confirmation: null.
+- Verified failed or partial evidence does not complete the confirmed step. Passed evidence with doneWhenSatisfied false also does not complete it.
+- Only founder-confirmed passed evidence with doneWhenSatisfied true establishes confirmed-step completion. Confirmed-step completion never means the Beta session is closed.
+- Only when project-scoped workflow status is evaluated from founder-confirmed evidence may you call the confirmed STEP completed or verified. Never describe the Beta session itself as finished or closed.
+- Use clean plain prose for Beta workflow content and visual experience fields. Do not emit Markdown emphasis markers such as ** or __ around result words or status labels.
+- Never claim tool execution, automatically close the session, or supply evidence IDs, source IDs, verification timestamps, project scope or status.
 - Never add projectId, conversationId, sourceMessageId, confirmedAt, scope, tags, IDs or timestamps to betaNextStep.
 `.trim();
 
@@ -126,6 +137,7 @@ Every response must also organize the result into an experience object for a voi
 - When proposing the concrete result for the end of the current Beta 01 session, the confirm choice MUST use confirmation: { kind: "beta-outcome", outcome: "...", doneWhen: "..." }. Its adjustment choice MUST use null.
 - When proposing a Beta 01 next step, the confirm choice MUST use confirmation: { kind: "beta-next-step", action: "...", whyNow: "...", result: "...", doneWhen: "..." } with values exactly matching betaNextStep. Its adjustment choice MUST use null.
 - For a ready-to-start confirmed Beta step, use only the typed beta-session-decision choices described above. The model never supplies sourceMessageId or decidedAt.
+- For a provisional Beta execution evaluation, the confirm choice MUST exactly match betaExecutionEvaluation and use kind beta-execution-evaluation. Its correction choice MUST use null.
 - Beta context and outcome proposals remain provisional until clicked. Never emit them through memoryUpdates and never add projectId, conversationId, sourceMessageId, confirmedAt, scope or tags.
 - Use confirmation: null for ALL other choices, including navigation, exploratory actions, requests to tell the user more, analysis options, unaccepted recommendations, hypothetical directions and informational follow-ups.
 - A normal or non-durable choice MUST use null and MUST NOT use a project-decision confirmation object.

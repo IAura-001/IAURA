@@ -325,4 +325,84 @@ describe("Conversation windowing controls", () => {
     expect(card).toHaveTextContent(title);
     expect(card).toHaveTextContent(detail);
   });
+
+  it("renders and confirms one provisional execution evaluation truthfully", async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn().mockResolvedValue(undefined);
+    const evaluation = {
+      result: "partial" as const,
+      observation: "The card appeared but the click failed",
+      doneWhenSatisfied: false,
+    };
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation onChoose={onChoose} messages={[{
+          id: "evaluation", role: "assistant", content: "Review",
+          betaExecutionEvaluation: evaluation,
+          experience: {
+            kind: "decision", title: "Evidence", summary: "Review", phases: [],
+            choices: [
+              { label: "Confirmar evaluación", description: "Confirm", prompt: "Continue", confirmation: { kind: "beta-execution-evaluation", ...evaluation } },
+              { label: "Corregir", description: "Correct", prompt: "Correct it" },
+            ], recommendedSurface: "presence",
+          },
+        }]} />
+      </I18nProvider>,
+    );
+
+    const card = screen.getByRole("region", { name: "Evaluación provisional" });
+    expect(card).toHaveTextContent("Parcial");
+    expect(card).toHaveTextContent("No cumplido");
+    await user.click(screen.getByRole("button", { name: /Confirmar evaluación/ }));
+    expect(onChoose).toHaveBeenCalledWith(expect.objectContaining({
+      confirmation: expect.objectContaining({ kind: "beta-execution-evaluation" }),
+    }), "evaluation");
+    expect(screen.getByRole("region", { name: "Evaluación verificada" })).toBeVisible();
+  });
+
+  it("keeps a rejected execution evaluation provisional", async () => {
+    const user = userEvent.setup();
+    const evaluation = {
+      result: "failed" as const,
+      observation: "The test failed",
+      doneWhenSatisfied: false,
+    };
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation onChoose={vi.fn().mockRejectedValue(new Error("rejected"))} messages={[{
+          id: "evaluation", role: "assistant", content: "Review",
+          betaExecutionEvaluation: evaluation,
+          experience: { kind: "decision", title: "Evidence", summary: "Review", phases: [], choices: [{
+            label: "Confirmar evaluación", description: "Confirm", prompt: "Continue",
+            confirmation: { kind: "beta-execution-evaluation", ...evaluation },
+          }], recommendedSurface: "presence" },
+        }]} />
+      </I18nProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: /Confirmar evaluación/ }));
+    expect(screen.getByRole("region", { name: "Evaluación provisional" })).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Evaluación verificada" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("renders hydrated verified step evidence without closing the session", () => {
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation messages={[{
+          id: "verified", role: "assistant", content: "Verified",
+          betaExecutionEvaluation: {
+            result: "passed", observation: "The card remained visible",
+            doneWhenSatisfied: true,
+          },
+          betaExecutionVerified: true,
+        }]} />
+      </I18nProvider>,
+    );
+    const card = screen.getByRole("region", { name: "Evaluación verificada" });
+    expect(card).toHaveTextContent("Exitosa");
+    expect(card).toHaveTextContent("Cumplido");
+    expect(card).not.toHaveTextContent(/sesión cerrada/i);
+    expect(screen.queryByRole("button", { name: /Confirmar evaluación/ }))
+      .not.toBeInTheDocument();
+  });
 });

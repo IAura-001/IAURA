@@ -637,6 +637,18 @@ export default function Home({
           });
         }
 
+        if (
+          typeof missionOverride === "object" &&
+          missionOverride.confirmation?.kind === "beta-execution-evaluation" &&
+          sourceMessageId
+        ) {
+          setMessages((previous) => previous.map((message) =>
+            message.id === sourceMessageId
+              ? { ...message, betaExecutionVerified: true }
+              : message,
+          ));
+        }
+
         const actionItems =
           executeActions(
             response.actions,
@@ -666,6 +678,9 @@ export default function Home({
               response.experience,
             ...(response.betaNextStep
               ? { betaNextStep: response.betaNextStep }
+              : {}),
+            ...(response.betaExecutionEvaluation
+              ? { betaExecutionEvaluation: response.betaExecutionEvaluation }
               : {}),
           };
 

@@ -194,6 +194,86 @@ describe("LocalConversationRepository", () => {
     });
   });
 
+  it("persists provisional evaluation and immutable verified evidence", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "execution-evidence", projectId: "iaura",
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "report-1", role: "user", content: "The card flickered.",
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "evaluation-1", role: "assistant", content: "Review first attempt.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        sourceUserMessageId: "report-1",
+        betaExecutionEvaluation: {
+          result: "partial", observation: "The card flickered", doneWhenSatisfied: false,
+        },
+      },
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "report", role: "user", content: "I tested the card.",
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "evaluation", role: "assistant", content: "Review.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        sourceUserMessageId: "report",
+        betaExecutionEvaluation: {
+          result: "passed", observation: "The card is visible", doneWhenSatisfied: true,
+        },
+      },
+    });
+    first.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "evaluated",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      verifiedExecutions: [
+        {
+          evidenceId: "evidence-1", result: "partial", observation: "The card flickered",
+          doneWhenSatisfied: false, sourceUserMessageId: "report-1",
+          sourceMessageId: "evaluation-1", verifiedAt: "2026-08-13T12:03:30Z",
+        },
+        {
+          evidenceId: "evidence-2", result: "passed", observation: "The card is visible",
+          doneWhenSatisfied: true, sourceUserMessageId: "report",
+          sourceMessageId: "evaluation", verifiedAt: "2026-08-13T12:04:00Z",
+        },
+      ],
+    } });
+
+    const restored = repository().getConversation("execution-evidence")!;
+    expect(restored.messages[3].structuredResponse).toMatchObject({
+      sourceUserMessageId: "report",
+      betaExecutionEvaluation: { result: "passed", doneWhenSatisfied: true },
+    });
+    expect(restored.betaWorkflow).toMatchObject({
+      status: "evaluated",
+      verifiedExecutions: [
+        { evidenceId: "evidence-1", result: "partial" },
+        { evidenceId: "evidence-2", sourceMessageId: "evaluation" },
+      ],
+    });
+  });
+
+  it("does not reconstruct evaluated without passing done-when evidence", () => {
+    const first = repository();
+    const conversation = createConversation(first, { projectId: "iaura" });
+    first.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "evaluated",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      verifiedExecutions: [{ evidenceId: "e", result: "partial", observation: "Not done", doneWhenSatisfied: false, sourceUserMessageId: "u", sourceMessageId: "a", verifiedAt: "2026-08-13T12:04:00Z" }],
+    } });
+    expect(repository().getActiveConversation("iaura")?.betaWorkflow?.status)
+      .toBe("started");
+  });
+
   it("drops malformed confirmed fields and strips injected scope fields", () => {
     const first = repository();
     const conversation = createConversation(first, {

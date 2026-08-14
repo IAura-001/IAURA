@@ -93,11 +93,15 @@ interface ConversationControllerOptions {
   generateResponse?: ResponseGenerator;
   contextRetriever?: ContextRetrievalService;
   now?: () => string;
+  evidenceIdFactory?: () => string;
 }
 
 function serializeBetaWorkflow(conversation: Conversation): string {
   const workflow = conversation.betaWorkflow;
   if (!workflow) return "";
+
+  const verifiedEvidence = workflow.verifiedExecutions ?? [];
+  const latestEvidence = verifiedEvidence.at(-1);
 
   return [
     "BETA 01 CONVERSATION WORKFLOW — PROJECT-SCOPED",
@@ -116,6 +120,12 @@ function serializeBetaWorkflow(conversation: Conversation): string {
       : workflow.sessionDecision?.kind === "continue-later"
         ? "Session decision: Founder chose to continue this step later.\nExecution status: Not started."
         : "Session decision: none",
+    latestEvidence
+      ? `Verified execution evidence (${verifiedEvidence.length} record${verifiedEvidence.length === 1 ? "" : "s"}):\n- Result: ${latestEvidence.result}\n- Observation: ${latestEvidence.observation}\n- Done-when satisfied: ${latestEvidence.doneWhenSatisfied ? "yes" : "no"}\n- Verification recorded.`
+      : "Verified execution evidence: none",
+    workflow.status === "evaluated"
+      ? "Confirmed-step verification: Done-when criterion satisfied by founder-confirmed evidence. The Beta session is not closed."
+      : "Confirmed-step verification: not established.",
   ].join("\n");
 }
 
@@ -139,6 +149,21 @@ function sameNextStep(
   );
 }
 
+function sameExecutionEvaluation(
+  evaluation: NonNullable<ConversationMessage["structuredResponse"]>["betaExecutionEvaluation"],
+  confirmation: Extract<
+    AuraExperienceChoice["confirmation"],
+    { kind: "beta-execution-evaluation" }
+  >,
+): boolean {
+  return Boolean(
+    evaluation &&
+    evaluation.result === confirmation.result &&
+    evaluation.observation === confirmation.observation &&
+    evaluation.doneWhenSatisfied === confirmation.doneWhenSatisfied,
+  );
+}
+
 function toBrainHistory(
   messages: ConversationMessage[],
 ): BrainInput["history"] {
@@ -155,6 +180,7 @@ export class ConversationController {
   private readonly generateResponse: ResponseGenerator;
   private readonly contextRetriever: ContextRetrievalService;
   private readonly now: () => string;
+  private readonly evidenceIdFactory: () => string;
 
   constructor(options: ConversationControllerOptions = {}) {
     this.conversations =
@@ -180,6 +206,8 @@ export class ConversationController {
           new LocalMemoryContextSource(),
       });
     this.now = options.now ?? (() => new Date().toISOString());
+    this.evidenceIdFactory = options.evidenceIdFactory ??
+      (() => `evidence-${crypto.randomUUID()}`);
   }
 
   private resolveConversation(): Conversation {
@@ -287,6 +315,7 @@ export class ConversationController {
     conversation: Conversation,
     message: string,
     userContext: string,
+    options: { allowBetaExecutionEvaluation?: boolean } = {},
   ): Promise<ConversationTurnResult> {
     const userMessage =
       this.persistUserMessage(
@@ -337,10 +366,10 @@ export class ConversationController {
         },
       });
 
-    let response: AuraAssistantPlan;
+    let generatedResponse: AuraAssistantPlan;
 
     try {
-      response =
+      generatedResponse =
         await this.generateResponse(result);
     } catch {
       throw new ConversationTurnError(
@@ -350,6 +379,18 @@ export class ConversationController {
         userMessage.messageId,
       );
     }
+
+    const evaluationAllowed =
+      options.allowBetaExecutionEvaluation !== false &&
+      conversation.betaWorkflow?.status === "started" &&
+      Boolean(conversation.betaWorkflow.confirmedNextStep);
+    const response: AuraAssistantPlan = evaluationAllowed || !generatedResponse.betaExecutionEvaluation
+      ? generatedResponse
+      : (() => {
+          const safeResponse = { ...generatedResponse };
+          delete safeResponse.betaExecutionEvaluation;
+          return safeResponse;
+        })();
 
     executeMemoryUpdates(
       response.memoryUpdates,
@@ -363,7 +404,12 @@ export class ConversationController {
           role: "assistant",
           content: response.content,
           structuredResponse:
-            assistantMessageMetadata(response),
+            assistantMessageMetadata(
+              response,
+              response.betaExecutionEvaluation
+                ? userMessage.messageId
+                : undefined,
+            ),
         },
       );
 
@@ -564,11 +610,13 @@ export class ConversationController {
 
     if (confirmation?.kind === "beta-session-decision") {
       const workflow = conversation.betaWorkflow;
+      const isDeferredRestart =
+        workflow?.status === "deferred" && confirmation.decision === "start-now";
       if (
         !workflow?.confirmedContext ||
         !workflow.confirmedOutcome ||
         !workflow.confirmedNextStep ||
-        workflow.status !== "ready-to-start"
+        (workflow.status !== "ready-to-start" && !isDeferredRestart)
       ) {
         throw new ConversationTurnError(
           "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE",
@@ -601,10 +649,81 @@ export class ConversationController {
       }
     }
 
+    if (confirmation?.kind === "beta-execution-evaluation") {
+      const workflow = conversation.betaWorkflow;
+      const evaluation = sourceMessage.structuredResponse?.betaExecutionEvaluation;
+      const sourceUserMessageId = sourceMessage.structuredResponse?.sourceUserMessageId;
+      const sourceMessageIndex = conversation.messages.findIndex(
+        (message) => message.messageId === sourceMessage.messageId,
+      );
+      const sourceUserMessageIndex = sourceUserMessageId
+        ? conversation.messages.findIndex(
+            (message) =>
+              message.messageId === sourceUserMessageId && message.role === "user",
+          )
+        : -1;
+      if (
+        !workflow?.confirmedContext ||
+        !workflow.confirmedOutcome ||
+        !workflow.confirmedNextStep ||
+        workflow.status !== "started" ||
+        !sameExecutionEvaluation(evaluation, confirmation) ||
+        sourceUserMessageIndex < 0 ||
+        sourceUserMessageIndex >= sourceMessageIndex
+      ) {
+        throw new ConversationTurnError(
+          "IAURA_BETA_CONFIRMATION_INVALID",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+
+      const alreadyVerified = workflow.verifiedExecutions?.some(
+        (evidence) => evidence.sourceMessageId === sourceMessage.messageId,
+      );
+      const write = alreadyVerified
+        ? { ok: true, outcome: "unchanged" as const }
+        : this.conversations.updateConversationMetadata(
+            conversation.conversationId,
+            {
+              betaWorkflow: {
+                ...workflow,
+                status:
+                  confirmation.result === "passed" && confirmation.doneWhenSatisfied
+                    ? "evaluated"
+                    : "started",
+                verifiedExecutions: [
+                  ...(workflow.verifiedExecutions ?? []),
+                  {
+                    evidenceId: this.evidenceIdFactory(),
+                    result: confirmation.result,
+                    observation: confirmation.observation,
+                    doneWhenSatisfied: confirmation.doneWhenSatisfied,
+                    sourceUserMessageId: sourceUserMessageId!,
+                    sourceMessageId: sourceMessage.messageId,
+                    verifiedAt: this.now(),
+                  },
+                ],
+              },
+            },
+          );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
     return this.sendInConversation(
       this.conversations.getConversation(conversation.conversationId) ?? conversation,
       persistedChoice.prompt,
       userContext,
+      {
+        allowBetaExecutionEvaluation:
+          confirmation?.kind !== "beta-execution-evaluation",
+      },
     );
   }
 }

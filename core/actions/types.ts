@@ -76,6 +76,14 @@ export interface AuraExperienceChoice {
   confirmation?: AuraExperienceConfirmation;
 }
 
+export type BetaExecutionResult = "passed" | "failed" | "partial";
+
+export interface BetaExecutionEvaluation {
+  result: BetaExecutionResult;
+  observation: string;
+  doneWhenSatisfied: boolean;
+}
+
 export type AuraExperienceConfirmation =
   | {
       kind: "project-decision";
@@ -102,6 +110,12 @@ export type AuraExperienceConfirmation =
   | {
       kind: "beta-session-decision";
       decision: "start-now" | "continue-later";
+    }
+  | {
+      kind: "beta-execution-evaluation";
+      result: BetaExecutionResult;
+      observation: string;
+      doneWhenSatisfied: boolean;
     };
 
 export interface AuraExperience {
@@ -147,6 +161,7 @@ export interface AuraAssistantPlan {
   memoryUpdates: PlannedMemoryUpdate[];
   experience: AuraExperience;
   betaNextStep?: BetaNextStepRecommendation;
+  betaExecutionEvaluation?: BetaExecutionEvaluation;
 }
 
 export interface ActionExecutionItem {

@@ -5,6 +5,7 @@ import {
   IAURA_MEMORY_OPERATIONS,
   IAURA_MEMORY_TYPES,
   type AuraAssistantPlan,
+  type BetaExecutionEvaluation,
   type BetaNextStepRecommendation,
   type AuraExperience,
   type AuraExperienceChoice,
@@ -296,6 +297,23 @@ function parseChoice(
         decision: rawConfirmation.decision as "start-now" | "continue-later",
       };
     }
+    if (
+      rawConfirmation.kind === "beta-execution-evaluation" &&
+      (rawConfirmation.result === "passed" ||
+        rawConfirmation.result === "failed" ||
+        rawConfirmation.result === "partial") &&
+      typeof rawConfirmation.doneWhenSatisfied === "boolean"
+    ) {
+      const observation = readText(rawConfirmation.observation, 2000);
+      return observation
+        ? {
+            kind: "beta-execution-evaluation" as const,
+            result: rawConfirmation.result as BetaExecutionEvaluation["result"],
+            observation,
+            doneWhenSatisfied: rawConfirmation.doneWhenSatisfied,
+          }
+        : undefined;
+    }
     return undefined;
   })();
 
@@ -307,6 +325,31 @@ function parseChoice(
     ),
     prompt,
     ...(confirmation ? { confirmation } : {}),
+  };
+}
+
+function parseBetaExecutionEvaluation(
+  value: unknown,
+): BetaExecutionEvaluation | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    candidate.result !== "passed" &&
+    candidate.result !== "failed" &&
+    candidate.result !== "partial"
+  ) {
+    return null;
+  }
+  const observation = readText(candidate.observation, 2000);
+  if (!observation || typeof candidate.doneWhenSatisfied !== "boolean") {
+    return null;
+  }
+  return {
+    result: candidate.result as BetaExecutionEvaluation["result"],
+    observation,
+    doneWhenSatisfied: candidate.doneWhenSatisfied,
   };
 }
 
@@ -471,6 +514,9 @@ export function parseAuraAssistantPlan(
     : [];
 
   const betaNextStep = parseBetaNextStep(candidate.betaNextStep);
+  const betaExecutionEvaluation = parseBetaExecutionEvaluation(
+    candidate.betaExecutionEvaluation,
+  );
 
   return {
     content,
@@ -480,5 +526,6 @@ export function parseAuraAssistantPlan(
       candidate.experience,
     ),
     ...(betaNextStep ? { betaNextStep } : {}),
+    ...(betaExecutionEvaluation ? { betaExecutionEvaluation } : {}),
   };
 }

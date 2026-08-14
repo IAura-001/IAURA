@@ -14,6 +14,7 @@ describe("ActionPlan", () => {
     const recommendation = schema.anyOf[0];
 
     expect(IAURA_RESPONSE_SCHEMA.required).toContain("betaNextStep");
+    expect(IAURA_RESPONSE_SCHEMA.required).toContain("betaExecutionEvaluation");
     expect(recommendation).toMatchObject({
       type: "object",
       additionalProperties: false,
@@ -86,6 +87,11 @@ describe("ActionPlan", () => {
         additionalProperties: false,
         required: ["kind", "decision"],
       }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "result", "observation", "doneWhenSatisfied"],
+      }),
       { type: "null" },
     ]);
     const objectProperties =
@@ -119,6 +125,56 @@ describe("ActionPlan", () => {
       } }], recommendedSurface: "presence",
     } });
     expect(plan.experience.choices[0].confirmation).toBeUndefined();
+  });
+
+  it("parses a provisional execution evaluation and strips trusted fields", () => {
+    const plan = parseAuraAssistantPlan({
+      content: "Review this evidence.",
+      betaExecutionEvaluation: {
+        result: "partial",
+        observation: "  The card rendered but the action failed. ",
+        doneWhenSatisfied: false,
+        evidenceId: "model-id",
+        sourceMessageId: "model-source",
+        verifiedAt: "model-time",
+        projectId: "model-project",
+      },
+      experience: {
+        kind: "decision", title: "Evidence", summary: "Review", phases: [],
+        choices: [{
+          label: "Confirmar evaluación", description: "Confirm", prompt: "Continue",
+          confirmation: {
+            kind: "beta-execution-evaluation", result: "partial",
+            observation: "The card rendered but the action failed.",
+            doneWhenSatisfied: false, evidenceId: "model-id", verifiedAt: "model-time",
+          },
+        }], recommendedSurface: "presence",
+      },
+    });
+
+    expect(plan.betaExecutionEvaluation).toEqual({
+      result: "partial",
+      observation: "The card rendered but the action failed.",
+      doneWhenSatisfied: false,
+    });
+    expect(plan.experience.choices[0].confirmation).toEqual({
+      kind: "beta-execution-evaluation",
+      result: "partial",
+      observation: "The card rendered but the action failed.",
+      doneWhenSatisfied: false,
+    });
+  });
+
+  it.each([
+    { result: "passed", observation: "Done" },
+    { result: "unknown", observation: "Done", doneWhenSatisfied: true },
+    { result: "failed", observation: " ", doneWhenSatisfied: false },
+    [{ result: "passed", observation: "Done", doneWhenSatisfied: true }],
+  ])("rejects malformed provisional execution evaluation", (evaluation) => {
+    expect(parseAuraAssistantPlan({
+      content: "Review.",
+      betaExecutionEvaluation: evaluation,
+    }).betaExecutionEvaluation).toBeUndefined();
   });
 
   it("parses complete beta-next-step confirmation and strips trusted fields", () => {

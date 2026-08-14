@@ -16,6 +16,8 @@ import {
   AURA_EXPERIENCE_SURFACES,
   IAURA_ACTION_TYPES,
   type AuraAssistantPlan,
+  type BetaExecutionEvaluation,
+  type BetaExecutionResult,
   type BetaNextStepRecommendation,
   type AuraExperience,
   type AuraExperienceKind,
@@ -88,6 +90,15 @@ export interface BetaWorkflowMetadata {
     sourceMessageId: string;
     decidedAt: string;
   };
+  verifiedExecutions?: Array<{
+    evidenceId: string;
+    result: BetaExecutionResult;
+    observation: string;
+    doneWhenSatisfied: boolean;
+    sourceUserMessageId: string;
+    sourceMessageId: string;
+    verifiedAt: string;
+  }>;
 }
 
 export interface ConversationStructuredResponse {
@@ -96,6 +107,8 @@ export interface ConversationStructuredResponse {
   recommendedSurface: AuraExperienceSurface;
   experience?: AuraExperience;
   betaNextStep?: BetaNextStepRecommendation;
+  betaExecutionEvaluation?: BetaExecutionEvaluation;
+  sourceUserMessageId?: string;
 }
 
 export interface ConversationMessage {
@@ -348,16 +361,87 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
           decidedAt: value.sessionDecision.decidedAt,
         }
       : undefined;
+  const normalizedVerifiedExecutions = Array.isArray(value.verifiedExecutions)
+    ? value.verifiedExecutions.slice(0, 100).flatMap((candidate) => {
+        if (
+          !isRecord(candidate) ||
+          !isNonEmptyString(candidate.evidenceId) ||
+          (candidate.result !== "passed" &&
+            candidate.result !== "failed" &&
+            candidate.result !== "partial") ||
+          !isNonEmptyString(candidate.observation) ||
+          typeof candidate.doneWhenSatisfied !== "boolean" ||
+          !isNonEmptyString(candidate.sourceUserMessageId) ||
+          !isNonEmptyString(candidate.sourceMessageId) ||
+          !isIsoDate(candidate.verifiedAt)
+        ) {
+          return [];
+        }
+        return [{
+          evidenceId: candidate.evidenceId.trim(),
+          result: candidate.result as BetaExecutionResult,
+          observation: candidate.observation.trim().slice(0, 2000),
+          doneWhenSatisfied: candidate.doneWhenSatisfied,
+          sourceUserMessageId: candidate.sourceUserMessageId.trim(),
+          sourceMessageId: candidate.sourceMessageId.trim(),
+          verifiedAt: candidate.verifiedAt,
+        }];
+      })
+    : [];
+  const evidenceIds = new Set<string>();
+  const evidenceSourceMessageIds = new Set<string>();
+  const verifiedExecutions = normalizedVerifiedExecutions.filter((evidence) => {
+    if (
+      evidenceIds.has(evidence.evidenceId) ||
+      evidenceSourceMessageIds.has(evidence.sourceMessageId)
+    ) {
+      return false;
+    }
+    evidenceIds.add(evidence.evidenceId);
+    evidenceSourceMessageIds.add(evidence.sourceMessageId);
+    return true;
+  });
+  const trustedVerifiedExecutions = sessionDecision?.kind === "start-now"
+    ? verifiedExecutions
+    : [];
+  const latestVerifiedExecution = trustedVerifiedExecutions.at(-1);
+  const hasCompletedStep =
+    latestVerifiedExecution?.result === "passed" &&
+    latestVerifiedExecution.doneWhenSatisfied;
+  const status = value.status === "evaluated" && !hasCompletedStep
+    ? "started"
+    : value.status;
 
   return {
     version: BETA_WORKFLOW_VERSION,
-    status: value.status,
+    status,
     ...(context ? { confirmedContext: context } : {}),
     ...(outcome && context ? { confirmedOutcome: outcome } : {}),
     ...(nextStep && outcome && context ? { confirmedNextStep: nextStep } : {}),
     ...(sessionDecision && nextStep && outcome && context
       ? { sessionDecision }
       : {}),
+    ...(trustedVerifiedExecutions.length && nextStep && outcome && context
+      ? { verifiedExecutions: trustedVerifiedExecutions }
+      : {}),
+  };
+}
+
+function normalizeBetaExecutionEvaluation(
+  value: unknown,
+): BetaExecutionEvaluation | undefined {
+  if (
+    !isRecord(value) ||
+    (value.result !== "passed" && value.result !== "failed" && value.result !== "partial") ||
+    !isNonEmptyString(value.observation) ||
+    typeof value.doneWhenSatisfied !== "boolean"
+  ) {
+    return undefined;
+  }
+  return {
+    result: value.result as BetaExecutionResult,
+    observation: value.observation.trim().slice(0, 2000),
+    doneWhenSatisfied: value.doneWhenSatisfied,
   };
 }
 
@@ -468,6 +552,19 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
         kind: "beta-session-decision" as const,
         decision: rawConfirmation.decision as "start-now" | "continue-later",
       };
+      if (
+        rawConfirmation.kind === "beta-execution-evaluation" &&
+        (rawConfirmation.result === "passed" ||
+          rawConfirmation.result === "failed" ||
+          rawConfirmation.result === "partial") &&
+        isNonEmptyString(rawConfirmation.observation) &&
+        typeof rawConfirmation.doneWhenSatisfied === "boolean"
+      ) return {
+        kind: "beta-execution-evaluation" as const,
+        result: rawConfirmation.result as BetaExecutionResult,
+        observation: rawConfirmation.observation.trim().slice(0, 2000),
+        doneWhenSatisfied: rawConfirmation.doneWhenSatisfied,
+      };
       return undefined;
     })();
 
@@ -527,12 +624,19 @@ function normalizeStructuredResponse(
 
   const experience = normalizeExperience(value.experience);
   const betaNextStep = normalizeBetaNextStep(value.betaNextStep);
+  const betaExecutionEvaluation = normalizeBetaExecutionEvaluation(
+    value.betaExecutionEvaluation,
+  );
   return {
     actionTypes: [...new Set(value.actionTypes)],
     experienceKind: value.experienceKind,
     recommendedSurface: value.recommendedSurface,
     ...(experience ? { experience } : {}),
     ...(betaNextStep ? { betaNextStep } : {}),
+    ...(betaExecutionEvaluation ? { betaExecutionEvaluation } : {}),
+    ...(isNonEmptyString(value.sourceUserMessageId)
+      ? { sourceUserMessageId: value.sourceUserMessageId.trim() }
+      : {}),
   };
 }
 
@@ -584,6 +688,46 @@ function normalizeSummary(value: unknown): ConversationSummaryMetadata | undefin
   };
 }
 
+function bindVerifiedExecutionsToMessages(
+  workflow: BetaWorkflowMetadata | undefined,
+  messages: ConversationMessage[],
+): BetaWorkflowMetadata | undefined {
+  if (!workflow?.verifiedExecutions?.length) return workflow;
+
+  const verifiedExecutions = workflow.verifiedExecutions.filter((evidence) => {
+    const userIndex = messages.findIndex(
+      (message) =>
+        message.messageId === evidence.sourceUserMessageId && message.role === "user",
+    );
+    const assistantIndex = messages.findIndex(
+      (message) =>
+        message.messageId === evidence.sourceMessageId && message.role === "assistant",
+    );
+    const assistant = assistantIndex >= 0 ? messages[assistantIndex] : undefined;
+    const evaluation = assistant?.structuredResponse?.betaExecutionEvaluation;
+    return (
+      userIndex >= 0 &&
+      assistantIndex > userIndex &&
+      assistant?.structuredResponse?.sourceUserMessageId === evidence.sourceUserMessageId &&
+      evaluation?.result === evidence.result &&
+      evaluation.observation === evidence.observation &&
+      evaluation.doneWhenSatisfied === evidence.doneWhenSatisfied
+    );
+  });
+  const latest = verifiedExecutions.at(-1);
+  const status = workflow.status === "evaluated" &&
+    !(latest?.result === "passed" && latest.doneWhenSatisfied)
+    ? "started"
+    : workflow.status;
+  const baseWorkflow = { ...workflow };
+  delete baseWorkflow.verifiedExecutions;
+  return {
+    ...baseWorkflow,
+    status,
+    ...(verifiedExecutions.length ? { verifiedExecutions } : {}),
+  };
+}
+
 function normalizeConversation(value: unknown): Conversation | null {
   if (!isRecord(value)) return null;
   if (
@@ -610,7 +754,10 @@ function normalizeConversation(value: unknown): Conversation | null {
   }
 
   const summary = normalizeSummary(value.summary);
-  const betaWorkflow = normalizeBetaWorkflow(value.betaWorkflow);
+  const betaWorkflow = bindVerifiedExecutionsToMessages(
+    normalizeBetaWorkflow(value.betaWorkflow),
+    messages,
+  );
   return {
     conversationId: value.conversationId.trim(),
     ...(isNonEmptyString(value.projectId) ? { projectId: value.projectId.trim() } : {}),
@@ -730,6 +877,13 @@ function cloneMessage(message: ConversationMessage): ConversationMessage {
             ...(message.structuredResponse.betaNextStep
               ? { betaNextStep: { ...message.structuredResponse.betaNextStep } }
               : {}),
+            ...(message.structuredResponse.betaExecutionEvaluation
+              ? {
+                  betaExecutionEvaluation: {
+                    ...message.structuredResponse.betaExecutionEvaluation,
+                  },
+                }
+              : {}),
           },
         }
       : {}),
@@ -763,6 +917,13 @@ function cloneConversation(conversation: Conversation): Conversation {
               : {}),
             ...(conversation.betaWorkflow.sessionDecision
               ? { sessionDecision: { ...conversation.betaWorkflow.sessionDecision } }
+              : {}),
+            ...(conversation.betaWorkflow.verifiedExecutions
+              ? {
+                  verifiedExecutions: conversation.betaWorkflow.verifiedExecutions.map(
+                    (evidence) => ({ ...evidence }),
+                  ),
+                }
               : {}),
           },
         }
@@ -801,6 +962,7 @@ function readLegacyMessages(value: unknown): Array<Pick<ConversationMessage, "ro
 
 function structuredResponseFromPlan(
   plan: AuraAssistantPlan,
+  sourceUserMessageId?: string,
 ): NonNullable<ConversationMessage["structuredResponse"]> {
   return {
     actionTypes: [...new Set(plan.actions.map((action) => action.type))],
@@ -817,13 +979,22 @@ function structuredResponseFromPlan(
     ...(plan.betaNextStep
       ? { betaNextStep: normalizeBetaNextStep(plan.betaNextStep) }
       : {}),
+    ...(plan.betaExecutionEvaluation
+      ? {
+          betaExecutionEvaluation: normalizeBetaExecutionEvaluation(
+            plan.betaExecutionEvaluation,
+          ),
+        }
+      : {}),
+    ...(sourceUserMessageId ? { sourceUserMessageId } : {}),
   };
 }
 
 export function assistantMessageMetadata(
   plan: AuraAssistantPlan,
+  sourceUserMessageId?: string,
 ): NonNullable<ConversationMessage["structuredResponse"]> {
-  return structuredResponseFromPlan(plan);
+  return structuredResponseFromPlan(plan, sourceUserMessageId);
 }
 
 export class LocalConversationRepository implements ConversationRepository {

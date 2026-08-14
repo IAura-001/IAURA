@@ -1329,6 +1329,237 @@ describe("ConversationController", () => {
       .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" });
   });
 
+  it.each([
+    ["failed", false, "started"],
+    ["partial", false, "started"],
+    ["passed", false, "started"],
+    ["passed", true, "evaluated"],
+  ] as const)(
+    "verifies %s evidence with done-when %s and derives %s truthfully",
+    async (result, doneWhenSatisfied, expectedStatus) => {
+      const projects = {
+        getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)),
+      } as unknown as ProjectRepository;
+      const conversation = conversationRepository.createConversation({
+        conversationId: `evidence-${result}-${doneWhenSatisfied}`,
+        projectId: "iaura",
+      }).conversation!;
+      conversationRepository.updateConversationMetadata(conversation.conversationId, {
+        betaWorkflow: {
+          version: 1, status: "started",
+          confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+          confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+          confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "Visible", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+          sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+        },
+      });
+      const evaluationPlan = parseAuraAssistantPlan({
+        content: "Evaluación provisional.",
+        betaExecutionEvaluation: { result, observation: "Founder observation", doneWhenSatisfied },
+        experience: {
+          kind: "decision", title: "Evidence", summary: "Review", phases: [],
+          choices: [{ label: "Confirmar evaluación", description: "Confirm", prompt: "Record it", confirmation: {
+            kind: "beta-execution-evaluation", result,
+            observation: "Founder observation", doneWhenSatisfied,
+          } }], recommendedSurface: "presence",
+        },
+      });
+      mocks.analyze.mockReturnValue(cognitiveRequest);
+      mocks.generateCognitiveResponse
+        .mockResolvedValueOnce(evaluationPlan)
+        .mockResolvedValueOnce({ ...evaluationPlan, content: "Evidence recorded." });
+      const controller = new ConversationController({
+        conversations: conversationRepository,
+        projects,
+        contextRetriever: createContextRetriever(),
+        now: () => "2026-08-13T12:04:00Z",
+        evidenceIdFactory: () => "application-evidence-id",
+      });
+
+      const provisional = await controller.send("I tested it.", "Context");
+      expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
+        .not.toHaveProperty("verifiedExecutions");
+      const assistant = conversationRepository.getConversation(conversation.conversationId)
+        ?.messages.find((message) => message.messageId === provisional.assistantMessageId);
+      expect(assistant?.structuredResponse).toMatchObject({
+        sourceUserMessageId: expect.any(String),
+        betaExecutionEvaluation: { result, observation: "Founder observation", doneWhenSatisfied },
+      });
+
+      await expect(controller.sendChoice(
+        { ...evaluationPlan.experience.choices[0], label: "Invented" },
+        provisional.assistantMessageId,
+        "Context",
+      )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+      const acknowledgment = await controller.sendChoice(
+        evaluationPlan.experience.choices[0],
+        provisional.assistantMessageId,
+        "Context",
+      );
+
+      expect(acknowledgment.plan.content).toBe("Evidence recorded.");
+      expect(acknowledgment.plan).not.toHaveProperty("betaExecutionEvaluation");
+      expect(conversationRepository.getConversation(conversation.conversationId)?.messages.at(-1)
+        ?.structuredResponse).not.toHaveProperty("betaExecutionEvaluation");
+
+      expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
+        .toMatchObject({
+          status: expectedStatus,
+          verifiedExecutions: [{
+            evidenceId: "application-evidence-id",
+            result,
+            doneWhenSatisfied,
+            sourceMessageId: provisional.assistantMessageId,
+            verifiedAt: "2026-08-13T12:04:00Z",
+          }],
+        });
+      expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow?.status)
+        .not.toBe("closed");
+      expect(mocks.analyze).toHaveBeenLastCalledWith(expect.objectContaining({
+        userContext: expect.stringContaining("Verified execution evidence"),
+      }));
+    },
+  );
+
+  it("accepts a new execution report after verified partial evidence without duplicating the first evidence", async () => {
+    const projects = {
+      getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)),
+    } as unknown as ProjectRepository;
+    const conversation = conversationRepository.createConversation({
+      conversationId: "partial-retry",
+      projectId: "iaura",
+    }).conversation!;
+    conversationRepository.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1, status: "started",
+        confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+        confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+        confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "Visible", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+        sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      },
+    });
+    const evaluationPlan = parseAuraAssistantPlan({
+      content: "Review this attempt.",
+      betaExecutionEvaluation: { result: "partial", observation: "First attempt", doneWhenSatisfied: false },
+      experience: {
+        kind: "decision", title: "Evidence", summary: "Review", phases: [],
+        choices: [{ label: "Confirm", description: "Confirm", prompt: "Record it", confirmation: {
+          kind: "beta-execution-evaluation", result: "partial", observation: "First attempt", doneWhenSatisfied: false,
+        } }], recommendedSurface: "presence",
+      },
+    });
+    const nextEvaluationPlan = parseAuraAssistantPlan({
+      ...evaluationPlan,
+      content: "Review the new attempt.",
+      betaExecutionEvaluation: { result: "passed", observation: "Second attempt", doneWhenSatisfied: false },
+      experience: {
+        ...evaluationPlan.experience,
+        choices: [{ label: "Confirm", description: "Confirm", prompt: "Record it", confirmation: {
+          kind: "beta-execution-evaluation", result: "passed", observation: "Second attempt", doneWhenSatisfied: false,
+        } }],
+      },
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse
+      .mockResolvedValueOnce(evaluationPlan)
+      .mockResolvedValueOnce({ ...evaluationPlan, content: "Recorded." })
+      .mockResolvedValueOnce({ ...evaluationPlan, content: "Already recorded." })
+      .mockResolvedValueOnce(nextEvaluationPlan)
+      .mockResolvedValueOnce({ ...nextEvaluationPlan, content: "Second attempt recorded." });
+    let evidenceSequence = 0;
+    const controller = new ConversationController({
+      conversations: conversationRepository,
+      projects,
+      contextRetriever: createContextRetriever(),
+      evidenceIdFactory: () => `evidence-${++evidenceSequence}`,
+    });
+
+    const provisional = await controller.send("First execution report", "Context");
+    await controller.sendChoice(
+      evaluationPlan.experience.choices[0],
+      provisional.assistantMessageId,
+      "Context",
+    );
+    const replay = await controller.sendChoice(
+      evaluationPlan.experience.choices[0],
+      provisional.assistantMessageId,
+      "Context",
+    );
+    expect(replay.plan).not.toHaveProperty("betaExecutionEvaluation");
+    expect(conversationRepository.getConversation(conversation.conversationId)
+      ?.betaWorkflow?.verifiedExecutions).toHaveLength(1);
+    const nextProvisional = await controller.send("New execution report", "Context");
+
+    expect(nextProvisional.plan.betaExecutionEvaluation).toEqual({
+      result: "passed", observation: "Second attempt", doneWhenSatisfied: false,
+    });
+    expect(conversationRepository.getConversation(conversation.conversationId)
+      ?.betaWorkflow?.verifiedExecutions).toHaveLength(1);
+    const secondAcknowledgment = await controller.sendChoice(
+      nextEvaluationPlan.experience.choices[0],
+      nextProvisional.assistantMessageId,
+      "Context",
+    );
+    expect(secondAcknowledgment.plan).not.toHaveProperty("betaExecutionEvaluation");
+    expect(conversationRepository.getConversation(conversation.conversationId)
+      ?.betaWorkflow?.verifiedExecutions).toHaveLength(2);
+  });
+
+  it("rejects evaluation whose application-bound founder report is missing", async () => {
+    const projects = { getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)) } as unknown as ProjectRepository;
+    const plan = parseAuraAssistantPlan({ content: "Review.", betaExecutionEvaluation: {
+      result: "partial", observation: "Observed", doneWhenSatisfied: false,
+    }, experience: { kind: "decision", title: "E", summary: "E", phases: [], choices: [{
+      label: "Confirm", description: "Confirm", prompt: "Continue", confirmation: {
+        kind: "beta-execution-evaluation", result: "partial", observation: "Observed", doneWhenSatisfied: false,
+      },
+    }], recommendedSurface: "presence" } });
+    const conversation = conversationRepository.createConversation({ projectId: "iaura" }).conversation!;
+    conversationRepository.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "started",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+    } });
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "evaluation-without-user", role: "assistant", content: "Review.",
+      structuredResponse: assistantMessageMetadata(plan, "missing-user"),
+    });
+    await expect(new ConversationController({ conversations: conversationRepository, projects })
+      .sendChoice(plan.experience.choices[0], "evaluation-without-user", "Context"))
+      .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+  });
+
+  it("allows deferred to restart only through an exact persisted start choice", async () => {
+    const projects = { getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)) } as unknown as ProjectRepository;
+    const plan = parseAuraAssistantPlan({ content: "Start?", experience: {
+      kind: "decision", title: "Start", summary: "Start", phases: [], choices: [{
+        label: "Empezar ahora", description: "Start", prompt: "Start", confirmation: {
+          kind: "beta-session-decision", decision: "start-now",
+        },
+      }], recommendedSurface: "presence",
+    } });
+    const conversation = conversationRepository.createConversation({ projectId: "iaura" }).conversation!;
+    conversationRepository.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "deferred",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "continue-later", sourceMessageId: "old", decidedAt: "2026-08-13T12:03:00Z" },
+    } });
+    conversationRepository.appendMessage(conversation.conversationId, {
+      messageId: "restart", role: "assistant", content: "Start?",
+      structuredResponse: assistantMessageMetadata(plan),
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Started.", []));
+    await new ConversationController({ conversations: conversationRepository, projects })
+      .sendChoice(plan.experience.choices[0], "restart", "Context");
+    expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
+      .toMatchObject({ status: "started", sessionDecision: { kind: "start-now", sourceMessageId: "restart" } });
+  });
+
   it("stops before Brain when every context source fails", async () => {
     const contextRetriever = {
       retrieve: vi.fn().mockRejectedValue(

@@ -7,6 +7,7 @@ export const IAURA_RESPONSE_SCHEMA = {
   "memoryUpdates",
   "experience",
   "betaNextStep",
+  "betaExecutionEvaluation",
 ],
   properties: {
     content: {
@@ -286,6 +287,17 @@ export const IAURA_RESPONSE_SCHEMA = {
                     },
                   },
                   {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "result", "observation", "doneWhenSatisfied"],
+                    properties: {
+                      kind: { type: "string", enum: ["beta-execution-evaluation"] },
+                      result: { type: "string", enum: ["passed", "failed", "partial"] },
+                      observation: { type: "string", minLength: 1 },
+                      doneWhenSatisfied: { type: "boolean" },
+                    },
+                  },
+                  {
                     type: "null",
                   },
                 ],
@@ -346,6 +358,23 @@ export const IAURA_RESPONSE_SCHEMA = {
       ],
       description:
         "Exactly one Beta 01 next-step proposal when confirmed context and confirmed outcome exist; otherwise null.",
+    },
+    betaExecutionEvaluation: {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["result", "observation", "doneWhenSatisfied"],
+          properties: {
+            result: { type: "string", enum: ["passed", "failed", "partial"] },
+            observation: { type: "string", minLength: 1 },
+            doneWhenSatisfied: { type: "boolean" },
+          },
+        },
+        { type: "null" },
+      ],
+      description:
+        "Provisional interpretation of a founder execution report while Beta workflow status is started; otherwise null.",
     },
   },
 } as const;

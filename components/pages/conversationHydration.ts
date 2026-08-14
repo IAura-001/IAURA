@@ -1,5 +1,6 @@
 import type { ChatMessage } from "@/types/chat";
 import type { ConversationRepository } from "@/core/conversation";
+import { cleanAIText } from "@/utils/formatText";
 
 export function didActiveProjectChange(
   previousProjectId: string | null,
@@ -29,7 +30,9 @@ export function loadVisibleConversation(
   return conversation?.messages.map((message) => ({
     id: message.messageId,
     role: message.role,
-    content: message.content,
+    content: message.role === "assistant"
+      ? cleanAIText(message.content)
+      : message.content,
     ...(message.role === "assistant" &&
     message.structuredResponse?.experience
       ? { experience: message.structuredResponse.experience }
@@ -37,6 +40,19 @@ export function loadVisibleConversation(
     ...(message.role === "assistant" &&
     message.structuredResponse?.betaNextStep
       ? { betaNextStep: message.structuredResponse.betaNextStep }
+      : {}),
+    ...(message.role === "assistant" &&
+    message.structuredResponse?.betaExecutionEvaluation
+      ? {
+          betaExecutionEvaluation:
+            message.structuredResponse.betaExecutionEvaluation,
+        }
+      : {}),
+    ...(message.role === "assistant" &&
+    conversation.betaWorkflow?.verifiedExecutions?.some(
+      (evidence) => evidence.sourceMessageId === message.messageId,
+    )
+      ? { betaExecutionVerified: true }
       : {}),
     ...(message.role === "assistant" &&
     conversation.betaWorkflow?.confirmedNextStep?.sourceMessageId === message.messageId

@@ -98,6 +98,26 @@ describe("project conversation hydration", () => {
     expect(loadVisibleConversation(reloaded, "project-a")).toHaveLength(1);
   });
 
+  it("uses the existing clean-prose presentation convention for hydrated assistant text only", () => {
+    const conversations = new LocalConversationRepository();
+    const created = conversations.createConversation({ projectId: "project-a" })
+      .conversation!;
+    conversations.appendMessage(created.conversationId, {
+      messageId: "user-markdown", role: "user", content: "I wrote **partial**.",
+    });
+    conversations.appendMessage(created.conversationId, {
+      messageId: "assistant-markdown", role: "assistant",
+      content: "The result is **partial** and remains provisional.",
+    });
+
+    const visible = loadVisibleConversation(conversations, "project-a");
+
+    expect(visible[0].content).toBe("I wrote **partial**.");
+    expect(visible[1].content).toBe("The result is partial and remains provisional.");
+    expect(conversations.getActiveConversation("project-a")?.messages[1].content)
+      .toBe("The result is **partial** and remains provisional.");
+  });
+
   it("switches A to B to A without leaking messages across projects", () => {
     const conversations = new LocalConversationRepository();
     const projectA = conversations.createConversation({
@@ -227,5 +247,39 @@ describe("project conversation hydration", () => {
     } });
     expect(loadVisibleConversation(new LocalConversationRepository(), "iaura")[0])
       .toMatchObject({ betaNextStepConfirmed: true, betaSessionDecision: "continue-later" });
+  });
+
+  it("hydrates project-scoped provisional and verified execution state", () => {
+    const conversations = new LocalConversationRepository();
+    const conversation = conversations.createConversation({ projectId: "iaura" }).conversation!;
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "report", role: "user", content: "I tested it.",
+    });
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "evaluation", role: "assistant", content: "Review.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        sourceUserMessageId: "report",
+        betaExecutionEvaluation: {
+          result: "partial", observation: "Some behavior worked", doneWhenSatisfied: false,
+        },
+      },
+    });
+    conversations.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "started",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      verifiedExecutions: [{ evidenceId: "e", result: "partial", observation: "Some behavior worked", doneWhenSatisfied: false, sourceUserMessageId: "report", sourceMessageId: "evaluation", verifiedAt: "2026-08-13T12:04:00Z" }],
+    } });
+    conversations.createConversation({ projectId: "nova" });
+
+    expect(loadVisibleConversation(conversations, "iaura")[1]).toMatchObject({
+      id: "evaluation",
+      betaExecutionEvaluation: { result: "partial", doneWhenSatisfied: false },
+      betaExecutionVerified: true,
+    });
+    expect(loadVisibleConversation(conversations, "nova")).toEqual([]);
   });
 });
