@@ -26,9 +26,18 @@ export function loadVisibleConversation(
   projectId: string | null,
 ): ChatMessage[] {
   const conversation = conversations.getActiveConversation(projectId);
-  const closedReviewTargetId = conversation?.betaWorkflow?.status === "closed"
-    ? conversation.messages.findLast((message) => message.role === "assistant")?.messageId
-    : undefined;
+  const workflows = [
+    ...(conversation?.completedBetaWorkflows ?? []),
+    ...(conversation?.betaWorkflow ? [conversation.betaWorkflow] : []),
+  ];
+  const closedReviewTargets = new Map(
+    workflows.flatMap((workflow) => {
+      if (workflow.status !== "closed" || !workflow.sessionEvaluation) return [];
+      const targetId = workflow.postClosureHandoff?.sourceMessageId ??
+        conversation?.messages.findLast((message) => message.role === "assistant")?.messageId;
+      return targetId ? [[targetId, workflow] as const] : [];
+    }),
+  );
 
   return conversation?.messages.map((message) => ({
     id: message.messageId,
@@ -56,41 +65,60 @@ export function loadVisibleConversation(
       ? { betaSessionEvaluation: message.structuredResponse.betaSessionEvaluation }
       : {}),
     ...(message.role === "assistant" &&
-    conversation.betaWorkflow?.sessionEvaluation?.sourceMessageId === message.messageId
+    workflows.some(
+      (workflow) => workflow.sessionEvaluation?.sourceMessageId === message.messageId,
+    )
       ? {
           betaSessionEvaluation: {
-            outcomeSatisfied: conversation.betaWorkflow.sessionEvaluation.outcomeSatisfied,
-            summary: conversation.betaWorkflow.sessionEvaluation.summary,
+            outcomeSatisfied: workflows.find(
+              (workflow) => workflow.sessionEvaluation?.sourceMessageId === message.messageId,
+            )!.sessionEvaluation!.outcomeSatisfied,
+            summary: workflows.find(
+              (workflow) => workflow.sessionEvaluation?.sourceMessageId === message.messageId,
+            )!.sessionEvaluation!.summary,
           },
           betaSessionEvaluationConfirmed: true,
         }
       : {}),
     ...(message.role === "assistant" &&
-    closedReviewTargetId === message.messageId &&
-    conversation.betaWorkflow?.sessionEvaluation
+    closedReviewTargets.has(message.messageId)
       ? {
           betaSessionEvaluation: {
-            outcomeSatisfied: conversation.betaWorkflow.sessionEvaluation.outcomeSatisfied,
-            summary: conversation.betaWorkflow.sessionEvaluation.summary,
+            outcomeSatisfied: closedReviewTargets.get(message.messageId)!
+              .sessionEvaluation!.outcomeSatisfied,
+            summary: closedReviewTargets.get(message.messageId)!
+              .sessionEvaluation!.summary,
           },
           betaSessionEvaluationConfirmed: true,
           betaSessionClosed: true,
+          ...(closedReviewTargets.get(message.messageId)!.postClosureHandoff
+            ? {
+                betaPostClosureDecision: closedReviewTargets.get(message.messageId)!
+                  .postClosureHandoff!.decision,
+              }
+            : {}),
         }
       : {}),
     ...(message.role === "assistant" &&
-    conversation.betaWorkflow?.verifiedExecutions?.some(
-      (evidence) => evidence.sourceMessageId === message.messageId,
-    )
+    workflows.some((workflow) => workflow.verifiedExecutions?.some(
+      (evidence) => evidence.sourceMessageId === message.messageId))
       ? { betaExecutionVerified: true }
       : {}),
     ...(message.role === "assistant" &&
-    conversation.betaWorkflow?.confirmedNextStep?.sourceMessageId === message.messageId
+    workflows.some(
+      (workflow) => workflow.confirmedNextStep?.sourceMessageId === message.messageId,
+    )
       ? { betaNextStepConfirmed: true }
       : {}),
     ...(message.role === "assistant" &&
-    conversation.betaWorkflow?.confirmedNextStep?.sourceMessageId === message.messageId &&
-    conversation.betaWorkflow.sessionDecision
-      ? { betaSessionDecision: conversation.betaWorkflow.sessionDecision.kind }
+    workflows.some((workflow) =>
+      workflow.confirmedNextStep?.sourceMessageId === message.messageId &&
+      workflow.sessionDecision)
+      ? {
+          betaSessionDecision: workflows.find((workflow) =>
+            workflow.confirmedNextStep?.sourceMessageId === message.messageId &&
+            workflow.sessionDecision)!.sessionDecision!.kind,
+        }
       : {}),
   })) ?? [];
 }

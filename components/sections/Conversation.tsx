@@ -219,6 +219,7 @@ const AnimatedMessage = memo(
                   sourceMessageId={message.id}
                   confirmed={message.betaSessionEvaluationConfirmed}
                   closed={message.betaSessionClosed}
+                  handoffDecision={message.betaPostClosureDecision}
                   disabled={isBusy}
                   onChoose={onChoose}
                 />

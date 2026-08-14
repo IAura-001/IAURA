@@ -6,6 +6,7 @@ import {
   IAURA_MEMORY_TYPES,
   type AuraAssistantPlan,
   type BetaExecutionEvaluation,
+  type BetaPostClosureDecision,
   type BetaSessionEvaluation,
   type BetaNextStepRecommendation,
   type AuraExperience,
@@ -330,6 +331,16 @@ function parseChoice(
     }
     if (rawConfirmation.kind === "beta-session-closure") {
       return { kind: "beta-session-closure" as const };
+    }
+    if (
+      rawConfirmation.kind === "beta-post-closure-handoff" &&
+      (rawConfirmation.decision === "finish-here" ||
+        rawConfirmation.decision === "begin-another-cycle")
+    ) {
+      return {
+        kind: "beta-post-closure-handoff" as const,
+        decision: rawConfirmation.decision as BetaPostClosureDecision,
+      };
     }
     return undefined;
   })();

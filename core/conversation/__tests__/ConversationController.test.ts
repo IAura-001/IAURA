@@ -1253,6 +1253,49 @@ describe("ConversationController", () => {
   });
 
   it.each([
+    ["defining-outcome", false],
+    ["recommended", true],
+  ] as const)(
+    "filters start-now while workflow is %s and keeps provisional recommendation unconfirmed",
+    async (status, hasOutcome) => {
+      const projects = { getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)) } as unknown as ProjectRepository;
+      const recommendation = { action: "A", whyNow: "W", result: "R", doneWhen: "D" };
+      const generated = parseAuraAssistantPlan({ content: "Continue.", betaNextStep: recommendation,
+        experience: { kind: "decision", title: "Continue", summary: "Continue", phases: [], choices: [
+          { label: "Confirmar siguiente paso", description: "Confirm", prompt: "Confirm", confirmation: { kind: "beta-next-step", ...recommendation } },
+          { label: "Empezar ahora", description: "Start", prompt: "Start", confirmation: { kind: "beta-session-decision", decision: "start-now" } },
+        ], recommendedSurface: "presence" },
+      });
+      const conversation = conversationRepository.createConversation({ projectId: "iaura" }).conversation!;
+      conversationRepository.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+        version: 1, status,
+        confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+        ...(hasOutcome ? { confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" } } : {}),
+      } });
+      mocks.analyze.mockReturnValue(cognitiveRequest);
+      mocks.generateCognitiveResponse.mockResolvedValue(generated);
+      const controller = new ConversationController({ conversations: conversationRepository, projects, contextRetriever: createContextRetriever() });
+
+      const displayed = await controller.send("Continue", "Context");
+      expect(displayed.plan.experience.choices).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ confirmation: { kind: "beta-session-decision", decision: "start-now" } }),
+      ]));
+      if (hasOutcome) {
+        expect(displayed.plan.betaNextStep).toEqual(recommendation);
+        expect(displayed.plan.experience.choices[0].confirmation)
+          .toMatchObject({ kind: "beta-next-step" });
+        expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
+          .not.toHaveProperty("confirmedNextStep");
+      } else {
+        expect(displayed.plan).not.toHaveProperty("betaNextStep");
+      }
+      await expect(controller.sendChoice(
+        generated.experience.choices[1], displayed.assistantMessageId, "Context",
+      )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+    },
+  );
+
+  it.each([
     ["start-now", "started"],
     ["continue-later", "deferred"],
   ] as const)("persists trusted session decision %s without losing confirmed workflow", async (decision, status) => {
@@ -1696,6 +1739,105 @@ describe("ConversationController", () => {
     expect(conversationRepository.getConversation(conversation.conversationId)?.betaWorkflow)
       .toMatchObject({ status: "started", sessionDecision: { kind: "start-now", sourceMessageId: "restart" } });
   });
+
+  it.each(["finish-here", "begin-another-cycle"] as const)(
+    "persists trusted post-closure handoff %s without reopening history",
+    async (decision) => {
+      const projects = { getActiveProject: vi.fn(() => ({ id: "iaura", name: "IAURA" } as IAuraProject)) } as unknown as ProjectRepository;
+      const handoffPlan = parseAuraAssistantPlan({ content: "Choose.", experience: {
+        kind: "decision", title: "Closed", summary: "Choose", phases: [],
+        choices: [{ label: decision, description: "Choose", prompt: "Continue",
+          confirmation: { kind: "beta-post-closure-handoff", decision } }],
+        recommendedSurface: "presence",
+      } });
+      const conversation = conversationRepository.createConversation({ projectId: "iaura" }).conversation!;
+      const sourcePlans = [
+        ["c", parseAuraAssistantPlan({ content: "Context", experience: { kind: "decision", title: "Context", summary: "Context", phases: [], choices: [{ label: "Confirm", description: "Confirm", prompt: "Continue", confirmation: { kind: "beta-context", goal: "G", blocker: "B", summary: "S" } }], recommendedSurface: "presence" } })],
+        ["o", parseAuraAssistantPlan({ content: "Outcome", experience: { kind: "decision", title: "Outcome", summary: "Outcome", phases: [], choices: [{ label: "Confirm", description: "Confirm", prompt: "Continue", confirmation: { kind: "beta-outcome", outcome: "O", doneWhen: "D" } }], recommendedSurface: "presence" } })],
+        ["n", parseAuraAssistantPlan({ content: "Next", betaNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D" }, experience: { kind: "decision", title: "Next", summary: "Next", phases: [], choices: [{ label: "Confirm", description: "Confirm", prompt: "Continue", confirmation: { kind: "beta-next-step", action: "A", whyNow: "W", result: "R", doneWhen: "D" } }], recommendedSurface: "presence" } })],
+        ["d", parseAuraAssistantPlan({ content: "Start", experience: { kind: "decision", title: "Start", summary: "Start", phases: [], choices: [{ label: "Start", description: "Start", prompt: "Continue", confirmation: { kind: "beta-session-decision", decision: "start-now" } }], recommendedSurface: "presence" } })],
+      ] as const;
+      for (const [messageId, plan] of sourcePlans) {
+        conversationRepository.appendMessage(conversation.conversationId, {
+          messageId, role: "assistant", content: plan.content,
+          structuredResponse: assistantMessageMetadata(plan),
+        });
+      }
+      conversationRepository.appendMessage(conversation.conversationId, {
+        messageId: "report", role: "user", content: "Passed.",
+      });
+      conversationRepository.appendMessage(conversation.conversationId, {
+        messageId: "execution", role: "assistant", content: "Passed.", structuredResponse: {
+          actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+          sourceUserMessageId: "report",
+          betaExecutionEvaluation: { result: "passed", observation: "Passed", doneWhenSatisfied: true },
+        },
+      });
+      conversationRepository.appendMessage(conversation.conversationId, {
+        messageId: "review", role: "assistant", content: "Satisfied.", structuredResponse: {
+          actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+          betaSessionEvaluation: { outcomeSatisfied: true, summary: "Satisfied" },
+        },
+      });
+      conversationRepository.appendMessage(conversation.conversationId, {
+        messageId: "close-choice", role: "assistant", content: "Close?", structuredResponse: assistantMessageMetadata(parseAuraAssistantPlan({
+          content: "Close?", experience: { kind: "decision", title: "Close", summary: "Close", phases: [],
+            choices: [{ label: "Close", description: "Close", prompt: "Close", confirmation: { kind: "beta-session-closure" } }], recommendedSurface: "presence" },
+        })),
+      });
+      conversationRepository.appendMessage(conversation.conversationId, {
+        messageId: "handoff", role: "assistant", content: "Choose.",
+        structuredResponse: assistantMessageMetadata(handoffPlan),
+      });
+      conversationRepository.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+        version: 1, status: "closed",
+        confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+        confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+        confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+        sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+        verifiedExecutions: [{ evidenceId: "e", result: "passed", observation: "Passed", doneWhenSatisfied: true, sourceUserMessageId: "report", sourceMessageId: "execution", verifiedAt: "2026-08-13T12:04:00Z" }],
+        sessionEvaluation: { outcomeSatisfied: true, summary: "Satisfied", sourceMessageId: "review", confirmedAt: "2026-08-13T12:05:00Z" },
+        sessionClosure: { sourceMessageId: "close-choice", closedAt: "2026-08-13T12:06:00Z" },
+      } });
+      mocks.analyze.mockReturnValue(cognitiveRequest);
+      mocks.generateCognitiveResponse.mockResolvedValue({
+        ...handoffPlan,
+        content: "Acknowledged.",
+      });
+      const controller = new ConversationController({ conversations: conversationRepository, projects, now: () => "2026-08-13T12:07:00Z" });
+
+      const acknowledgment = await controller.sendChoice(
+        handoffPlan.experience.choices[0], "handoff", "Context",
+      );
+      expect(acknowledgment.plan.experience.choices).toEqual([]);
+      const restored = conversationRepository.getConversation(conversation.conversationId)!;
+      if (decision === "finish-here") {
+        expect(restored.betaWorkflow).toMatchObject({ status: "closed", postClosureHandoff: { decision, sourceMessageId: "handoff" } });
+        expect(restored.completedBetaWorkflows).toBeUndefined();
+        expect(mocks.analyze).toHaveBeenLastCalledWith(expect.objectContaining({
+          userContext: expect.stringContaining(
+            "Founder explicitly chose to finish here. The handoff is complete",
+          ),
+        }));
+      } else {
+        expect(restored.betaWorkflow).toBeUndefined();
+        expect(restored.completedBetaWorkflows).toHaveLength(1);
+        expect(restored.completedBetaWorkflows?.[0]).toMatchObject({
+          status: "closed", postClosureHandoff: { decision, sourceMessageId: "handoff" },
+          verifiedExecutions: [{ evidenceId: "e" }],
+        });
+        expect(mocks.analyze).toHaveBeenLastCalledWith(expect.objectContaining({
+          userContext: expect.stringContaining(
+            "Active workflow: none. A fresh Beta cycle may begin only through new context confirmation.",
+          ),
+        }));
+      }
+      const ordinary = await controller.send("Continue normal conversation", "Context");
+      expect(ordinary.plan.experience.choices).toEqual([]);
+      await expect(controller.sendChoice(handoffPlan.experience.choices[0], "handoff", "Context"))
+        .rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
+    },
+  );
 
   it("stops before Brain when every context source fails", async () => {
     const contextRetriever = {

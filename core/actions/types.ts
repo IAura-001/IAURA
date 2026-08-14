@@ -89,6 +89,10 @@ export interface BetaSessionEvaluation {
   summary: string;
 }
 
+export type BetaPostClosureDecision =
+  | "finish-here"
+  | "begin-another-cycle";
+
 export type AuraExperienceConfirmation =
   | {
       kind: "project-decision";
@@ -129,6 +133,10 @@ export type AuraExperienceConfirmation =
     }
   | {
       kind: "beta-session-closure";
+    }
+  | {
+      kind: "beta-post-closure-handoff";
+      decision: BetaPostClosureDecision;
     };
 
 export interface AuraExperience {

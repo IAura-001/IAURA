@@ -1,5 +1,6 @@
 import type {
   AuraExperience,
+  BetaPostClosureDecision,
   BetaExecutionEvaluation,
   BetaSessionEvaluation,
   BetaNextStepRecommendation,
@@ -18,4 +19,5 @@ export interface ChatMessage {
   betaSessionEvaluation?: BetaSessionEvaluation;
   betaSessionEvaluationConfirmed?: boolean;
   betaSessionClosed?: boolean;
+  betaPostClosureDecision?: BetaPostClosureDecision;
 }

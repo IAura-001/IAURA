@@ -663,11 +663,13 @@ export default function Home({
 
         if (
           typeof missionOverride === "object" &&
-          missionOverride.confirmation?.kind === "beta-session-closure"
+          missionOverride.confirmation?.kind === "beta-post-closure-handoff" &&
+          sourceMessageId
         ) {
+          const decision = missionOverride.confirmation.decision;
           setMessages((previous) => previous.map((message) =>
-            message.betaSessionEvaluationConfirmed
-              ? { ...message, betaSessionClosed: true }
+            message.id === sourceMessageId
+              ? { ...message, betaPostClosureDecision: decision }
               : message,
           ));
         }
@@ -714,10 +716,26 @@ export default function Home({
         setAnimatedMessageIds((current) =>
           new Set([...current, assistantMessage.id]),
         );
-        setMessages((previous) => [
-          ...previous,
-          assistantMessage,
-        ]);
+        setMessages((previous) => {
+          const isPostClosureHandoff = response.experience.choices.some(
+            (choice) => choice.confirmation?.kind === "beta-post-closure-handoff",
+          );
+          const confirmedReview = isPostClosureHandoff
+            ? previous.findLast((message) =>
+                message.betaSessionEvaluationConfirmed && message.betaSessionEvaluation)
+            : undefined;
+          return [
+            ...previous,
+            confirmedReview?.betaSessionEvaluation
+              ? {
+                  ...assistantMessage,
+                  betaSessionEvaluation: confirmedReview.betaSessionEvaluation,
+                  betaSessionEvaluationConfirmed: true,
+                  betaSessionClosed: true,
+                }
+              : assistantMessage,
+          ];
+        });
 
         if (
           voiceMode &&

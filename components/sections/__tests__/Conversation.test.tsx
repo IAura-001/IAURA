@@ -439,4 +439,35 @@ describe("Conversation windowing controls", () => {
     expect(card).toHaveTextContent("Outcome satisfied");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("offers one post-closure handoff and displays the selected disposition", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const onChoose = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    const messages = [{
+      id: "closed-handoff", role: "assistant" as const, content: "Closed",
+      betaSessionEvaluation: { outcomeSatisfied: true, summary: "Outcome satisfied" },
+      betaSessionEvaluationConfirmed: true, betaSessionClosed: true,
+      experience: { kind: "decision" as const, title: "Closed", summary: "Choose",
+        phases: [], recommendedSurface: "presence" as const, choices: [
+          { label: "Terminar aquí", description: "Finish", prompt: "Finish",
+            confirmation: { kind: "beta-post-closure-handoff" as const, decision: "finish-here" as const } },
+          { label: "Comenzar otro ciclo", description: "Again", prompt: "Again",
+            confirmation: { kind: "beta-post-closure-handoff" as const, decision: "begin-another-cycle" as const } },
+        ] },
+    }];
+    const { rerender } = render(<I18nProvider locale="es-419">
+      <Conversation messages={messages} onChoose={onChoose} />
+    </I18nProvider>);
+    const finish = screen.getByRole("button", { name: /Terminar aquí/ });
+    await user.click(finish);
+    expect(screen.getByRole("button", { name: /Comenzar otro ciclo/ })).toBeDisabled();
+    release();
+    await screen.findByText(/el fundador eligió terminar aquí/i);
+    rerender(<I18nProvider locale="es-419"><Conversation messages={[{
+      ...messages[0], betaPostClosureDecision: "begin-another-cycle",
+    }]} onChoose={onChoose} /></I18nProvider>);
+    expect(screen.getByText(/el fundador comenzó otro ciclo/i)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Terminar aquí/ })).not.toBeInTheDocument();
+  });
 });

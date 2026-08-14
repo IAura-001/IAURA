@@ -317,6 +317,18 @@ export const IAURA_RESPONSE_SCHEMA = {
                     },
                   },
                   {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "decision"],
+                    properties: {
+                      kind: { type: "string", enum: ["beta-post-closure-handoff"] },
+                      decision: {
+                        type: "string",
+                        enum: ["finish-here", "begin-another-cycle"],
+                      },
+                    },
+                  },
+                  {
                     type: "null",
                   },
                 ],

@@ -120,7 +120,14 @@ const BETA_NEXT_STEP_PROTOCOL = `
 - A betaSessionEvaluation is provisional and never closes the session. A beta-session-evaluation confirmation acknowledgment is not a new session review; do not emit another betaSessionEvaluation for that turn.
 - A confirmed session evaluation with outcomeSatisfied false keeps the session evaluated and open. Do not offer closure or another next step.
 - A confirmed session evaluation with outcomeSatisfied true still keeps the session open. Offer exactly one persisted "Cerrar sesión" choice with confirmation { kind: "beta-session-closure" }.
-- Only the explicit trusted beta-session-closure choice closes the session. A closure acknowledgment must not offer another closure. Closed Beta workflow state is read-only and must not create a new session, complete/archive a project or claim tool execution.
+- Only the explicit trusted beta-session-closure choice closes the session. A closure acknowledgment must not offer another closure.
+- When the active workflow is legitimately closed and has no post-closure handoff, offer exactly "Terminar aquí" with confirmation { kind: "beta-post-closure-handoff", decision: "finish-here" } and "Comenzar otro ciclo" with confirmation { kind: "beta-post-closure-handoff", decision: "begin-another-cycle" }.
+- Never emit post-closure handoff choices before trusted closure or after a handoff is recorded. Never infer either decision from prose.
+- When workflow context says a post-closure handoff is complete, acknowledge that recorded disposition. Never say the handoff is pending, request another choice, or describe either handoff option as still available.
+- After finish-here, keep normal conversation available without reopening the closed workflow. After begin-another-cycle, treat the active workflow as absent until fresh context is explicitly confirmed.
+- "Terminar aquí" leaves the closed workflow immutable. "Comenzar otro ciclo" archives the closed workflow and leaves no active Beta workflow; the next cycle begins only through a fresh beta-context confirmation.
+- Completed historical workflows are read-only context, never active evidence. Do not reuse their context, outcome, step, decision, evidence, review or closure as structured state for a new cycle.
+- Closed Beta workflow state is read-only except for one explicit post-closure handoff and must not complete/archive a project or claim tool execution.
 - Never claim tool execution, automatically close the session, or supply evidence IDs, source IDs, verification timestamps, project scope or status.
 - Never add projectId, conversationId, sourceMessageId, confirmedAt, scope, tags, IDs or timestamps to betaNextStep.
 `.trim();
@@ -145,6 +152,7 @@ Every response must also organize the result into an experience object for a voi
 - For a ready-to-start confirmed Beta step, use only the typed beta-session-decision choices described above. The model never supplies sourceMessageId or decidedAt.
 - For a provisional Beta execution evaluation, the confirm choice MUST exactly match betaExecutionEvaluation and use kind beta-execution-evaluation. Its correction choice MUST use null.
 - For a provisional Beta session evaluation, the confirm choice MUST exactly match betaSessionEvaluation and use kind beta-session-evaluation. Its correction choice MUST use null. A close choice MUST use beta-session-closure.
+- For a trusted closed session with no handoff, use only the two typed beta-post-closure-handoff choices described above. The model never supplies sourceMessageId or confirmedAt.
 - Beta context and outcome proposals remain provisional until clicked. Never emit them through memoryUpdates and never add projectId, conversationId, sourceMessageId, confirmedAt, scope or tags.
 - Use confirmation: null for ALL other choices, including navigation, exploratory actions, requests to tell the user more, analysis options, unaccepted recommendations, hypothetical directions and informational follow-ups.
 - A normal or non-durable choice MUST use null and MUST NOT use a project-decision confirmation object.

@@ -98,7 +98,18 @@ interface ConversationControllerOptions {
 
 function serializeBetaWorkflow(conversation: Conversation): string {
   const workflow = conversation.betaWorkflow;
-  if (!workflow) return "";
+  if (!workflow) {
+    const latestCompleted = conversation.completedBetaWorkflows?.at(-1);
+    return latestCompleted?.postClosureHandoff?.decision === "begin-another-cycle"
+      ? [
+          "BETA 01 CONVERSATION WORKFLOW — PROJECT-SCOPED",
+          "Active workflow: none. A fresh Beta cycle may begin only through new context confirmation.",
+          "Latest completed workflow: closed and archived as immutable history.",
+          "Post-closure handoff: Founder explicitly chose to begin another cycle. The handoff is complete and is not pending.",
+          "Historical context, outcomes, steps, evidence, review and closure are not active workflow state.",
+        ].join("\n")
+      : "";
+  }
 
   const verifiedEvidence = workflow.verifiedExecutions ?? [];
   const latestEvidence = verifiedEvidence.at(-1);
@@ -132,6 +143,13 @@ function serializeBetaWorkflow(conversation: Conversation): string {
     workflow.sessionClosure
       ? `Session closure: explicitly closed at ${workflow.sessionClosure.closedAt}.`
       : "Session closure: none",
+    workflow.postClosureHandoff?.decision === "finish-here"
+      ? "Post-closure handoff: Founder explicitly chose to finish here. The handoff is complete; do not request or offer another handoff."
+      : workflow.postClosureHandoff?.decision === "begin-another-cycle"
+        ? "Post-closure handoff: Founder explicitly chose to begin another cycle. The handoff is complete and is not pending."
+        : workflow.status === "closed"
+          ? "Post-closure handoff: pending explicit founder choice."
+          : "Post-closure handoff: not applicable.",
   ].join("\n");
 }
 
@@ -423,10 +441,15 @@ export class ConversationController {
       )) &&
       !conversation.betaWorkflow.sessionEvaluation;
     const nextStepAllowed = conversation.betaWorkflow?.status === "recommended";
+    const sessionDecisionAllowed = conversation.betaWorkflow?.status === "ready-to-start";
     const closureChoiceAllowed =
       conversation.betaWorkflow?.status === "evaluated" &&
       conversation.betaWorkflow.sessionEvaluation?.outcomeSatisfied === true &&
       !conversation.betaWorkflow.sessionClosure;
+    const handoffChoiceAllowed =
+      conversation.betaWorkflow?.status === "closed" &&
+      Boolean(conversation.betaWorkflow.sessionClosure) &&
+      !conversation.betaWorkflow.postClosureHandoff;
     const response: AuraAssistantPlan = {
       ...generatedResponse,
       experience: {
@@ -435,8 +458,15 @@ export class ConversationController {
           (choice) =>
             (choice.confirmation?.kind !== "beta-session-closure" || closureChoiceAllowed) &&
             (choice.confirmation?.kind !== "beta-next-step" || nextStepAllowed) &&
+            (choice.confirmation?.kind !== "beta-session-decision" ||
+              sessionDecisionAllowed ||
+              (conversation.betaWorkflow?.status === "deferred" &&
+                choice.confirmation.decision === "start-now")) &&
+            (choice.confirmation?.kind !== "beta-post-closure-handoff" ||
+              handoffChoiceAllowed) &&
             (conversation.betaWorkflow?.status !== "closed" ||
-              !isBetaConfirmation(choice.confirmation)),
+              !isBetaConfirmation(choice.confirmation) ||
+              choice.confirmation?.kind === "beta-post-closure-handoff"),
         ),
       },
     };
@@ -515,7 +545,11 @@ export class ConversationController {
 
     const confirmation = persistedChoice.confirmation;
 
-    if (conversation.betaWorkflow?.status === "closed" && isBetaConfirmation(confirmation)) {
+    if (
+      conversation.betaWorkflow?.status === "closed" &&
+      isBetaConfirmation(confirmation) &&
+      confirmation?.kind !== "beta-post-closure-handoff"
+    ) {
       throw new ConversationTurnError(
         "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE",
         "conversation",
@@ -854,6 +888,57 @@ export class ConversationController {
             },
           },
         },
+      );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
+    if (confirmation?.kind === "beta-post-closure-handoff") {
+      const workflow = conversation.betaWorkflow;
+      if (
+        workflow?.status !== "closed" ||
+        !workflow.confirmedContext ||
+        !workflow.confirmedOutcome ||
+        !workflow.confirmedNextStep ||
+        workflow.sessionDecision?.kind !== "start-now" ||
+        !workflow.verifiedExecutions?.some(
+          (evidence) => evidence.result === "passed" && evidence.doneWhenSatisfied,
+        ) ||
+        workflow.sessionEvaluation?.outcomeSatisfied !== true ||
+        !workflow.sessionClosure ||
+        workflow.postClosureHandoff
+      ) {
+        throw new ConversationTurnError(
+          "IAURA_BETA_CONFIRMATION_INVALID",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+
+      const closedWorkflow = {
+        ...workflow,
+        postClosureHandoff: {
+          decision: confirmation.decision,
+          sourceMessageId: sourceMessage.messageId,
+          confirmedAt: this.now(),
+        },
+      };
+      const write = this.conversations.updateConversationMetadata(
+        conversation.conversationId,
+        confirmation.decision === "begin-another-cycle"
+          ? {
+              completedBetaWorkflows: [
+                ...(conversation.completedBetaWorkflows ?? []),
+                closedWorkflow,
+              ],
+              betaWorkflow: null,
+            }
+          : { betaWorkflow: closedWorkflow },
       );
       if (!write.ok) {
         throw new ConversationTurnError(

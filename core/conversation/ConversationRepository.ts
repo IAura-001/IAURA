@@ -17,6 +17,7 @@ import {
   IAURA_ACTION_TYPES,
   type AuraAssistantPlan,
   type BetaExecutionEvaluation,
+  type BetaPostClosureDecision,
   type BetaSessionEvaluation,
   type BetaExecutionResult,
   type BetaNextStepRecommendation,
@@ -41,6 +42,7 @@ export const MAX_WORKING_HISTORY_MESSAGES = 24;
 export const MAX_WORKING_HISTORY_CHARACTERS = 12_000;
 const MAX_RECEIPT_HISTORY_MESSAGES = 4;
 const MAX_RECEIPT_HISTORY_CHARACTERS = 3_000;
+export const MAX_COMPLETED_BETA_WORKFLOWS = 20;
 
 export type ConversationStatus = "active" | "archived" | "deleted";
 export type ConversationRole = "user" | "assistant";
@@ -110,6 +112,11 @@ export interface BetaWorkflowMetadata {
     sourceMessageId: string;
     closedAt: string;
   };
+  postClosureHandoff?: {
+    decision: BetaPostClosureDecision;
+    sourceMessageId: string;
+    confirmedAt: string;
+  };
 }
 
 export interface ConversationStructuredResponse {
@@ -152,6 +159,7 @@ export interface Conversation {
   messages: ConversationMessage[];
   summary?: ConversationSummaryMetadata;
   betaWorkflow?: BetaWorkflowMetadata;
+  completedBetaWorkflows?: BetaWorkflowMetadata[];
 }
 
 export interface ConversationRepositorySnapshot {
@@ -187,6 +195,7 @@ export interface ConversationMetadataUpdate {
   missionId?: string | null;
   summary?: ConversationSummaryMetadata | null;
   betaWorkflow?: BetaWorkflowMetadata | null;
+  completedBetaWorkflows?: BetaWorkflowMetadata[];
 }
 
 export interface ConversationWriteResult extends StateOperationResult {
@@ -440,6 +449,17 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
           closedAt: value.sessionClosure.closedAt,
         }
       : undefined;
+  const postClosureHandoff = isRecord(value.postClosureHandoff) &&
+    (value.postClosureHandoff.decision === "finish-here" ||
+      value.postClosureHandoff.decision === "begin-another-cycle") &&
+    isNonEmptyString(value.postClosureHandoff.sourceMessageId) &&
+    isIsoDate(value.postClosureHandoff.confirmedAt)
+      ? {
+          decision: value.postClosureHandoff.decision as BetaPostClosureDecision,
+          sourceMessageId: value.postClosureHandoff.sourceMessageId.trim(),
+          confirmedAt: value.postClosureHandoff.confirmedAt,
+        }
+      : undefined;
   const canRemainClosed = hasCompletedStep && sessionEvaluation?.outcomeSatisfied === true &&
     Boolean(sessionClosure);
   const status = value.status === "closed" && !canRemainClosed
@@ -465,6 +485,9 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
       : {}),
     ...(sessionClosure && status === "closed" && sessionEvaluation?.outcomeSatisfied
       ? { sessionClosure }
+      : {}),
+    ...(postClosureHandoff && sessionClosure && status === "closed"
+      ? { postClosureHandoff }
       : {}),
   };
 }
@@ -502,15 +525,21 @@ function hasUnsupportedBetaWorkflowVersion(value: unknown): boolean {
   if (!isRecord(value) || !Array.isArray(value.conversations)) return false;
 
   return value.conversations.some((conversation) => {
-    if (!isRecord(conversation) || !isRecord(conversation.betaWorkflow)) {
+    if (!isRecord(conversation)) {
       return false;
     }
-    const version = conversation.betaWorkflow.version;
-    return (
-      typeof version === "number" &&
-      Number.isInteger(version) &&
-      version > BETA_WORKFLOW_VERSION
-    );
+    const workflows = [
+      conversation.betaWorkflow,
+      ...(Array.isArray(conversation.completedBetaWorkflows)
+        ? conversation.completedBetaWorkflows
+        : []),
+    ];
+    return workflows.some((workflow) => {
+      if (!isRecord(workflow)) return false;
+      const version = workflow.version;
+      return typeof version === "number" &&
+        Number.isInteger(version) && version > BETA_WORKFLOW_VERSION;
+    });
   });
 }
 
@@ -629,6 +658,14 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
       };
       if (rawConfirmation.kind === "beta-session-closure") return {
         kind: "beta-session-closure" as const,
+      };
+      if (
+        rawConfirmation.kind === "beta-post-closure-handoff" &&
+        (rawConfirmation.decision === "finish-here" ||
+          rawConfirmation.decision === "begin-another-cycle")
+      ) return {
+        kind: "beta-post-closure-handoff" as const,
+        decision: rawConfirmation.decision as BetaPostClosureDecision,
       };
       return undefined;
     })();
@@ -794,6 +831,7 @@ function bindVerifiedExecutionsToMessages(
   delete baseWorkflow.verifiedExecutions;
   delete baseWorkflow.sessionEvaluation;
   delete baseWorkflow.sessionClosure;
+  delete baseWorkflow.postClosureHandoff;
   const sessionEvaluationSource = workflow.sessionEvaluation
     ? messages.find((message) =>
         message.messageId === workflow.sessionEvaluation?.sourceMessageId &&
@@ -828,6 +866,23 @@ function bindVerifiedExecutionsToMessages(
     closureSourceIndex > sessionEvaluationSourceIndex && hasPersistedCloseChoice
     ? workflow.sessionClosure
     : undefined;
+  const handoffSource = workflow.postClosureHandoff
+    ? messages.find((message) =>
+        message.messageId === workflow.postClosureHandoff?.sourceMessageId &&
+        message.role === "assistant")
+    : undefined;
+  const handoffSourceIndex = handoffSource
+    ? messages.findIndex((message) => message.messageId === handoffSource.messageId)
+    : -1;
+  const hasPersistedHandoffChoice = handoffSource?.structuredResponse?.experience?.choices.some(
+    (choice) =>
+      choice.confirmation?.kind === "beta-post-closure-handoff" &&
+      choice.confirmation.decision === workflow.postClosureHandoff?.decision,
+  );
+  const postClosureHandoff = sessionClosure && workflow.postClosureHandoff &&
+    handoffSourceIndex > closureSourceIndex && hasPersistedHandoffChoice
+    ? workflow.postClosureHandoff
+    : undefined;
   const reconstructedStatus = workflow.status === "closed" && !sessionClosure
     ? hasBoundCompletedStep ? "evaluated" : "started"
     : status;
@@ -837,7 +892,64 @@ function bindVerifiedExecutionsToMessages(
     ...(verifiedExecutions.length ? { verifiedExecutions } : {}),
     ...(sessionEvaluation ? { sessionEvaluation } : {}),
     ...(sessionClosure && reconstructedStatus === "closed" ? { sessionClosure } : {}),
+    ...(postClosureHandoff && reconstructedStatus === "closed"
+      ? { postClosureHandoff }
+      : {}),
   };
+}
+
+function bindCompletedWorkflowToMessages(
+  workflow: BetaWorkflowMetadata | undefined,
+  messages: ConversationMessage[],
+): BetaWorkflowMetadata | undefined {
+  const bound = bindVerifiedExecutionsToMessages(workflow, messages);
+  if (
+    bound?.status !== "closed" ||
+    bound.sessionDecision?.kind !== "start-now" ||
+    bound.postClosureHandoff?.decision !== "begin-another-cycle" ||
+    !bound.confirmedContext || !bound.confirmedOutcome || !bound.confirmedNextStep ||
+    !bound.sessionClosure
+  ) return undefined;
+
+  const sourceIndex = (messageId: string) => messages.findIndex(
+    (message) => message.messageId === messageId && message.role === "assistant",
+  );
+  const sourceChoice = (messageId: string) => messages.find(
+    (message) => message.messageId === messageId && message.role === "assistant",
+  )?.structuredResponse?.experience?.choices;
+  const contextIndex = sourceIndex(bound.confirmedContext.sourceMessageId);
+  const outcomeIndex = sourceIndex(bound.confirmedOutcome.sourceMessageId);
+  const nextStepIndex = sourceIndex(bound.confirmedNextStep.sourceMessageId);
+  const decisionIndex = sourceIndex(bound.sessionDecision.sourceMessageId);
+  const evidenceIndex = sourceIndex(bound.verifiedExecutions?.at(-1)?.sourceMessageId ?? "");
+  const reviewIndex = sourceIndex(bound.sessionEvaluation?.sourceMessageId ?? "");
+  const closureIndex = sourceIndex(bound.sessionClosure.sourceMessageId);
+  const handoffIndex = sourceIndex(bound.postClosureHandoff.sourceMessageId);
+  const hasContext = sourceChoice(bound.confirmedContext.sourceMessageId)?.some((choice) =>
+    choice.confirmation?.kind === "beta-context" &&
+    choice.confirmation.goal === bound.confirmedContext?.goal &&
+    choice.confirmation.blocker === bound.confirmedContext?.blocker &&
+    choice.confirmation.summary === bound.confirmedContext?.summary);
+  const hasOutcome = sourceChoice(bound.confirmedOutcome.sourceMessageId)?.some((choice) =>
+    choice.confirmation?.kind === "beta-outcome" &&
+    choice.confirmation.outcome === bound.confirmedOutcome?.outcome &&
+    choice.confirmation.doneWhen === bound.confirmedOutcome?.doneWhen);
+  const hasNextStep = sourceChoice(bound.confirmedNextStep.sourceMessageId)?.some((choice) =>
+    choice.confirmation?.kind === "beta-next-step" &&
+    choice.confirmation.action === bound.confirmedNextStep?.action &&
+    choice.confirmation.whyNow === bound.confirmedNextStep?.whyNow &&
+    choice.confirmation.result === bound.confirmedNextStep?.result &&
+    choice.confirmation.doneWhen === bound.confirmedNextStep?.doneWhen);
+  const hasStartDecision = sourceChoice(bound.sessionDecision.sourceMessageId)?.some((choice) =>
+    choice.confirmation?.kind === "beta-session-decision" &&
+    choice.confirmation.decision === "start-now");
+
+  return hasContext && hasOutcome && hasNextStep && hasStartDecision &&
+    contextIndex >= 0 && contextIndex < outcomeIndex && outcomeIndex < nextStepIndex &&
+    nextStepIndex < decisionIndex && decisionIndex < evidenceIndex &&
+    evidenceIndex < reviewIndex && reviewIndex < closureIndex && closureIndex < handoffIndex
+    ? bound
+    : undefined;
 }
 
 function normalizeConversation(value: unknown): Conversation | null {
@@ -870,6 +982,26 @@ function normalizeConversation(value: unknown): Conversation | null {
     normalizeBetaWorkflow(value.betaWorkflow),
     messages,
   );
+  const completedClosureSources = new Set<string>();
+  const completedBetaWorkflows = Array.isArray(value.completedBetaWorkflows)
+    ? value.completedBetaWorkflows.slice(-MAX_COMPLETED_BETA_WORKFLOWS).flatMap((candidate) => {
+        const workflow = bindCompletedWorkflowToMessages(
+          normalizeBetaWorkflow(candidate),
+          messages,
+        );
+        const closureSourceId = workflow?.sessionClosure?.sourceMessageId;
+        if (
+          workflow?.status !== "closed" ||
+          workflow.postClosureHandoff?.decision !== "begin-another-cycle" ||
+          !closureSourceId ||
+          completedClosureSources.has(closureSourceId)
+        ) {
+          return [];
+        }
+        completedClosureSources.add(closureSourceId);
+        return [workflow];
+      })
+    : [];
   return {
     conversationId: value.conversationId.trim(),
     ...(isNonEmptyString(value.projectId) ? { projectId: value.projectId.trim() } : {}),
@@ -884,6 +1016,7 @@ function normalizeConversation(value: unknown): Conversation | null {
     messages,
     ...(summary ? { summary } : {}),
     ...(betaWorkflow ? { betaWorkflow } : {}),
+    ...(completedBetaWorkflows.length ? { completedBetaWorkflows } : {}),
   };
 }
 
@@ -1016,41 +1149,49 @@ function cloneMessage(message: ConversationMessage): ConversationMessage {
   };
 }
 
+function cloneBetaWorkflow(workflow: BetaWorkflowMetadata): BetaWorkflowMetadata {
+  return {
+    ...workflow,
+    ...(workflow.confirmedContext
+      ? { confirmedContext: { ...workflow.confirmedContext } }
+      : {}),
+    ...(workflow.confirmedOutcome
+      ? { confirmedOutcome: { ...workflow.confirmedOutcome } }
+      : {}),
+    ...(workflow.confirmedNextStep
+      ? { confirmedNextStep: { ...workflow.confirmedNextStep } }
+      : {}),
+    ...(workflow.sessionDecision
+      ? { sessionDecision: { ...workflow.sessionDecision } }
+      : {}),
+    ...(workflow.verifiedExecutions
+      ? { verifiedExecutions: workflow.verifiedExecutions.map((evidence) => ({ ...evidence })) }
+      : {}),
+    ...(workflow.sessionEvaluation
+      ? { sessionEvaluation: { ...workflow.sessionEvaluation } }
+      : {}),
+    ...(workflow.sessionClosure
+      ? { sessionClosure: { ...workflow.sessionClosure } }
+      : {}),
+    ...(workflow.postClosureHandoff
+      ? { postClosureHandoff: { ...workflow.postClosureHandoff } }
+      : {}),
+  };
+}
+
 function cloneConversation(conversation: Conversation): Conversation {
   return {
     ...conversation,
     messages: conversation.messages.map(cloneMessage),
     ...(conversation.summary ? { summary: { ...conversation.summary } } : {}),
     ...(conversation.betaWorkflow
+      ? { betaWorkflow: cloneBetaWorkflow(conversation.betaWorkflow) }
+      : {}),
+    ...(conversation.completedBetaWorkflows
       ? {
-          betaWorkflow: {
-            ...conversation.betaWorkflow,
-            ...(conversation.betaWorkflow.confirmedContext
-              ? { confirmedContext: { ...conversation.betaWorkflow.confirmedContext } }
-              : {}),
-            ...(conversation.betaWorkflow.confirmedOutcome
-              ? { confirmedOutcome: { ...conversation.betaWorkflow.confirmedOutcome } }
-              : {}),
-            ...(conversation.betaWorkflow.confirmedNextStep
-              ? { confirmedNextStep: { ...conversation.betaWorkflow.confirmedNextStep } }
-              : {}),
-            ...(conversation.betaWorkflow.sessionDecision
-              ? { sessionDecision: { ...conversation.betaWorkflow.sessionDecision } }
-              : {}),
-            ...(conversation.betaWorkflow.verifiedExecutions
-              ? {
-                  verifiedExecutions: conversation.betaWorkflow.verifiedExecutions.map(
-                    (evidence) => ({ ...evidence }),
-                  ),
-                }
-              : {}),
-            ...(conversation.betaWorkflow.sessionEvaluation
-              ? { sessionEvaluation: { ...conversation.betaWorkflow.sessionEvaluation } }
-              : {}),
-            ...(conversation.betaWorkflow.sessionClosure
-              ? { sessionClosure: { ...conversation.betaWorkflow.sessionClosure } }
-              : {}),
-          },
+          completedBetaWorkflows: conversation.completedBetaWorkflows.map(
+            cloneBetaWorkflow,
+          ),
         }
       : {}),
   };
@@ -1624,6 +1765,16 @@ export class LocalConversationRepository implements ConversationRepository {
         : update.betaWorkflow
           ? { betaWorkflow: normalizeBetaWorkflow(update.betaWorkflow) }
           : {}),
+      ...(update.completedBetaWorkflows
+        ? {
+            completedBetaWorkflows: update.completedBetaWorkflows
+              .slice(-MAX_COMPLETED_BETA_WORKFLOWS)
+              .flatMap((workflow) => {
+                const normalized = normalizeBetaWorkflow(workflow);
+                return normalized ? [normalized] : [];
+              }),
+          }
+        : {}),
       updatedAt: now,
       lastAccessedAt: now,
       revision: conversation.revision + 1,

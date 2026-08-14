@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { LocalConversationRepository } from "@/core/conversation";
+import {
+  LocalConversationRepository,
+  type ConversationRepository,
+} from "@/core/conversation";
 import {
   canApplyConversationHydration,
   didActiveProjectChange,
@@ -321,5 +324,44 @@ describe("project conversation hydration", () => {
     });
     expect(loadVisibleConversation(conversations, "iaura")[2])
       .not.toHaveProperty("betaSessionClosed");
+  });
+
+  it("hydrates archived closed workflow flags without leaking them into the fresh cycle", () => {
+    const completed = {
+      version: 1 as const, status: "closed" as const,
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now" as const, sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      verifiedExecutions: [{ evidenceId: "e", result: "passed" as const, observation: "Passed", doneWhenSatisfied: true, sourceUserMessageId: "report", sourceMessageId: "execution", verifiedAt: "2026-08-13T12:04:00Z" }],
+      sessionEvaluation: { outcomeSatisfied: true, summary: "Satisfied", sourceMessageId: "review", confirmedAt: "2026-08-13T12:05:00Z" },
+      sessionClosure: { sourceMessageId: "close", closedAt: "2026-08-13T12:06:00Z" },
+      postClosureHandoff: { decision: "begin-another-cycle" as const, sourceMessageId: "handoff", confirmedAt: "2026-08-13T12:07:00Z" },
+    };
+    const conversation = {
+      conversationId: "history", projectId: "iaura", title: "IAURA", status: "active" as const,
+      createdAt: "2026-08-13T12:00:00Z", updatedAt: "2026-08-13T12:08:00Z",
+      lastAccessedAt: "2026-08-13T12:08:00Z", revision: 1,
+      messages: [
+        { messageId: "execution", role: "assistant" as const, content: "Passed", createdAt: "2026-08-13T12:04:00Z", structuredResponse: { actionTypes: [], experienceKind: "decision" as const, recommendedSurface: "presence" as const, betaExecutionEvaluation: { result: "passed" as const, observation: "Passed", doneWhenSatisfied: true } } },
+        { messageId: "review", role: "assistant" as const, content: "Review", createdAt: "2026-08-13T12:05:00Z", structuredResponse: { actionTypes: [], experienceKind: "decision" as const, recommendedSurface: "presence" as const, betaSessionEvaluation: { outcomeSatisfied: true, summary: "Satisfied" } } },
+        { messageId: "handoff", role: "assistant" as const, content: "Handoff", createdAt: "2026-08-13T12:07:00Z", structuredResponse: { actionTypes: [], experienceKind: "decision" as const, recommendedSurface: "presence" as const } },
+        { messageId: "fresh", role: "assistant" as const, content: "Fresh cycle", createdAt: "2026-08-13T12:08:00Z" },
+      ],
+      completedBetaWorkflows: [completed],
+    };
+    const conversations = {
+      getActiveConversation: (projectId?: string | null) => projectId === "iaura" ? conversation : null,
+    } as Pick<ConversationRepository, "getActiveConversation">;
+
+    const hydrated = loadVisibleConversation(conversations, "iaura");
+    expect(hydrated[0]).toMatchObject({ betaExecutionVerified: true });
+    expect(hydrated[2]).toMatchObject({
+      betaSessionClosed: true,
+      betaPostClosureDecision: "begin-another-cycle",
+    });
+    expect(hydrated[3]).not.toHaveProperty("betaSessionClosed");
+    expect(hydrated[3]).not.toHaveProperty("betaExecutionVerified");
+    expect(loadVisibleConversation(conversations, "nova")).toEqual([]);
   });
 });

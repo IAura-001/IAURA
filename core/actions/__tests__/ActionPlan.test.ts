@@ -103,6 +103,11 @@ describe("ActionPlan", () => {
         additionalProperties: false,
         required: ["kind"],
       }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "decision"],
+      }),
       { type: "null" },
     ]);
     const objectProperties =
@@ -228,6 +233,35 @@ describe("ActionPlan", () => {
       content: "Review.", betaSessionEvaluation: evaluation,
     }).betaSessionEvaluation).toBeUndefined();
   });
+
+  it.each(["finish-here", "begin-another-cycle"] as const)(
+    "parses post-closure handoff %s without trusted fields",
+    (decision) => {
+      const plan = parseAuraAssistantPlan({ content: "Choose.", experience: {
+        kind: "decision", title: "Closed", summary: "Choose", phases: [],
+        choices: [{ label: "Choose", description: "Choose", prompt: "Continue",
+          confirmation: { kind: "beta-post-closure-handoff", decision,
+            sourceMessageId: "injected", confirmedAt: "injected" } }],
+        recommendedSurface: "presence",
+      } });
+      expect(plan.experience.choices[0].confirmation).toEqual({
+        kind: "beta-post-closure-handoff", decision,
+      });
+    },
+  );
+
+  it.each([undefined, "restart", "finish"])(
+    "rejects malformed post-closure handoff decision %s",
+    (decision) => {
+      const plan = parseAuraAssistantPlan({ content: "Choose.", experience: {
+        kind: "decision", title: "Closed", summary: "Choose", phases: [],
+        choices: [{ label: "Choose", description: "Choose", prompt: "Continue",
+          confirmation: { kind: "beta-post-closure-handoff", decision } }],
+        recommendedSurface: "presence",
+      } });
+      expect(plan.experience.choices[0].confirmation).toBeUndefined();
+    },
+  );
 
   it("parses complete beta-next-step confirmation and strips trusted fields", () => {
     const plan = parseAuraAssistantPlan({

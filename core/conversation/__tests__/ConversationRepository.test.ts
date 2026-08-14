@@ -6,6 +6,7 @@ import {
   CONVERSATION_STATE_VERSION,
   LEGACY_CONVERSATION_STORAGE_KEYS,
   LocalConversationRepository,
+  MAX_COMPLETED_BETA_WORKFLOWS,
   MAX_WORKING_HISTORY_CHARACTERS,
   MAX_WORKING_HISTORY_MESSAGES,
   type Conversation,
@@ -36,6 +37,20 @@ describe("LocalConversationRepository", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it("discards incomplete completed Beta workflows instead of activating them", () => {
+    const repo = repository();
+    const conversation = createConversation(repo, { projectId: "iaura" });
+    repo.updateConversationMetadata(conversation.conversationId, {
+      completedBetaWorkflows: Array.from(
+        { length: MAX_COMPLETED_BETA_WORKFLOWS + 3 },
+        () => ({ version: 1 as const, status: "closed" as const }),
+      ),
+    });
+    const restored = repository().getActiveConversation("iaura");
+    expect(restored?.completedBetaWorkflows).toBeUndefined();
+    expect(restored?.betaWorkflow).toBeUndefined();
   });
 
   it("persists conversations, messages, association and the active id across reload", () => {

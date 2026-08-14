@@ -93,6 +93,11 @@ describe("PromptBuilder", () => {
     expect(prompt).toContain("outcomeSatisfied true still keeps the session open");
     expect(prompt).toContain("beta-session-closure");
     expect(prompt).toContain("Closed Beta workflow state is read-only");
+    expect(prompt).toContain("Terminar aquí");
+    expect(prompt).toContain("Comenzar otro ciclo");
+    expect(prompt).toContain("Completed historical workflows are read-only context");
+    expect(prompt).toContain("Never say the handoff is pending");
+    expect(prompt).toContain("keep normal conversation available without reopening");
   });
   it("composes the official personality exactly once", () => {
     const prompt = new PromptBuilder().build(input);
