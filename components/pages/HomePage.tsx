@@ -616,6 +616,27 @@ export default function Home({
               );
         const response = turn.plan;
 
+        if (
+          typeof missionOverride === "object" &&
+          missionOverride.confirmation?.kind === "beta-session-decision"
+        ) {
+          const decision = missionOverride.confirmation.decision;
+          setMessages((previous) => {
+            const recommendationIndex = previous.findLastIndex(
+              (message) => Boolean(message.betaNextStep),
+            );
+            return previous.map((message, index) =>
+              index === recommendationIndex
+                ? {
+                    ...message,
+                    betaNextStepConfirmed: true,
+                    betaSessionDecision: decision,
+                  }
+                : message,
+            );
+          });
+        }
+
         const actionItems =
           executeActions(
             response.actions,

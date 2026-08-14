@@ -42,5 +42,10 @@ export function loadVisibleConversation(
     conversation.betaWorkflow?.confirmedNextStep?.sourceMessageId === message.messageId
       ? { betaNextStepConfirmed: true }
       : {}),
+    ...(message.role === "assistant" &&
+    conversation.betaWorkflow?.confirmedNextStep?.sourceMessageId === message.messageId &&
+    conversation.betaWorkflow.sessionDecision
+      ? { betaSessionDecision: conversation.betaWorkflow.sessionDecision.kind }
+      : {}),
   })) ?? [];
 }

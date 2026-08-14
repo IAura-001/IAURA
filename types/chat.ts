@@ -10,4 +10,5 @@ export interface ChatMessage {
   experience?: AuraExperience;
   betaNextStep?: BetaNextStepRecommendation;
   betaNextStepConfirmed?: boolean;
+  betaSessionDecision?: "start-now" | "continue-later";
 }

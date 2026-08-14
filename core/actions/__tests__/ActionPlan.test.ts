@@ -81,6 +81,11 @@ describe("ActionPlan", () => {
         additionalProperties: false,
         required: ["kind", "action", "whyNow", "result", "doneWhen"],
       }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "decision"],
+      }),
       { type: "null" },
     ]);
     const objectProperties =
@@ -88,6 +93,32 @@ describe("ActionPlan", () => {
     expect(objectProperties).not.toHaveProperty("projectId");
     expect(objectProperties).not.toHaveProperty("scope");
     expect(objectProperties).not.toHaveProperty("tags");
+  });
+
+  it.each(["start-now", "continue-later"] as const)(
+    "parses beta session decision %s and strips trusted fields",
+    (decision) => {
+      const plan = parseAuraAssistantPlan({ content: "Choose.", experience: {
+        kind: "decision", title: "Session", summary: "Choose", phases: [],
+        choices: [{ label: "Choose", description: "Choose", prompt: "Continue", confirmation: {
+          kind: "beta-session-decision", decision,
+          sourceMessageId: "hostile", decidedAt: "hostile", projectId: "hostile",
+        } }], recommendedSurface: "presence",
+      } });
+      expect(plan.experience.choices[0].confirmation).toEqual({
+        kind: "beta-session-decision", decision,
+      });
+    },
+  );
+
+  it("rejects an unsupported beta session decision", () => {
+    const plan = parseAuraAssistantPlan({ content: "Choose.", experience: {
+      kind: "decision", title: "Session", summary: "Choose", phases: [],
+      choices: [{ label: "Choose", description: "Choose", prompt: "Continue", confirmation: {
+        kind: "beta-session-decision", decision: "completed",
+      } }], recommendedSurface: "presence",
+    } });
+    expect(plan.experience.choices[0].confirmation).toBeUndefined();
   });
 
   it("parses complete beta-next-step confirmation and strips trusted fields", () => {

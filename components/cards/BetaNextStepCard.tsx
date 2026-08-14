@@ -13,6 +13,7 @@ interface BetaNextStepCardProps {
   confirmed?: boolean;
   disabled?: boolean;
   onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
+  sessionDecision?: "start-now" | "continue-later";
 }
 
 const details: Array<{
@@ -32,6 +33,7 @@ export function BetaNextStepCard({
   confirmed = false,
   disabled = false,
   onChoose,
+  sessionDecision,
 }: BetaNextStepCardProps) {
   const [pendingChoice, setPendingChoice] = useState<number | null>(null);
   const [chosenChoice, setChosenChoice] = useState<number | null>(null);
@@ -61,10 +63,18 @@ export function BetaNextStepCard({
     >
       <header className="border-b border-white/[0.07] px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-purple-300">
-          {isConfirmed ? "Siguiente paso confirmado" : "Siguiente paso recomendado"}
+          {sessionDecision === "start-now"
+            ? "Inicio confirmado"
+            : sessionDecision === "continue-later"
+              ? "Guardado para continuar después"
+              : isConfirmed ? "Siguiente paso confirmado" : "Siguiente paso recomendado"}
         </p>
         <p className="mt-1 text-xs text-zinc-500">
-          {isConfirmed
+          {sessionDecision === "start-now"
+            ? "Decisión de comenzar registrada; resultado todavía no verificado"
+            : sessionDecision === "continue-later"
+              ? "Paso confirmado y preservado; todavía no iniciado"
+              : isConfirmed
             ? "Confirmado para continuar; todavía no iniciado"
             : "Una propuesta de Aura para avanzar ahora"}
         </p>

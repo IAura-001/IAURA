@@ -286,6 +286,16 @@ function parseChoice(
         ? { kind: "beta-next-step" as const, action, whyNow, result, doneWhen }
         : undefined;
     }
+    if (
+      rawConfirmation.kind === "beta-session-decision" &&
+      (rawConfirmation.decision === "start-now" ||
+        rawConfirmation.decision === "continue-later")
+    ) {
+      return {
+        kind: "beta-session-decision" as const,
+        decision: rawConfirmation.decision as "start-now" | "continue-later",
+      };
+    }
     return undefined;
   })();
 

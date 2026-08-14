@@ -71,6 +71,12 @@ describe("PromptBuilder", () => {
     expect(prompt).toContain("Confirmar siguiente paso");
     expect(prompt).toContain("Confirmed next step in workflow context is authoritative");
     expect(prompt).toContain("never as started or executed");
+    expect(prompt).toContain("Empezar ahora");
+    expect(prompt).toContain("Continuar después");
+    expect(prompt).toContain("offer exactly two choices");
+    expect(prompt).toContain("use only the typed beta-session-decision choices");
+    expect(prompt).toContain("never means the action was executed, completed or verified");
+    expect(prompt).toContain("intentionally preserved for later");
   });
   it("composes the official personality exactly once", () => {
     const prompt = new PromptBuilder().build(input);

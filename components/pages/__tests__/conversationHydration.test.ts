@@ -209,4 +209,23 @@ describe("project conversation hydration", () => {
     expect(loadVisibleConversation(new LocalConversationRepository(), "iaura")[0])
       .toMatchObject({ id: "source", betaNextStepConfirmed: true });
   });
+
+  it("hydrates a persisted session decision onto the confirmed step", () => {
+    const conversations = new LocalConversationRepository();
+    const conversation = conversations.createConversation({ projectId: "iaura" }).conversation!;
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "step", role: "assistant", content: "Next",
+      structuredResponse: { actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        betaNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D" } },
+    });
+    conversations.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "deferred",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "step", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "continue-later", sourceMessageId: "decision", decidedAt: "2026-08-13T12:03:00Z" },
+    } });
+    expect(loadVisibleConversation(new LocalConversationRepository(), "iaura")[0])
+      .toMatchObject({ betaNextStepConfirmed: true, betaSessionDecision: "continue-later" });
+  });
 });

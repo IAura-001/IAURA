@@ -148,4 +148,22 @@ describe("Conversation windowing controls", () => {
     const card = screen.getByRole("region", { name: "Siguiente paso confirmado" });
     expect(card).toHaveTextContent("todavía no iniciado");
   });
+
+  it.each([
+    ["start-now", "Inicio confirmado", "resultado todavía no verificado"],
+    ["continue-later", "Guardado para continuar después", "todavía no iniciado"],
+  ] as const)("renders hydrated session decision %s truthfully", (decision, title, detail) => {
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation messages={[{
+          id: "source", role: "assistant", content: "Next", betaNextStepConfirmed: true,
+          betaSessionDecision: decision,
+          betaNextStep: { action: "Build", whyNow: "Now", result: "Card", doneWhen: "Visible" },
+        }]} />
+      </I18nProvider>,
+    );
+    const card = screen.getByRole("region", { name: "Siguiente paso confirmado" });
+    expect(card).toHaveTextContent(title);
+    expect(card).toHaveTextContent(detail);
+  });
 });

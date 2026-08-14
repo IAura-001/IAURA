@@ -274,6 +274,18 @@ export const IAURA_RESPONSE_SCHEMA = {
                     },
                   },
                   {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "decision"],
+                    properties: {
+                      kind: { type: "string", enum: ["beta-session-decision"] },
+                      decision: {
+                        type: "string",
+                        enum: ["start-now", "continue-later"],
+                      },
+                    },
+                  },
+                  {
                     type: "null",
                   },
                 ],

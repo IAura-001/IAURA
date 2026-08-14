@@ -50,6 +50,7 @@ export const BETA_WORKFLOW_STATUSES = [
   "recommended",
   "ready-to-start",
   "started",
+  "deferred",
   "pending",
   "evaluated",
   "closed",
@@ -81,6 +82,11 @@ export interface BetaWorkflowMetadata {
     doneWhen: string;
     sourceMessageId: string;
     confirmedAt: string;
+  };
+  sessionDecision?: {
+    kind: "start-now" | "continue-later";
+    sourceMessageId: string;
+    decidedAt: string;
   };
 }
 
@@ -331,6 +337,17 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
           confirmedAt: value.confirmedNextStep.confirmedAt,
         }
       : undefined;
+  const sessionDecision = isRecord(value.sessionDecision) &&
+    (value.sessionDecision.kind === "start-now" ||
+      value.sessionDecision.kind === "continue-later") &&
+    isNonEmptyString(value.sessionDecision.sourceMessageId) &&
+    isIsoDate(value.sessionDecision.decidedAt)
+      ? {
+          kind: value.sessionDecision.kind as "start-now" | "continue-later",
+          sourceMessageId: value.sessionDecision.sourceMessageId.trim(),
+          decidedAt: value.sessionDecision.decidedAt,
+        }
+      : undefined;
 
   return {
     version: BETA_WORKFLOW_VERSION,
@@ -338,6 +355,9 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
     ...(context ? { confirmedContext: context } : {}),
     ...(outcome && context ? { confirmedOutcome: outcome } : {}),
     ...(nextStep && outcome && context ? { confirmedNextStep: nextStep } : {}),
+    ...(sessionDecision && nextStep && outcome && context
+      ? { sessionDecision }
+      : {}),
   };
 }
 
@@ -439,6 +459,14 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
         whyNow: rawConfirmation.whyNow.trim().slice(0, 1000),
         result: rawConfirmation.result.trim().slice(0, 1000),
         doneWhen: rawConfirmation.doneWhen.trim().slice(0, 1000),
+      };
+      if (
+        rawConfirmation.kind === "beta-session-decision" &&
+        (rawConfirmation.decision === "start-now" ||
+          rawConfirmation.decision === "continue-later")
+      ) return {
+        kind: "beta-session-decision" as const,
+        decision: rawConfirmation.decision as "start-now" | "continue-later",
       };
       return undefined;
     })();
@@ -732,6 +760,9 @@ function cloneConversation(conversation: Conversation): Conversation {
               : {}),
             ...(conversation.betaWorkflow.confirmedNextStep
               ? { confirmedNextStep: { ...conversation.betaWorkflow.confirmedNextStep } }
+              : {}),
+            ...(conversation.betaWorkflow.sessionDecision
+              ? { sessionDecision: { ...conversation.betaWorkflow.sessionDecision } }
               : {}),
           },
         }

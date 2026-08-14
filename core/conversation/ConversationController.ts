@@ -111,6 +111,11 @@ function serializeBetaWorkflow(conversation: Conversation): string {
     workflow.confirmedNextStep
       ? `Confirmed next step:\n- Action: ${workflow.confirmedNextStep.action}\n- Why now: ${workflow.confirmedNextStep.whyNow}\n- Result: ${workflow.confirmedNextStep.result}\n- Done when: ${workflow.confirmedNextStep.doneWhen}`
       : "Confirmed next step: none",
+    workflow.sessionDecision?.kind === "start-now"
+      ? "Session decision: Founder chose to start the confirmed next step now.\nExecution status: Decision recorded; completion has not been verified."
+      : workflow.sessionDecision?.kind === "continue-later"
+        ? "Session decision: Founder chose to continue this step later.\nExecution status: Not started."
+        : "Session decision: none",
   ].join("\n");
 }
 
@@ -548,6 +553,45 @@ export class ConversationController {
             },
           },
         );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
+    if (confirmation?.kind === "beta-session-decision") {
+      const workflow = conversation.betaWorkflow;
+      if (
+        !workflow?.confirmedContext ||
+        !workflow.confirmedOutcome ||
+        !workflow.confirmedNextStep ||
+        workflow.status !== "ready-to-start"
+      ) {
+        throw new ConversationTurnError(
+          "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+
+      const write = this.conversations.updateConversationMetadata(
+        conversation.conversationId,
+        {
+          betaWorkflow: {
+            ...workflow,
+            version: 1,
+            status: confirmation.decision === "start-now" ? "started" : "deferred",
+            sessionDecision: {
+              kind: confirmation.decision,
+              sourceMessageId: sourceMessage.messageId,
+              decidedAt: this.now(),
+            },
+          },
+        },
+      );
       if (!write.ok) {
         throw new ConversationTurnError(
           "IAURA_CONVERSATION_PERSISTENCE_FAILED",

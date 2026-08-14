@@ -91,6 +91,7 @@ describe("conversation windowing", () => {
       ...complete[5],
       role: "assistant",
       betaNextStepConfirmed: true,
+      betaSessionDecision: "continue-later",
       betaNextStep: {
         action: "Build one card",
         whyNow: "The outcome is confirmed",
@@ -111,5 +112,8 @@ describe("conversation windowing", () => {
     expect(visibleConversationMessages(complete, start)
       .find(({ id }) => id === complete[5].id)?.betaNextStepConfirmed)
       .toBe(true);
+    expect(visibleConversationMessages(complete, start)
+      .find(({ id }) => id === complete[5].id)?.betaSessionDecision)
+      .toBe("continue-later");
   });
 });

@@ -175,6 +175,25 @@ describe("LocalConversationRepository", () => {
     expect(repository().getActiveConversation("nova")).toBeNull();
   });
 
+  it.each([
+    ["start-now", "started"],
+    ["continue-later", "deferred"],
+  ] as const)("persists session decision %s across reconstruction", (kind, status) => {
+    const first = repository();
+    const conversation = createConversation(first, { projectId: "iaura" });
+    first.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status,
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind, sourceMessageId: "decision", decidedAt: "2026-08-13T12:03:00Z" },
+    } });
+    expect(repository().getActiveConversation("iaura")?.betaWorkflow).toMatchObject({
+      status, confirmedNextStep: { action: "A" },
+      sessionDecision: { kind, sourceMessageId: "decision", decidedAt: "2026-08-13T12:03:00Z" },
+    });
+  });
+
   it("drops malformed confirmed fields and strips injected scope fields", () => {
     const first = repository();
     const conversation = createConversation(first, {

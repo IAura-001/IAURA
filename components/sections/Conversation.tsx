@@ -181,6 +181,7 @@ const AnimatedMessage = memo(
                   confirmed={message.betaNextStepConfirmed}
                   disabled={isBusy}
                   onChoose={onChoose}
+                  sessionDecision={message.betaSessionDecision}
                 />
               ) : null}
             </>

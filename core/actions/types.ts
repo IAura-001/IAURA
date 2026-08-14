@@ -98,6 +98,10 @@ export type AuraExperienceConfirmation =
       whyNow: string;
       result: string;
       doneWhen: string;
+    }
+  | {
+      kind: "beta-session-decision";
+      decision: "start-now" | "continue-later";
     };
 
 export interface AuraExperience {
