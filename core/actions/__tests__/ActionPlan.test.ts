@@ -15,6 +15,7 @@ describe("ActionPlan", () => {
 
     expect(IAURA_RESPONSE_SCHEMA.required).toContain("betaNextStep");
     expect(IAURA_RESPONSE_SCHEMA.required).toContain("betaExecutionEvaluation");
+    expect(IAURA_RESPONSE_SCHEMA.required).toContain("betaSessionEvaluation");
     expect(recommendation).toMatchObject({
       type: "object",
       additionalProperties: false,
@@ -91,6 +92,16 @@ describe("ActionPlan", () => {
         type: "object",
         additionalProperties: false,
         required: ["kind", "result", "observation", "doneWhenSatisfied"],
+      }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "outcomeSatisfied", "summary"],
+      }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
+        required: ["kind"],
       }),
       { type: "null" },
     ]);
@@ -175,6 +186,47 @@ describe("ActionPlan", () => {
       content: "Review.",
       betaExecutionEvaluation: evaluation,
     }).betaExecutionEvaluation).toBeUndefined();
+  });
+
+  it("parses provisional session evaluation and typed confirmations without trusted fields", () => {
+    const plan = parseAuraAssistantPlan({
+      content: "Review the session.",
+      betaSessionEvaluation: {
+        outcomeSatisfied: true, summary: "  Outcome is visible. ",
+        sourceMessageId: "model", confirmedAt: "model", closedAt: "model",
+      },
+      experience: {
+        kind: "decision", title: "Session", summary: "Review", phases: [],
+        choices: [
+          { label: "Confirm", description: "Confirm", prompt: "Continue", confirmation: {
+            kind: "beta-session-evaluation", outcomeSatisfied: true,
+            summary: "Outcome is visible.", sourceMessageId: "model", confirmedAt: "model",
+          } },
+          { label: "Close", description: "Close", prompt: "Close", confirmation: {
+            kind: "beta-session-closure", sourceMessageId: "model", closedAt: "model", status: "closed",
+          } },
+        ], recommendedSurface: "presence",
+      },
+    });
+    expect(plan.betaSessionEvaluation).toEqual({
+      outcomeSatisfied: true, summary: "Outcome is visible.",
+    });
+    expect(plan.experience.choices[0].confirmation).toEqual({
+      kind: "beta-session-evaluation", outcomeSatisfied: true,
+      summary: "Outcome is visible.",
+    });
+    expect(plan.experience.choices[1].confirmation).toEqual({ kind: "beta-session-closure" });
+  });
+
+  it.each([
+    { summary: "Missing boolean" },
+    { outcomeSatisfied: "yes", summary: "Wrong boolean" },
+    { outcomeSatisfied: false, summary: "  " },
+    [{ outcomeSatisfied: true, summary: "Array" }],
+  ])("rejects malformed provisional session evaluation", (evaluation) => {
+    expect(parseAuraAssistantPlan({
+      content: "Review.", betaSessionEvaluation: evaluation,
+    }).betaSessionEvaluation).toBeUndefined();
   });
 
   it("parses complete beta-next-step confirmation and strips trusted fields", () => {

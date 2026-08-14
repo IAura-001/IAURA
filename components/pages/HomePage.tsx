@@ -649,6 +649,29 @@ export default function Home({
           ));
         }
 
+        if (
+          typeof missionOverride === "object" &&
+          missionOverride.confirmation?.kind === "beta-session-evaluation" &&
+          sourceMessageId
+        ) {
+          setMessages((previous) => previous.map((message) =>
+            message.id === sourceMessageId
+              ? { ...message, betaSessionEvaluationConfirmed: true }
+              : message,
+          ));
+        }
+
+        if (
+          typeof missionOverride === "object" &&
+          missionOverride.confirmation?.kind === "beta-session-closure"
+        ) {
+          setMessages((previous) => previous.map((message) =>
+            message.betaSessionEvaluationConfirmed
+              ? { ...message, betaSessionClosed: true }
+              : message,
+          ));
+        }
+
         const actionItems =
           executeActions(
             response.actions,
@@ -681,6 +704,9 @@ export default function Home({
               : {}),
             ...(response.betaExecutionEvaluation
               ? { betaExecutionEvaluation: response.betaExecutionEvaluation }
+              : {}),
+            ...(response.betaSessionEvaluation
+              ? { betaSessionEvaluation: response.betaSessionEvaluation }
               : {}),
           };
 

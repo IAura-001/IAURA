@@ -87,6 +87,12 @@ describe("PromptBuilder", () => {
     expect(prompt).toContain("Beta session is closed");
     expect(prompt).toContain("Do not emit Markdown emphasis markers");
     expect(prompt).toContain("beta-execution-evaluation");
+    expect(prompt).toContain("betaSessionEvaluation may contain exactly one provisional");
+    expect(prompt).toContain("Confirmar evaluación de sesión");
+    expect(prompt).toContain("outcomeSatisfied false keeps the session evaluated and open");
+    expect(prompt).toContain("outcomeSatisfied true still keeps the session open");
+    expect(prompt).toContain("beta-session-closure");
+    expect(prompt).toContain("Closed Beta workflow state is read-only");
   });
   it("composes the official personality exactly once", () => {
     const prompt = new PromptBuilder().build(input);

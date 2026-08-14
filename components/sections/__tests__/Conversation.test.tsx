@@ -405,4 +405,38 @@ describe("Conversation windowing controls", () => {
     expect(screen.queryByRole("button", { name: /Confirmar evaluación/ }))
       .not.toBeInTheDocument();
   });
+
+  it("renders and confirms a provisional session review without closing it", async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn().mockResolvedValue(undefined);
+    const evaluation = { outcomeSatisfied: true, summary: "The outcome is visible" };
+    render(<I18nProvider locale="es-419"><Conversation onChoose={onChoose} messages={[{
+      id: "session-review", role: "assistant", content: "Review",
+      betaSessionEvaluation: evaluation,
+      experience: { kind: "decision", title: "Review", summary: "Review", phases: [], choices: [{
+        label: "Confirmar evaluación de sesión", description: "Confirm", prompt: "Continue",
+        confirmation: { kind: "beta-session-evaluation", ...evaluation },
+      }], recommendedSurface: "presence" },
+    }]} /></I18nProvider>);
+    expect(screen.getByRole("region", { name: "Revisión de sesión" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Confirmar evaluación de sesión/ }));
+    expect(onChoose).toHaveBeenCalledWith(expect.objectContaining({
+      confirmation: expect.objectContaining({ kind: "beta-session-evaluation" }),
+    }), "session-review");
+    expect(screen.getByRole("region", { name: "Evaluación de sesión confirmada" }))
+      .toBeVisible();
+    expect(screen.queryByRole("region", { name: "Sesión cerrada" })).not.toBeInTheDocument();
+  });
+
+  it("renders deterministic read-only closed session state", () => {
+    render(<I18nProvider locale="es-419"><Conversation messages={[{
+      id: "closed-review", role: "assistant", content: "Closed",
+      betaSessionEvaluation: { outcomeSatisfied: true, summary: "Outcome satisfied" },
+      betaSessionEvaluationConfirmed: true, betaSessionClosed: true,
+    }]} /></I18nProvider>);
+    const card = screen.getByRole("region", { name: "Sesión cerrada" });
+    expect(card).toHaveTextContent("Objetivo de la sesión satisfecho");
+    expect(card).toHaveTextContent("Outcome satisfied");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
 });

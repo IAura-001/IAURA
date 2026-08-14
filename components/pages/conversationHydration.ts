@@ -26,6 +26,9 @@ export function loadVisibleConversation(
   projectId: string | null,
 ): ChatMessage[] {
   const conversation = conversations.getActiveConversation(projectId);
+  const closedReviewTargetId = conversation?.betaWorkflow?.status === "closed"
+    ? conversation.messages.findLast((message) => message.role === "assistant")?.messageId
+    : undefined;
 
   return conversation?.messages.map((message) => ({
     id: message.messageId,
@@ -46,6 +49,32 @@ export function loadVisibleConversation(
       ? {
           betaExecutionEvaluation:
             message.structuredResponse.betaExecutionEvaluation,
+        }
+      : {}),
+    ...(message.role === "assistant" &&
+    message.structuredResponse?.betaSessionEvaluation
+      ? { betaSessionEvaluation: message.structuredResponse.betaSessionEvaluation }
+      : {}),
+    ...(message.role === "assistant" &&
+    conversation.betaWorkflow?.sessionEvaluation?.sourceMessageId === message.messageId
+      ? {
+          betaSessionEvaluation: {
+            outcomeSatisfied: conversation.betaWorkflow.sessionEvaluation.outcomeSatisfied,
+            summary: conversation.betaWorkflow.sessionEvaluation.summary,
+          },
+          betaSessionEvaluationConfirmed: true,
+        }
+      : {}),
+    ...(message.role === "assistant" &&
+    closedReviewTargetId === message.messageId &&
+    conversation.betaWorkflow?.sessionEvaluation
+      ? {
+          betaSessionEvaluation: {
+            outcomeSatisfied: conversation.betaWorkflow.sessionEvaluation.outcomeSatisfied,
+            summary: conversation.betaWorkflow.sessionEvaluation.summary,
+          },
+          betaSessionEvaluationConfirmed: true,
+          betaSessionClosed: true,
         }
       : {}),
     ...(message.role === "assistant" &&

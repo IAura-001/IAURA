@@ -1,6 +1,7 @@
 import type {
   AuraExperience,
   BetaExecutionEvaluation,
+  BetaSessionEvaluation,
   BetaNextStepRecommendation,
 } from "@/core/actions";
 
@@ -14,4 +15,7 @@ export interface ChatMessage {
   betaSessionDecision?: "start-now" | "continue-later";
   betaExecutionEvaluation?: BetaExecutionEvaluation;
   betaExecutionVerified?: boolean;
+  betaSessionEvaluation?: BetaSessionEvaluation;
+  betaSessionEvaluationConfirmed?: boolean;
+  betaSessionClosed?: boolean;
 }

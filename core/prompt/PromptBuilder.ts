@@ -115,6 +115,12 @@ const BETA_NEXT_STEP_PROTOCOL = `
 - Only founder-confirmed passed evidence with doneWhenSatisfied true establishes confirmed-step completion. Confirmed-step completion never means the Beta session is closed.
 - Only when project-scoped workflow status is evaluated from founder-confirmed evidence may you call the confirmed STEP completed or verified. Never describe the Beta session itself as finished or closed.
 - Use clean plain prose for Beta workflow content and visual experience fields. Do not emit Markdown emphasis markers such as ** or __ around result words or status labels.
+- An evaluated confirmed step is not a closed Beta session. When workflow status is evaluated, compare the broader confirmed outcome done-when criterion against trusted verified evidence and session context; do not assume step completion satisfies it.
+- If status is evaluated and there is no confirmed session evaluation, betaSessionEvaluation may contain exactly one provisional { outcomeSatisfied, summary }. Include "Confirmar evaluación de sesión" with confirmation { kind: "beta-session-evaluation", outcomeSatisfied, summary } exactly matching it, plus "Corregir" with confirmation: null.
+- A betaSessionEvaluation is provisional and never closes the session. A beta-session-evaluation confirmation acknowledgment is not a new session review; do not emit another betaSessionEvaluation for that turn.
+- A confirmed session evaluation with outcomeSatisfied false keeps the session evaluated and open. Do not offer closure or another next step.
+- A confirmed session evaluation with outcomeSatisfied true still keeps the session open. Offer exactly one persisted "Cerrar sesión" choice with confirmation { kind: "beta-session-closure" }.
+- Only the explicit trusted beta-session-closure choice closes the session. A closure acknowledgment must not offer another closure. Closed Beta workflow state is read-only and must not create a new session, complete/archive a project or claim tool execution.
 - Never claim tool execution, automatically close the session, or supply evidence IDs, source IDs, verification timestamps, project scope or status.
 - Never add projectId, conversationId, sourceMessageId, confirmedAt, scope, tags, IDs or timestamps to betaNextStep.
 `.trim();
@@ -138,6 +144,7 @@ Every response must also organize the result into an experience object for a voi
 - When proposing a Beta 01 next step, the confirm choice MUST use confirmation: { kind: "beta-next-step", action: "...", whyNow: "...", result: "...", doneWhen: "..." } with values exactly matching betaNextStep. Its adjustment choice MUST use null.
 - For a ready-to-start confirmed Beta step, use only the typed beta-session-decision choices described above. The model never supplies sourceMessageId or decidedAt.
 - For a provisional Beta execution evaluation, the confirm choice MUST exactly match betaExecutionEvaluation and use kind beta-execution-evaluation. Its correction choice MUST use null.
+- For a provisional Beta session evaluation, the confirm choice MUST exactly match betaSessionEvaluation and use kind beta-session-evaluation. Its correction choice MUST use null. A close choice MUST use beta-session-closure.
 - Beta context and outcome proposals remain provisional until clicked. Never emit them through memoryUpdates and never add projectId, conversationId, sourceMessageId, confirmedAt, scope or tags.
 - Use confirmation: null for ALL other choices, including navigation, exploratory actions, requests to tell the user more, analysis options, unaccepted recommendations, hypothetical directions and informational follow-ups.
 - A normal or non-durable choice MUST use null and MUST NOT use a project-decision confirmation object.

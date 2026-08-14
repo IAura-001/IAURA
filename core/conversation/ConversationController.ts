@@ -126,6 +126,12 @@ function serializeBetaWorkflow(conversation: Conversation): string {
     workflow.status === "evaluated"
       ? "Confirmed-step verification: Done-when criterion satisfied by founder-confirmed evidence. The Beta session is not closed."
       : "Confirmed-step verification: not established.",
+    workflow.sessionEvaluation
+      ? `Confirmed session evaluation:\n- Outcome satisfied: ${workflow.sessionEvaluation.outcomeSatisfied ? "yes" : "no"}\n- Summary: ${workflow.sessionEvaluation.summary}\n- The session remains open until an explicit trusted close choice.`
+      : "Confirmed session evaluation: none",
+    workflow.sessionClosure
+      ? `Session closure: explicitly closed at ${workflow.sessionClosure.closedAt}.`
+      : "Session closure: none",
   ].join("\n");
 }
 
@@ -162,6 +168,26 @@ function sameExecutionEvaluation(
     evaluation.observation === confirmation.observation &&
     evaluation.doneWhenSatisfied === confirmation.doneWhenSatisfied,
   );
+}
+
+function sameSessionEvaluation(
+  evaluation: NonNullable<ConversationMessage["structuredResponse"]>["betaSessionEvaluation"],
+  confirmation: Extract<
+    AuraExperienceChoice["confirmation"],
+    { kind: "beta-session-evaluation" }
+  >,
+): boolean {
+  return Boolean(
+    evaluation &&
+    evaluation.outcomeSatisfied === confirmation.outcomeSatisfied &&
+    evaluation.summary === confirmation.summary,
+  );
+}
+
+function isBetaConfirmation(
+  confirmation: AuraExperienceChoice["confirmation"],
+): boolean {
+  return Boolean(confirmation?.kind.startsWith("beta-"));
 }
 
 function toBrainHistory(
@@ -315,7 +341,10 @@ export class ConversationController {
     conversation: Conversation,
     message: string,
     userContext: string,
-    options: { allowBetaExecutionEvaluation?: boolean } = {},
+    options: {
+      allowBetaExecutionEvaluation?: boolean;
+      allowBetaSessionEvaluation?: boolean;
+    } = {},
   ): Promise<ConversationTurnResult> {
     const userMessage =
       this.persistUserMessage(
@@ -384,13 +413,36 @@ export class ConversationController {
       options.allowBetaExecutionEvaluation !== false &&
       conversation.betaWorkflow?.status === "started" &&
       Boolean(conversation.betaWorkflow.confirmedNextStep);
-    const response: AuraAssistantPlan = evaluationAllowed || !generatedResponse.betaExecutionEvaluation
-      ? generatedResponse
-      : (() => {
-          const safeResponse = { ...generatedResponse };
-          delete safeResponse.betaExecutionEvaluation;
-          return safeResponse;
-        })();
+    const sessionEvaluationAllowed =
+      options.allowBetaSessionEvaluation !== false &&
+      conversation.betaWorkflow?.status === "evaluated" &&
+      Boolean(conversation.betaWorkflow.confirmedOutcome?.doneWhen) &&
+      Boolean(conversation.betaWorkflow.confirmedNextStep) &&
+      Boolean(conversation.betaWorkflow.verifiedExecutions?.some(
+        (evidence) => evidence.result === "passed" && evidence.doneWhenSatisfied,
+      )) &&
+      !conversation.betaWorkflow.sessionEvaluation;
+    const nextStepAllowed = conversation.betaWorkflow?.status === "recommended";
+    const closureChoiceAllowed =
+      conversation.betaWorkflow?.status === "evaluated" &&
+      conversation.betaWorkflow.sessionEvaluation?.outcomeSatisfied === true &&
+      !conversation.betaWorkflow.sessionClosure;
+    const response: AuraAssistantPlan = {
+      ...generatedResponse,
+      experience: {
+        ...generatedResponse.experience,
+        choices: generatedResponse.experience.choices.filter(
+          (choice) =>
+            (choice.confirmation?.kind !== "beta-session-closure" || closureChoiceAllowed) &&
+            (choice.confirmation?.kind !== "beta-next-step" || nextStepAllowed) &&
+            (conversation.betaWorkflow?.status !== "closed" ||
+              !isBetaConfirmation(choice.confirmation)),
+        ),
+      },
+    };
+    if (!evaluationAllowed) delete response.betaExecutionEvaluation;
+    if (!sessionEvaluationAllowed) delete response.betaSessionEvaluation;
+    if (!nextStepAllowed) delete response.betaNextStep;
 
     executeMemoryUpdates(
       response.memoryUpdates,
@@ -462,6 +514,14 @@ export class ConversationController {
     }
 
     const confirmation = persistedChoice.confirmation;
+
+    if (conversation.betaWorkflow?.status === "closed" && isBetaConfirmation(confirmation)) {
+      throw new ConversationTurnError(
+        "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE",
+        "conversation",
+        conversation.conversationId,
+      );
+    }
 
     if (
       confirmation?.kind === "project-decision" &&
@@ -559,9 +619,18 @@ export class ConversationController {
     }
 
     if (confirmation?.kind === "beta-next-step") {
+      const existing = conversation.betaWorkflow?.confirmedNextStep;
+      const alreadyConfirmed =
+        existing?.sourceMessageId === sourceMessage.messageId &&
+        existing.action === confirmation.action &&
+        existing.whyNow === confirmation.whyNow &&
+        existing.result === confirmation.result &&
+        existing.doneWhen === confirmation.doneWhen &&
+        conversation.betaWorkflow?.status === "ready-to-start";
       if (
         !conversation.betaWorkflow?.confirmedContext ||
         !conversation.betaWorkflow.confirmedOutcome ||
+        (conversation.betaWorkflow.status !== "recommended" && !alreadyConfirmed) ||
         !sameNextStep(sourceMessage.structuredResponse?.betaNextStep, confirmation)
       ) {
         throw new ConversationTurnError(
@@ -571,14 +640,6 @@ export class ConversationController {
         );
       }
 
-      const existing = conversation.betaWorkflow.confirmedNextStep;
-      const alreadyConfirmed =
-        existing?.sourceMessageId === sourceMessage.messageId &&
-        existing.action === confirmation.action &&
-        existing.whyNow === confirmation.whyNow &&
-        existing.result === confirmation.result &&
-        existing.doneWhen === confirmation.doneWhen &&
-        conversation.betaWorkflow.status === "ready-to-start";
       const write = alreadyConfirmed
         ? { ok: true, outcome: "unchanged" as const }
         : this.conversations.updateConversationMetadata(
@@ -716,6 +777,93 @@ export class ConversationController {
       }
     }
 
+    if (confirmation?.kind === "beta-session-evaluation") {
+      const workflow = conversation.betaWorkflow;
+      if (
+        workflow?.status !== "evaluated" ||
+        !workflow.confirmedContext ||
+        !workflow.confirmedOutcome?.doneWhen ||
+        !workflow.confirmedNextStep ||
+        !workflow.verifiedExecutions?.some(
+          (evidence) => evidence.result === "passed" && evidence.doneWhenSatisfied,
+        ) ||
+        workflow.sessionEvaluation ||
+        !sameSessionEvaluation(
+          sourceMessage.structuredResponse?.betaSessionEvaluation,
+          confirmation,
+        )
+      ) {
+        throw new ConversationTurnError(
+          "IAURA_BETA_CONFIRMATION_INVALID",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+      const write = this.conversations.updateConversationMetadata(
+        conversation.conversationId,
+        {
+          betaWorkflow: {
+            ...workflow,
+            sessionEvaluation: {
+              outcomeSatisfied: confirmation.outcomeSatisfied,
+              summary: confirmation.summary,
+              sourceMessageId: sourceMessage.messageId,
+              confirmedAt: this.now(),
+            },
+          },
+        },
+      );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
+    if (confirmation?.kind === "beta-session-closure") {
+      const workflow = conversation.betaWorkflow;
+      if (
+        workflow?.status !== "evaluated" ||
+        !workflow.confirmedContext ||
+        !workflow.confirmedOutcome ||
+        !workflow.confirmedNextStep ||
+        workflow.sessionDecision?.kind !== "start-now" ||
+        !workflow.verifiedExecutions?.some(
+          (evidence) => evidence.result === "passed" && evidence.doneWhenSatisfied,
+        ) ||
+        workflow.sessionEvaluation?.outcomeSatisfied !== true ||
+        workflow.sessionClosure
+      ) {
+        throw new ConversationTurnError(
+          "IAURA_BETA_CONFIRMATION_INVALID",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+      const write = this.conversations.updateConversationMetadata(
+        conversation.conversationId,
+        {
+          betaWorkflow: {
+            ...workflow,
+            status: "closed",
+            sessionClosure: {
+              sourceMessageId: sourceMessage.messageId,
+              closedAt: this.now(),
+            },
+          },
+        },
+      );
+      if (!write.ok) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+          "conversation",
+          conversation.conversationId,
+        );
+      }
+    }
+
     return this.sendInConversation(
       this.conversations.getConversation(conversation.conversationId) ?? conversation,
       persistedChoice.prompt,
@@ -723,6 +871,8 @@ export class ConversationController {
       {
         allowBetaExecutionEvaluation:
           confirmation?.kind !== "beta-execution-evaluation",
+        allowBetaSessionEvaluation:
+          confirmation?.kind !== "beta-session-evaluation",
       },
     );
   }

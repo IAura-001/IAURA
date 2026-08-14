@@ -274,6 +274,80 @@ describe("LocalConversationRepository", () => {
       .toBe("started");
   });
 
+  it("reconstructs trusted session evaluation and explicit closure source chains", () => {
+    const first = repository();
+    const conversation = createConversation(first, {
+      conversationId: "closed-session", projectId: "iaura",
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "report", role: "user", content: "The step passed.",
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "step-evaluation", role: "assistant", content: "Step review.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        sourceUserMessageId: "report",
+        betaExecutionEvaluation: {
+          result: "passed", observation: "The step passed", doneWhenSatisfied: true,
+        },
+      },
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "session-review", role: "assistant", content: "Session review.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        betaSessionEvaluation: { outcomeSatisfied: true, summary: "Outcome satisfied" },
+      },
+    });
+    first.appendMessage(conversation.conversationId, {
+      messageId: "close-source", role: "assistant", content: "Close?",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        experience: {
+          kind: "decision", title: "Close", summary: "Close", phases: [],
+          choices: [{ label: "Cerrar sesión", description: "Close", prompt: "Close", confirmation: {
+            kind: "beta-session-closure",
+          } }], recommendedSurface: "presence",
+        },
+      },
+    });
+    first.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "closed",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      verifiedExecutions: [{ evidenceId: "e", result: "passed", observation: "The step passed", doneWhenSatisfied: true, sourceUserMessageId: "report", sourceMessageId: "step-evaluation", verifiedAt: "2026-08-13T12:04:00Z" }],
+      sessionEvaluation: { outcomeSatisfied: true, summary: "Outcome satisfied", sourceMessageId: "session-review", confirmedAt: "2026-08-13T12:05:00Z" },
+      sessionClosure: { sourceMessageId: "close-source", closedAt: "2026-08-13T12:06:00Z" },
+    } });
+
+    expect(repository().getConversation("closed-session")?.betaWorkflow).toMatchObject({
+      status: "closed",
+      sessionEvaluation: { outcomeSatisfied: true, sourceMessageId: "session-review" },
+      sessionClosure: { sourceMessageId: "close-source" },
+      verifiedExecutions: [{ evidenceId: "e" }],
+    });
+  });
+
+  it("downgrades impossible closed state without a trusted closure source", () => {
+    const first = repository();
+    const conversation = createConversation(first, { projectId: "iaura" });
+    first.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "closed",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      sessionEvaluation: { outcomeSatisfied: true, summary: "Claim", sourceMessageId: "missing", confirmedAt: "2026-08-13T12:05:00Z" },
+      sessionClosure: { sourceMessageId: "missing", closedAt: "2026-08-13T12:06:00Z" },
+    } });
+    expect(repository().getActiveConversation("iaura")?.betaWorkflow?.status)
+      .toBe("started");
+    expect(repository().getActiveConversation("iaura")?.betaWorkflow)
+      .not.toHaveProperty("sessionClosure");
+  });
+
   it("drops malformed confirmed fields and strips injected scope fields", () => {
     const first = repository();
     const conversation = createConversation(first, {

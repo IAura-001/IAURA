@@ -84,6 +84,11 @@ export interface BetaExecutionEvaluation {
   doneWhenSatisfied: boolean;
 }
 
+export interface BetaSessionEvaluation {
+  outcomeSatisfied: boolean;
+  summary: string;
+}
+
 export type AuraExperienceConfirmation =
   | {
       kind: "project-decision";
@@ -116,6 +121,14 @@ export type AuraExperienceConfirmation =
       result: BetaExecutionResult;
       observation: string;
       doneWhenSatisfied: boolean;
+    }
+  | {
+      kind: "beta-session-evaluation";
+      outcomeSatisfied: boolean;
+      summary: string;
+    }
+  | {
+      kind: "beta-session-closure";
     };
 
 export interface AuraExperience {
@@ -162,6 +175,7 @@ export interface AuraAssistantPlan {
   experience: AuraExperience;
   betaNextStep?: BetaNextStepRecommendation;
   betaExecutionEvaluation?: BetaExecutionEvaluation;
+  betaSessionEvaluation?: BetaSessionEvaluation;
 }
 
 export interface ActionExecutionItem {

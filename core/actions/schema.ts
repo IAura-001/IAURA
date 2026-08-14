@@ -8,6 +8,7 @@ export const IAURA_RESPONSE_SCHEMA = {
   "experience",
   "betaNextStep",
   "betaExecutionEvaluation",
+  "betaSessionEvaluation",
 ],
   properties: {
     content: {
@@ -298,6 +299,24 @@ export const IAURA_RESPONSE_SCHEMA = {
                     },
                   },
                   {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "outcomeSatisfied", "summary"],
+                    properties: {
+                      kind: { type: "string", enum: ["beta-session-evaluation"] },
+                      outcomeSatisfied: { type: "boolean" },
+                      summary: { type: "string", minLength: 1 },
+                    },
+                  },
+                  {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind"],
+                    properties: {
+                      kind: { type: "string", enum: ["beta-session-closure"] },
+                    },
+                  },
+                  {
                     type: "null",
                   },
                 ],
@@ -375,6 +394,22 @@ export const IAURA_RESPONSE_SCHEMA = {
       ],
       description:
         "Provisional interpretation of a founder execution report while Beta workflow status is started; otherwise null.",
+    },
+    betaSessionEvaluation: {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["outcomeSatisfied", "summary"],
+          properties: {
+            outcomeSatisfied: { type: "boolean" },
+            summary: { type: "string", minLength: 1 },
+          },
+        },
+        { type: "null" },
+      ],
+      description:
+        "Provisional session-level evaluation while the trusted Beta workflow status is evaluated; otherwise null.",
     },
   },
 } as const;

@@ -282,4 +282,44 @@ describe("project conversation hydration", () => {
     });
     expect(loadVisibleConversation(conversations, "nova")).toEqual([]);
   });
+
+  it("hydrates provisional and confirmed session review state from trusted workflow binding", () => {
+    const conversations = new LocalConversationRepository();
+    const conversation = conversations.createConversation({ projectId: "iaura" }).conversation!;
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "report", role: "user", content: "Passed.",
+    });
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "step-evaluation", role: "assistant", content: "Passed.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        sourceUserMessageId: "report",
+        betaExecutionEvaluation: { result: "passed", observation: "Passed", doneWhenSatisfied: true },
+      },
+    });
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "session-review", role: "assistant", content: "Review.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        betaSessionEvaluation: { outcomeSatisfied: false, summary: "More remains" },
+      },
+    });
+    expect(loadVisibleConversation(conversations, "iaura")[2]).toMatchObject({
+      betaSessionEvaluation: { outcomeSatisfied: false, summary: "More remains" },
+    });
+    conversations.updateConversationMetadata(conversation.conversationId, { betaWorkflow: {
+      version: 1, status: "evaluated",
+      confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "c", confirmedAt: "2026-08-13T12:00:00Z" },
+      confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "o", confirmedAt: "2026-08-13T12:01:00Z" },
+      confirmedNextStep: { action: "A", whyNow: "W", result: "R", doneWhen: "D", sourceMessageId: "n", confirmedAt: "2026-08-13T12:02:00Z" },
+      sessionDecision: { kind: "start-now", sourceMessageId: "d", decidedAt: "2026-08-13T12:03:00Z" },
+      verifiedExecutions: [{ evidenceId: "e", result: "passed", observation: "Passed", doneWhenSatisfied: true, sourceUserMessageId: "report", sourceMessageId: "step-evaluation", verifiedAt: "2026-08-13T12:04:00Z" }],
+      sessionEvaluation: { outcomeSatisfied: false, summary: "More remains", sourceMessageId: "session-review", confirmedAt: "2026-08-13T12:05:00Z" },
+    } });
+    expect(loadVisibleConversation(conversations, "iaura")[2]).toMatchObject({
+      betaSessionEvaluationConfirmed: true,
+    });
+    expect(loadVisibleConversation(conversations, "iaura")[2])
+      .not.toHaveProperty("betaSessionClosed");
+  });
 });

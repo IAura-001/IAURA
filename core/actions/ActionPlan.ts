@@ -6,6 +6,7 @@ import {
   IAURA_MEMORY_TYPES,
   type AuraAssistantPlan,
   type BetaExecutionEvaluation,
+  type BetaSessionEvaluation,
   type BetaNextStepRecommendation,
   type AuraExperience,
   type AuraExperienceChoice,
@@ -314,6 +315,22 @@ function parseChoice(
           }
         : undefined;
     }
+    if (
+      rawConfirmation.kind === "beta-session-evaluation" &&
+      typeof rawConfirmation.outcomeSatisfied === "boolean"
+    ) {
+      const summary = readText(rawConfirmation.summary, 2000);
+      return summary
+        ? {
+            kind: "beta-session-evaluation" as const,
+            outcomeSatisfied: rawConfirmation.outcomeSatisfied,
+            summary,
+          }
+        : undefined;
+    }
+    if (rawConfirmation.kind === "beta-session-closure") {
+      return { kind: "beta-session-closure" as const };
+    }
     return undefined;
   })();
 
@@ -351,6 +368,19 @@ function parseBetaExecutionEvaluation(
     observation,
     doneWhenSatisfied: candidate.doneWhenSatisfied,
   };
+}
+
+function parseBetaSessionEvaluation(
+  value: unknown,
+): BetaSessionEvaluation | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const candidate = value as Record<string, unknown>;
+  const summary = readText(candidate.summary, 2000);
+  return typeof candidate.outcomeSatisfied === "boolean" && summary
+    ? { outcomeSatisfied: candidate.outcomeSatisfied, summary }
+    : null;
 }
 
 function parseExperience(
@@ -517,6 +547,9 @@ export function parseAuraAssistantPlan(
   const betaExecutionEvaluation = parseBetaExecutionEvaluation(
     candidate.betaExecutionEvaluation,
   );
+  const betaSessionEvaluation = parseBetaSessionEvaluation(
+    candidate.betaSessionEvaluation,
+  );
 
   return {
     content,
@@ -527,5 +560,6 @@ export function parseAuraAssistantPlan(
     ),
     ...(betaNextStep ? { betaNextStep } : {}),
     ...(betaExecutionEvaluation ? { betaExecutionEvaluation } : {}),
+    ...(betaSessionEvaluation ? { betaSessionEvaluation } : {}),
   };
 }

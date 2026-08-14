@@ -17,6 +17,7 @@ import {
   IAURA_ACTION_TYPES,
   type AuraAssistantPlan,
   type BetaExecutionEvaluation,
+  type BetaSessionEvaluation,
   type BetaExecutionResult,
   type BetaNextStepRecommendation,
   type AuraExperience,
@@ -99,6 +100,16 @@ export interface BetaWorkflowMetadata {
     sourceMessageId: string;
     verifiedAt: string;
   }>;
+  sessionEvaluation?: {
+    outcomeSatisfied: boolean;
+    summary: string;
+    sourceMessageId: string;
+    confirmedAt: string;
+  };
+  sessionClosure?: {
+    sourceMessageId: string;
+    closedAt: string;
+  };
 }
 
 export interface ConversationStructuredResponse {
@@ -108,6 +119,7 @@ export interface ConversationStructuredResponse {
   experience?: AuraExperience;
   betaNextStep?: BetaNextStepRecommendation;
   betaExecutionEvaluation?: BetaExecutionEvaluation;
+  betaSessionEvaluation?: BetaSessionEvaluation;
   sourceUserMessageId?: string;
 }
 
@@ -408,9 +420,33 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
   const hasCompletedStep =
     latestVerifiedExecution?.result === "passed" &&
     latestVerifiedExecution.doneWhenSatisfied;
-  const status = value.status === "evaluated" && !hasCompletedStep
-    ? "started"
-    : value.status;
+  const sessionEvaluation = isRecord(value.sessionEvaluation) &&
+    typeof value.sessionEvaluation.outcomeSatisfied === "boolean" &&
+    isNonEmptyString(value.sessionEvaluation.summary) &&
+    isNonEmptyString(value.sessionEvaluation.sourceMessageId) &&
+    isIsoDate(value.sessionEvaluation.confirmedAt)
+      ? {
+          outcomeSatisfied: value.sessionEvaluation.outcomeSatisfied,
+          summary: value.sessionEvaluation.summary.trim().slice(0, 2000),
+          sourceMessageId: value.sessionEvaluation.sourceMessageId.trim(),
+          confirmedAt: value.sessionEvaluation.confirmedAt,
+        }
+      : undefined;
+  const sessionClosure = isRecord(value.sessionClosure) &&
+    isNonEmptyString(value.sessionClosure.sourceMessageId) &&
+    isIsoDate(value.sessionClosure.closedAt)
+      ? {
+          sourceMessageId: value.sessionClosure.sourceMessageId.trim(),
+          closedAt: value.sessionClosure.closedAt,
+        }
+      : undefined;
+  const canRemainClosed = hasCompletedStep && sessionEvaluation?.outcomeSatisfied === true &&
+    Boolean(sessionClosure);
+  const status = value.status === "closed" && !canRemainClosed
+    ? hasCompletedStep ? "evaluated" : "started"
+    : value.status === "evaluated" && !hasCompletedStep
+      ? "started"
+      : value.status;
 
   return {
     version: BETA_WORKFLOW_VERSION,
@@ -423,6 +459,12 @@ function normalizeBetaWorkflow(value: unknown): BetaWorkflowMetadata | undefined
       : {}),
     ...(trustedVerifiedExecutions.length && nextStep && outcome && context
       ? { verifiedExecutions: trustedVerifiedExecutions }
+      : {}),
+    ...(sessionEvaluation && hasCompletedStep && nextStep && outcome && context
+      ? { sessionEvaluation }
+      : {}),
+    ...(sessionClosure && status === "closed" && sessionEvaluation?.outcomeSatisfied
+      ? { sessionClosure }
       : {}),
   };
 }
@@ -442,6 +484,17 @@ function normalizeBetaExecutionEvaluation(
     result: value.result as BetaExecutionResult,
     observation: value.observation.trim().slice(0, 2000),
     doneWhenSatisfied: value.doneWhenSatisfied,
+  };
+}
+
+function normalizeBetaSessionEvaluation(
+  value: unknown,
+): BetaSessionEvaluation | undefined {
+  if (!isRecord(value) || typeof value.outcomeSatisfied !== "boolean" ||
+    !isNonEmptyString(value.summary)) return undefined;
+  return {
+    outcomeSatisfied: value.outcomeSatisfied,
+    summary: value.summary.trim().slice(0, 2000),
   };
 }
 
@@ -565,6 +618,18 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
         observation: rawConfirmation.observation.trim().slice(0, 2000),
         doneWhenSatisfied: rawConfirmation.doneWhenSatisfied,
       };
+      if (
+        rawConfirmation.kind === "beta-session-evaluation" &&
+        typeof rawConfirmation.outcomeSatisfied === "boolean" &&
+        isNonEmptyString(rawConfirmation.summary)
+      ) return {
+        kind: "beta-session-evaluation" as const,
+        outcomeSatisfied: rawConfirmation.outcomeSatisfied,
+        summary: rawConfirmation.summary.trim().slice(0, 2000),
+      };
+      if (rawConfirmation.kind === "beta-session-closure") return {
+        kind: "beta-session-closure" as const,
+      };
       return undefined;
     })();
 
@@ -627,6 +692,9 @@ function normalizeStructuredResponse(
   const betaExecutionEvaluation = normalizeBetaExecutionEvaluation(
     value.betaExecutionEvaluation,
   );
+  const betaSessionEvaluation = normalizeBetaSessionEvaluation(
+    value.betaSessionEvaluation,
+  );
   return {
     actionTypes: [...new Set(value.actionTypes)],
     experienceKind: value.experienceKind,
@@ -634,6 +702,7 @@ function normalizeStructuredResponse(
     ...(experience ? { experience } : {}),
     ...(betaNextStep ? { betaNextStep } : {}),
     ...(betaExecutionEvaluation ? { betaExecutionEvaluation } : {}),
+    ...(betaSessionEvaluation ? { betaSessionEvaluation } : {}),
     ...(isNonEmptyString(value.sourceUserMessageId)
       ? { sourceUserMessageId: value.sourceUserMessageId.trim() }
       : {}),
@@ -715,16 +784,59 @@ function bindVerifiedExecutionsToMessages(
     );
   });
   const latest = verifiedExecutions.at(-1);
+  const hasBoundCompletedStep =
+    latest?.result === "passed" && latest.doneWhenSatisfied;
   const status = workflow.status === "evaluated" &&
-    !(latest?.result === "passed" && latest.doneWhenSatisfied)
+    !hasBoundCompletedStep
     ? "started"
     : workflow.status;
   const baseWorkflow = { ...workflow };
   delete baseWorkflow.verifiedExecutions;
+  delete baseWorkflow.sessionEvaluation;
+  delete baseWorkflow.sessionClosure;
+  const sessionEvaluationSource = workflow.sessionEvaluation
+    ? messages.find((message) =>
+        message.messageId === workflow.sessionEvaluation?.sourceMessageId &&
+        message.role === "assistant")
+    : undefined;
+  const completedStepSourceIndex = latest
+    ? messages.findIndex((message) => message.messageId === latest.sourceMessageId)
+    : -1;
+  const sessionEvaluationSourceIndex = sessionEvaluationSource
+    ? messages.findIndex((message) => message.messageId === sessionEvaluationSource.messageId)
+    : -1;
+  const sessionEvaluation = hasBoundCompletedStep && workflow.sessionEvaluation &&
+    sessionEvaluationSourceIndex > completedStepSourceIndex &&
+    sessionEvaluationSource?.structuredResponse?.betaSessionEvaluation?.outcomeSatisfied ===
+      workflow.sessionEvaluation.outcomeSatisfied &&
+    sessionEvaluationSource.structuredResponse.betaSessionEvaluation.summary ===
+      workflow.sessionEvaluation.summary
+      ? workflow.sessionEvaluation
+      : undefined;
+  const closureSource = workflow.sessionClosure
+    ? messages.find((message) =>
+        message.messageId === workflow.sessionClosure?.sourceMessageId &&
+        message.role === "assistant")
+    : undefined;
+  const hasPersistedCloseChoice = closureSource?.structuredResponse?.experience?.choices.some(
+    (choice) => choice.confirmation?.kind === "beta-session-closure",
+  );
+  const closureSourceIndex = closureSource
+    ? messages.findIndex((message) => message.messageId === closureSource.messageId)
+    : -1;
+  const sessionClosure = hasBoundCompletedStep && sessionEvaluation?.outcomeSatisfied &&
+    closureSourceIndex > sessionEvaluationSourceIndex && hasPersistedCloseChoice
+    ? workflow.sessionClosure
+    : undefined;
+  const reconstructedStatus = workflow.status === "closed" && !sessionClosure
+    ? hasBoundCompletedStep ? "evaluated" : "started"
+    : status;
   return {
     ...baseWorkflow,
-    status,
+    status: reconstructedStatus,
     ...(verifiedExecutions.length ? { verifiedExecutions } : {}),
+    ...(sessionEvaluation ? { sessionEvaluation } : {}),
+    ...(sessionClosure && reconstructedStatus === "closed" ? { sessionClosure } : {}),
   };
 }
 
@@ -884,6 +996,13 @@ function cloneMessage(message: ConversationMessage): ConversationMessage {
                   },
                 }
               : {}),
+            ...(message.structuredResponse.betaSessionEvaluation
+              ? {
+                  betaSessionEvaluation: {
+                    ...message.structuredResponse.betaSessionEvaluation,
+                  },
+                }
+              : {}),
           },
         }
       : {}),
@@ -924,6 +1043,12 @@ function cloneConversation(conversation: Conversation): Conversation {
                     (evidence) => ({ ...evidence }),
                   ),
                 }
+              : {}),
+            ...(conversation.betaWorkflow.sessionEvaluation
+              ? { sessionEvaluation: { ...conversation.betaWorkflow.sessionEvaluation } }
+              : {}),
+            ...(conversation.betaWorkflow.sessionClosure
+              ? { sessionClosure: { ...conversation.betaWorkflow.sessionClosure } }
               : {}),
           },
         }
@@ -983,6 +1108,13 @@ function structuredResponseFromPlan(
       ? {
           betaExecutionEvaluation: normalizeBetaExecutionEvaluation(
             plan.betaExecutionEvaluation,
+          ),
+        }
+      : {}),
+    ...(plan.betaSessionEvaluation
+      ? {
+          betaSessionEvaluation: normalizeBetaSessionEvaluation(
+            plan.betaSessionEvaluation,
           ),
         }
       : {}),
