@@ -10,6 +10,30 @@ afterEach(() => {
 });
 
 describe("AccessPage interaction feedback", () => {
+  it("moves from quiet presence to engaged presence as the key is entered", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<AccessPage />);
+    const gateway = container.querySelector("main");
+    const input = screen.getByLabelText("CLAVE DE ACCESO");
+
+    expect(gateway).toHaveAttribute("data-presence", "idle");
+    expect(input).toBeEnabled();
+    expect(input).not.toHaveAttribute("readonly");
+
+    await user.click(input);
+    expect(input).toHaveFocus();
+    expect(gateway).toHaveAttribute("data-presence", "engaged");
+
+    await user.type(input, "private-key");
+    expect(input).toHaveValue("private-key");
+    await user.tab();
+    expect(gateway).toHaveAttribute("data-presence", "engaged");
+    expect(screen.getByText("SIGNAL RECEIVED")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+  });
+
   it("explains a rate limit instead of reporting a wrong key", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn().mockResolvedValue(
@@ -31,6 +55,10 @@ describe("AccessPage interaction feedback", () => {
       "data-state",
       "error",
     );
+    expect(document.querySelector("main")).toHaveAttribute(
+      "data-presence",
+      "unrecognized",
+    );
   });
 
   it("exposes an immediate loading state while access is being checked", async () => {
@@ -48,6 +76,7 @@ describe("AccessPage interaction feedback", () => {
     expect(loadingButton).toBeDisabled();
     expect(loadingButton).toHaveAttribute("aria-busy", "true");
     expect(loadingButton).toHaveAttribute("data-state", "loading");
-
+    expect(loadingButton.textContent).not.toMatch(/[↗➡→]/u);
+    expect(loadingButton.querySelector("svg")).toBeInTheDocument();
   });
 });

@@ -1,42 +1,41 @@
 "use client";
 
-import {
-  type FormEvent,
-  useState,
-} from "react";
+import { type FormEvent, useState } from "react";
+import Link from "next/link";
+
+import styles from "./access.module.css";
 
 export default function AccessPage() {
-  const [accessKey, setAccessKey] =
-    useState("");
-  const [isEntering, setIsEntering] =
-    useState(false);
+  const [accessKey, setAccessKey] = useState("");
+  const [isEntering, setIsEntering] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [isRecognized, setIsRecognized] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  const presenceState = isRecognized
+    ? "recognized"
+    : isEntering
+      ? "listening"
+      : error
+        ? "unrecognized"
+        : isFocused || accessKey
+          ? "engaged"
+          : "idle";
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!accessKey.trim() || isEntering) {
-      return;
-    }
+    if (!accessKey.trim() || isEntering) return;
 
     setIsEntering(true);
     setError("");
 
     try {
-      const response = await fetch(
-        "/api/access",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            accessKey: accessKey.trim(),
-          }),
-        }
-      );
+      const response = await fetch("/api/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessKey: accessKey.trim() }),
+      });
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -50,127 +49,150 @@ export default function AccessPage() {
               : "Demasiados intentos. Espera un momento antes de volver a probar.",
           );
         } else if (response.status === 503) {
-          setError(
-            "El acceso privado todavía no está configurado en este entorno.",
-          );
+          setError("El acceso privado todavía no está configurado en este entorno.");
         } else {
-          setError(
-            "Esa clave no abre este espacio. Inténtalo de nuevo.",
-          );
+          setError("Esa clave no abre este espacio. Inténtalo de nuevo.");
         }
         setIsEntering(false);
         return;
       }
 
-      const requestedPath = new URLSearchParams(
-        window.location.search,
-      ).get("next");
+      const requestedPath = new URLSearchParams(window.location.search).get("next");
       const isSafeIauraPath = Boolean(
         requestedPath === "/iaura" ||
           requestedPath?.startsWith("/iaura?") ||
           requestedPath?.startsWith("/iaura/"),
       );
-      const nextPath =
-        requestedPath && isSafeIauraPath
-          ? requestedPath
-          : "/iaura";
+      const nextPath = requestedPath && isSafeIauraPath ? requestedPath : "/iaura";
 
-      window.location.assign(nextPath);
-    } catch {
-      setError(
-        "No se pudo contactar a IAURA. Revisa la conexión e inténtalo otra vez."
+      setIsRecognized(true);
+      const prefersReducedMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      window.setTimeout(
+        () => window.location.assign(nextPath),
+        prefersReducedMotion ? 0 : 760,
       );
+    } catch {
+      setError("No se pudo contactar a IAURA. Revisa la conexión e inténtalo otra vez.");
       setIsEntering(false);
     }
   }
 
   return (
-    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#05030a] px-5 py-10 text-white">
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-700/20 blur-[130px]" />
-      <div className="pointer-events-none absolute -right-32 top-10 h-72 w-72 rounded-full bg-blue-600/15 blur-[110px]" />
+    <main className={styles.gateway} data-presence={presenceState}>
+      <div className={styles.atmosphere} aria-hidden="true" />
+      <div className={styles.horizon} aria-hidden="true" />
 
-      <section className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.045] p-7 shadow-[0_30px_100px_rgba(76,29,149,0.22)] backdrop-blur-2xl sm:p-9">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.34em] text-purple-300/80">
-              PRIVATE BETA
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-              IAURA
+      <div className={styles.frame}>
+        <header className={styles.brandRow}>
+          <Link className={styles.wordmark} href="/" aria-label="IAURA, inicio">
+            IAURA
+          </Link>
+          <span className={styles.privateSignal}>
+            <span aria-hidden="true" />
+            Private beta · Access 01
+          </span>
+        </header>
+
+        <section className={styles.threshold} aria-labelledby="access-title">
+          <div className={styles.presence} aria-hidden="true">
+            <div className={styles.presenceField} />
+            <div className={styles.orbitOuter} />
+            <div className={styles.orbitInner} />
+            <div className={styles.presenceAxis} />
+            <div className={styles.presenceCore}><span /></div>
+          </div>
+
+          <div className={styles.invitation}>
+            <p className={styles.eyebrow}>Personal intelligence · by invitation</p>
+            <h1 id="access-title" className={styles.title}>
+              Lo que sigue
+              <span>solo se revela al entrar.</span>
             </h1>
+            <p className={styles.intro}>
+              IAURA reconoce una señal privada. Si la tienes, el espacio es tuyo.
+            </p>
           </div>
 
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-purple-500 via-violet-600 to-blue-500 shadow-[0_0_35px_rgba(139,92,246,0.35)]">
-            <span
-              aria-hidden="true"
-              className="text-xl"
-            >
-              ✦
-            </span>
+          <div className={styles.accessPanel}>
+            <p className={styles.panelSignal}>
+              <span aria-hidden="true">01</span>
+              Umbral privado
+            </p>
+
+            <form className={styles.form} onSubmit={handleSubmit}>
+              <label className={styles.label} htmlFor="iaura-access-key">
+                CLAVE DE ACCESO
+              </label>
+
+              <div className={styles.keyField}>
+                <input
+                  id="iaura-access-key"
+                  type="password"
+                  autoComplete="current-password"
+                  value={accessKey}
+                  disabled={isEntering}
+                  aria-describedby="iaura-access-message"
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                  onChange={(event) => {
+                    setAccessKey(event.target.value);
+                    if (error) setError("");
+                  }}
+                  className={styles.input}
+                  placeholder="Introduce tu señal"
+                />
+                <span className={styles.fieldTrace} aria-hidden="true" />
+                <span className={styles.keyStatus} aria-hidden="true">
+                  {accessKey ? "SIGNAL RECEIVED" : "AWAITING SIGNAL"}
+                </span>
+              </div>
+
+              <div
+                id="iaura-access-message"
+                role={error ? "alert" : "status"}
+                aria-live="polite"
+                className={styles.message}
+              >
+                {isRecognized ? "Señal reconocida. Abriendo el umbral." : error}
+              </div>
+
+              <button
+                type="submit"
+                disabled={!accessKey.trim() || isEntering}
+                aria-busy={isEntering}
+                data-state={isEntering ? "loading" : error ? "error" : "idle"}
+                className={styles.enterButton}
+              >
+                <span>
+                  {isRecognized
+                    ? "Señal reconocida"
+                    : isEntering
+                      ? "Abriendo IAURA..."
+                      : "Entrar a IAURA"}
+                </span>
+                <span className={styles.buttonLine} aria-hidden="true" />
+                <svg
+                  className={styles.buttonArrow}
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                >
+                  <path d="M3 13 13 3M6 3h7v7" />
+                </svg>
+              </button>
+            </form>
+
+            <p className={styles.discretion}>Acceso reservado · Sesión privada</p>
           </div>
-        </div>
+        </section>
 
-        <div className="my-8 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-
-        <p className="text-xl font-medium leading-snug text-white/95">
-          Tu inteligencia personal,
-          disponible desde cualquier lugar.
-        </p>
-        <p className="mt-3 text-sm leading-6 text-white/45">
-          Introduce la clave privada para entrar
-          a tu espacio.
-        </p>
-
-        <form
-          className="mt-8"
-          onSubmit={handleSubmit}
-        >
-          <label
-            className="text-[10px] font-semibold tracking-[0.25em] text-white/35"
-            htmlFor="iaura-access-key"
-          >
-            CLAVE DE ACCESO
-          </label>
-          <input
-            id="iaura-access-key"
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={accessKey}
-            disabled={isEntering}
-            onChange={(event) =>
-              setAccessKey(event.target.value)
-            }
-            className="mt-3 h-14 w-full rounded-2xl border border-white/10 bg-black/25 px-4 text-base text-white outline-none transition placeholder:text-white/20 focus:border-purple-400/60 focus:ring-4 focus:ring-purple-500/10"
-            placeholder="Tu clave privada"
-          />
-
-          <div
-            aria-live="polite"
-            className="min-h-9 pt-2 text-sm text-rose-300"
-          >
-            {error}
-          </div>
-
-          <button
-            type="submit"
-            disabled={
-              !accessKey.trim() || isEntering
-            }
-            aria-busy={isEntering}
-            data-state={isEntering ? "loading" : error ? "error" : "idle"}
-            className="flex h-14 w-full touch-manipulation items-center justify-center rounded-2xl border border-purple-300/20 bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 text-sm font-semibold shadow-[0_16px_45px_rgba(109,40,217,0.28)] transition duration-200 hover:brightness-110 active:scale-[0.975] active:brightness-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09050f] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 motion-reduce:transition-none"
-          >
-            {isEntering
-              ? "Abriendo IAURA..."
-              : "Entrar a IAURA"}
-          </button>
-        </form>
-
-        <p className="mt-5 text-center text-xs text-white/25">
-          Acceso protegido · Sesión privada
-        </p>
-      </section>
+        <footer className={styles.footer}>
+          <span>IAURA / Private intelligence system</span>
+          <span aria-hidden="true">Presence detected</span>
+        </footer>
+      </div>
     </main>
   );
 }
