@@ -13,6 +13,17 @@ import {
   getAccessAttemptStatus,
   recordAccessFailure,
 } from "@/core/auth/accessAttempts";
+import {
+  clearClaimContextCookie,
+  createClaimContext,
+  setClaimContextCookie,
+} from "@/core/auth/claimContext";
+import {
+  claimCurrentUserBetaInvite,
+  getCurrentBetaMembership,
+  recognizeBetaInvite,
+} from "@/core/auth/membership";
+import { getAuthenticatedUser } from "@/core/auth/session";
 
 interface AccessRequestBody {
   accessKey?: unknown;
@@ -90,29 +101,66 @@ export async function POST(
   ) {
     clearAccessFailures(request);
 
-    const response = NextResponse.json({
-      authenticated: true,
-    });
-
-    response.cookies.set({
-      name: ACCESS_COOKIE_NAME,
-      value: createAccessToken(secret),
-      httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: ACCESS_SESSION_SECONDS,
-      priority: "high",
-    });
-    response.headers.set(
-      "Cache-Control",
-      "no-store"
-    );
-
+    const response = accessGranted(secret);
+    clearClaimContextCookie(response);
     return response;
   }
 
+  if (accessKey && await recognizeBetaInvite(accessKey)) {
+    const user = await getAuthenticatedUser();
+
+    if (user) {
+      const membership = await getCurrentBetaMembership();
+      if (!membership || membership.status !== "active") {
+        try {
+          await claimCurrentUserBetaInvite(accessKey);
+        } catch {
+          return unrecognized(request);
+        }
+      }
+
+      clearAccessFailures(request);
+      const response = accessGranted(secret, "/iaura");
+      clearClaimContextCookie(response);
+      return response;
+    }
+
+    let context: string;
+    try {
+      context = createClaimContext(accessKey);
+    } catch {
+      return NextResponse.json(
+        { error: "IAURA private access is not configured." },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    clearAccessFailures(request);
+    const response = accessGranted(secret, "/signup");
+    setClaimContextCookie(response, context);
+    return response;
+  }
+
+  return unrecognized(request);
+}
+
+function accessGranted(secret: string, next?: string) {
+  const response = NextResponse.json({ authenticated: true, ...(next ? { next } : {}) });
+  response.cookies.set({
+    name: ACCESS_COOKIE_NAME,
+    value: createAccessToken(secret),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: ACCESS_SESSION_SECONDS,
+    priority: "high",
+  });
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
+function unrecognized(request: Request) {
   const attemptStatus = getAccessAttemptStatus(request);
 
   if (!attemptStatus.allowed) {

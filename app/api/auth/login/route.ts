@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { safeIauraNextPath } from "@/core/auth/redirects";
 import { validateCredentials } from "@/core/auth/session";
+import { completePostAuthClaim } from "@/core/auth/claimFlow";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
   const { error } = await supabase.auth.signInWithPassword(credentials);
   if (error) return failure(request, nextPath);
 
-  return NextResponse.redirect(new URL(nextPath, request.url), 303);
+  return completePostAuthClaim(request, nextPath);
 }
 
 function failure(request: Request, nextPath: string) {

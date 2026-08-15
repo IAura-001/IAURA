@@ -10,7 +10,7 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-import { BetaClaimError, claimCurrentUserBetaInvite, getCurrentBetaMembership } from "../membership";
+import { BetaClaimError, claimCurrentUserBetaInvite, getCurrentBetaMembership, recognizeBetaInvite } from "../membership";
 
 describe("Beta membership server helper", () => {
   beforeEach(() => {
@@ -39,5 +39,11 @@ describe("Beta membership server helper", () => {
     mocks.maybeSingle.mockResolvedValue({ data: { role: "member", status: "active", claimed_at: "now" }, error: null });
     await expect(getCurrentBetaMembership()).resolves.toEqual({ role: "member", status: "active", claimedAt: "now" });
     expect(query.eq).toHaveBeenCalledWith("user_id", "user-a");
+  });
+
+  it("returns only the boolean recognition result", async () => {
+    mocks.rpc.mockResolvedValue({ data: true, error: null });
+    await expect(recognizeBetaInvite("secret-token")).resolves.toBe(true);
+    expect(mocks.rpc).toHaveBeenCalledWith("recognize_beta_invite", { invite_token: "secret-token" });
   });
 });

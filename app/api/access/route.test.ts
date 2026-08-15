@@ -11,6 +11,20 @@ import {
   ACCESS_ATTEMPT_MAX_FAILURES,
   resetAccessAttemptLimitsForTests,
 } from "@/core/auth/accessAttempts";
+
+const inviteMocks = vi.hoisted(() => ({
+  recognize: vi.fn(),
+  getUser: vi.fn(),
+  getMembership: vi.fn(),
+  claim: vi.fn(),
+}));
+
+vi.mock("@/core/auth/membership", () => ({
+  recognizeBetaInvite: inviteMocks.recognize,
+  getCurrentBetaMembership: inviteMocks.getMembership,
+  claimCurrentUserBetaInvite: inviteMocks.claim,
+}));
+vi.mock("@/core/auth/session", () => ({ getAuthenticatedUser: inviteMocks.getUser }));
 import { POST } from "./route";
 
 const secret = "aura-prime-private-key";
@@ -34,6 +48,11 @@ function accessRequest(
 describe("POST /api/access", () => {
   beforeEach(() => {
     vi.stubEnv("IAURA_ACCESS_KEY", secret);
+    vi.stubEnv("IAURA_CLAIM_CONTEXT_SECRET", "test-claim-context-secret-with-32-characters");
+    inviteMocks.recognize.mockReset().mockResolvedValue(false);
+    inviteMocks.getUser.mockReset().mockResolvedValue(null);
+    inviteMocks.getMembership.mockReset().mockResolvedValue(null);
+    inviteMocks.claim.mockReset().mockResolvedValue({ role: "member", status: "active" });
     resetAccessAttemptLimitsForTests();
   });
 
@@ -49,6 +68,31 @@ describe("POST /api/access", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("recognizes an invite without consuming it before Auth", async () => {
+    inviteMocks.recognize.mockResolvedValue(true);
+    const response = await POST(accessRequest("a".repeat(32)));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ authenticated: true, next: "/signup" });
+    expect(response.headers.get("set-cookie")).toContain("iaura_beta_claim=");
+    expect(inviteMocks.claim).not.toHaveBeenCalled();
+  });
+
+  it("claims immediately for a returning authenticated user", async () => {
+    inviteMocks.recognize.mockResolvedValue(true);
+    inviteMocks.getUser.mockResolvedValue({ id: "user-a" });
+    const response = await POST(accessRequest("a".repeat(32)));
+    await expect(response.json()).resolves.toMatchObject({ next: "/iaura" });
+    expect(inviteMocks.claim).toHaveBeenCalledWith("a".repeat(32));
+  });
+
+  it("does not consume another invite for an existing active member", async () => {
+    inviteMocks.recognize.mockResolvedValue(true);
+    inviteMocks.getUser.mockResolvedValue({ id: "user-a" });
+    inviteMocks.getMembership.mockResolvedValue({ status: "active", role: "member" });
+    await POST(accessRequest("a".repeat(32)));
+    expect(inviteMocks.claim).not.toHaveBeenCalled();
   });
 
   it("throttles repeated invalid access attempts", async () => {

@@ -52,3 +52,11 @@ export async function claimCurrentUserBetaInvite(inviteToken: string): Promise<B
 
   return toMembership(data as MembershipRow);
 }
+
+export async function recognizeBetaInvite(inviteToken: string): Promise<boolean> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("recognize_beta_invite", {
+    invite_token: inviteToken,
+  });
+  return !error && data === true;
+}

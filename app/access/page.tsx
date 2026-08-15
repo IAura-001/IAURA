@@ -57,13 +57,18 @@ export default function AccessPage() {
         return;
       }
 
+      const result = (await response.json()) as { next?: unknown };
+
       const requestedPath = new URLSearchParams(window.location.search).get("next");
       const isSafeIauraPath = Boolean(
         requestedPath === "/iaura" ||
           requestedPath?.startsWith("/iaura?") ||
           requestedPath?.startsWith("/iaura/"),
       );
-      const nextPath = requestedPath && isSafeIauraPath ? requestedPath : "/iaura";
+      const serverNext = result.next === "/signup" || result.next === "/login"
+        ? result.next
+        : null;
+      const nextPath = serverNext ?? (requestedPath && isSafeIauraPath ? requestedPath : "/iaura");
 
       setIsRecognized(true);
       const prefersReducedMotion = window.matchMedia?.(
