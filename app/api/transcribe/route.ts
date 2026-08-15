@@ -2,6 +2,10 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { isRequestAuthorized } from "@/core/auth/access";
 import {
+  authenticationRequiredResponse,
+  getAuthenticatedUser,
+} from "@/core/auth/session";
+import {
   getLanguageDefinition,
   normalizeLocale,
 } from "@/core/i18n/languages";
@@ -28,6 +32,8 @@ export async function POST(
       }
     );
   }
+
+  if (!(await getAuthenticatedUser())) return authenticationRequiredResponse();
 
   try {
     const formData =

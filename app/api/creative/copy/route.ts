@@ -5,6 +5,10 @@ import {
   isRequestAuthorized,
 } from "@/core/auth/access";
 import {
+  authenticationRequiredResponse,
+  getAuthenticatedUser,
+} from "@/core/auth/session";
+import {
   CreativeRequestError,
   describeCreativeFailure,
   isCreativeCancellation,
@@ -71,6 +75,8 @@ export async function POST(request: Request) {
       },
     );
   }
+
+  if (!(await getAuthenticatedUser())) return authenticationRequiredResponse();
 
   try {
     assertCreativeSameOrigin(request);

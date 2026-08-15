@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 
 import { isRequestAuthorized } from "@/core/auth/access";
 import {
+  authenticationRequiredResponse,
+  getAuthenticatedUser,
+} from "@/core/auth/session";
+import {
   iauraBrain,
   type CognitiveRequest,
 } from "@/core/brain";
@@ -115,6 +119,8 @@ export async function POST(request: Request) {
       },
     );
   }
+
+  if (!(await getAuthenticatedUser())) return authenticationRequiredResponse();
 
   let body: ChatRequestBody;
 

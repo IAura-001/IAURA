@@ -13,6 +13,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   isRequestAuthorized: vi.fn(),
+  getAuthenticatedUser: vi.fn(),
   brainAnalyze: vi.fn(),
   providerGenerate: vi.fn(),
   createProvider: vi.fn(),
@@ -21,6 +22,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/core/auth/access", () => ({
   isRequestAuthorized: mocks.isRequestAuthorized,
 }));
+vi.mock("@/core/auth/session", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    getAuthenticatedUser: mocks.getAuthenticatedUser,
+    authenticationRequiredResponse: () => NextResponse.json(
+      { error: "IAURA authentication required.", code: "IAURA_AUTH_REQUIRED" },
+      { status: 401 },
+    ),
+  };
+});
 
 vi.mock("@/core/brain", () => ({
   iauraBrain: {
@@ -129,6 +140,7 @@ describe("POST /api/chat", () => {
     mocks.providerGenerate.mockReset();
     mocks.createProvider.mockReset();
     mocks.isRequestAuthorized.mockReturnValue(true);
+    mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-a" });
     mocks.providerGenerate.mockResolvedValue(providerResult);
     mocks.createProvider.mockReturnValue({
       generate: mocks.providerGenerate,
@@ -146,6 +158,19 @@ describe("POST /api/chat", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: "IAURA_ACCESS_REQUIRED",
     });
+    expect(mocks.createProvider).not.toHaveBeenCalled();
+  });
+
+  it("requires a verified Supabase user after private access passes", async () => {
+    mocks.getAuthenticatedUser.mockResolvedValue(null);
+
+    const response = await POST(jsonRequest("{invalid"));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "IAURA_AUTH_REQUIRED",
+    });
+    expect(mocks.brainAnalyze).not.toHaveBeenCalled();
     expect(mocks.createProvider).not.toHaveBeenCalled();
   });
 

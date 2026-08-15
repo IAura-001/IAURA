@@ -17,9 +17,20 @@ import {
 const mocks = vi.hoisted(() => ({
   hasValidAccessConfiguration: vi.fn(),
   isRequestAuthorized: vi.fn(),
+  getAuthenticatedUser: vi.fn(),
   generateImage: vi.fn(),
   createProvider: vi.fn(),
 }));
+vi.mock("@/core/auth/session", async () => {
+  const { NextResponse } = await import("next/server");
+  return {
+    getAuthenticatedUser: mocks.getAuthenticatedUser,
+    authenticationRequiredResponse: () => NextResponse.json(
+      { error: "IAURA authentication required.", code: "IAURA_AUTH_REQUIRED" },
+      { status: 401 },
+    ),
+  };
+});
 
 vi.mock("@/core/auth/access", () => ({
   ACCESS_COOKIE_NAME: "iaura_beta_access",
@@ -81,6 +92,7 @@ describe("POST /api/creative/image", () => {
     mocks.createProvider.mockReset();
     mocks.hasValidAccessConfiguration.mockReturnValue(true);
     mocks.isRequestAuthorized.mockReturnValue(true);
+    mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-a" });
     mocks.createProvider.mockReturnValue({
       generateImage: mocks.generateImage,
     });
