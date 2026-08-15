@@ -9,9 +9,15 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run test && npm run lint && npm run build"
+    "check": "npm run test && npm run lint && npm run build",
+    "supabase:init": "supabase init",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.3",
     "next": "16.2.12",
     "openai": "^7.1.0",
     "react": "19.2.4",
@@ -30,6 +36,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "jsdom": "^30.0.1",
+    "supabase": "2.114.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
