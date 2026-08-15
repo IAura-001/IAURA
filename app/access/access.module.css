@@ -312,6 +312,11 @@
 
 .title span { display: block; color: rgba(217, 213, 228, 0.54); }
 
+.title .mobileTitleBreak {
+  display: inline;
+  color: inherit;
+}
+
 .intro {
   max-width: 30rem;
   margin: 1.6rem 0 0;
@@ -529,9 +534,19 @@
 }
 
 @media (max-width: 860px) {
-  .frame { padding-right: max(1.5rem, env(safe-area-inset-right)); padding-left: max(1.5rem, env(safe-area-inset-left)); }
-  .threshold { width: min(100%, 35rem); padding: clamp(3.5rem, 10vh, 7rem) 0 3rem; grid-template-columns: 1fr; gap: clamp(3.3rem, 8vh, 5rem); }
-  .presence { top: 29%; left: 50%; width: min(78vw, 29rem); }
+  .frame {
+    padding-right: max(1.5rem, calc(env(safe-area-inset-right) + 1rem));
+    padding-left: max(1.5rem, calc(env(safe-area-inset-left) + 1rem));
+  }
+
+  .threshold {
+    width: min(100%, 35rem);
+    padding: clamp(2.5rem, 6dvh, 4rem) 0 2.25rem;
+    grid-template-columns: 1fr;
+    gap: clamp(2.35rem, 5dvh, 3.25rem);
+  }
+
+  .presence { top: 25%; left: 50%; width: min(72vw, 27rem); }
   .invitation { padding-left: 0; text-align: center; }
   .eyebrow { margin-bottom: 1rem; }
   .title { margin: 0 auto; }
@@ -540,17 +555,80 @@
 }
 
 @media (max-width: 560px) {
-  .frame { padding-top: max(1.15rem, env(safe-area-inset-top)); padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
-  .privateSignal { font-size: 0.48rem; letter-spacing: 0.12em; }
-  .threshold { padding: clamp(3.2rem, 8vh, 5rem) 0 2rem; gap: clamp(2.8rem, 7vh, 4rem); }
-  .presence { top: 27%; width: min(98vw, 26rem); }
-  .title { font-size: clamp(2.35rem, 12vw, 3.7rem); }
-  .intro { max-width: 21rem; font-size: 0.82rem; }
-  .accessPanel { padding-top: 1.45rem; }
-  .panelSignal { margin-bottom: 2rem; }
+  .frame {
+    padding-top: max(1.5rem, calc(env(safe-area-inset-top) + 0.85rem));
+    padding-bottom: max(1.35rem, calc(env(safe-area-inset-bottom) + 0.95rem));
+  }
+
+  .wordmark { font-size: 0.84rem; }
+  .privateSignal { color: rgba(210, 205, 224, 0.56); font-size: 0.47rem; letter-spacing: 0.1em; }
+
+  .threshold {
+    padding: clamp(2rem, 4.5dvh, 3rem) 0 1.5rem;
+    gap: clamp(1.75rem, 3.8dvh, 2.4rem);
+  }
+
+  .presence { top: 21%; width: min(88vw, 23rem); }
+  .eyebrow { margin-bottom: 0.8rem; color: rgba(219, 214, 232, 0.6); }
+
+  .title {
+    max-width: 22rem;
+    font-size: clamp(2.3rem, 10.5vw, 3.05rem);
+    line-height: 0.96;
+    letter-spacing: -0.04em;
+  }
+
+  .title .mobileTitleBreak { display: block; }
+
+  .intro {
+    max-width: 21rem;
+    margin-top: 1.05rem;
+    color: rgba(214, 210, 224, 0.64);
+    font-size: 0.84rem;
+    line-height: 1.58;
+  }
+
+  .accessPanel { padding-top: 1.25rem; padding-bottom: 1.1rem; }
+  .panelSignal { margin-bottom: 1.45rem; color: rgba(218, 213, 230, 0.54); }
+  .label { color: rgba(226, 221, 235, 0.62); }
   .input { min-height: 3.8rem; font-size: 16px; }
-  .enterButton { min-height: 3.65rem; }
+  .input::placeholder { color: rgba(207, 202, 219, 0.42); }
+  .keyStatus { color: rgba(174, 166, 221, 0.52); }
+  .message { min-height: 2.8rem; }
+  .enterButton { min-height: 3.75rem; padding-right: 1rem; padding-left: 1.1rem; }
+  .discretion { margin-top: 1rem; color: rgba(204, 199, 215, 0.43); font-size: 0.63rem; }
+  .footer { color: rgba(201, 196, 211, 0.36); font-size: 0.52rem; }
   .footer span:last-child { display: none; }
+}
+
+@media (max-width: 860px) and (max-height: 600px) and (orientation: landscape) {
+  .frame {
+    padding-top: max(0.9rem, calc(env(safe-area-inset-top) + 0.45rem));
+    padding-bottom: max(0.8rem, calc(env(safe-area-inset-bottom) + 0.45rem));
+  }
+
+  .threshold {
+    width: min(100%, 62rem);
+    padding: 0.8rem 0;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 23rem);
+    gap: clamp(2rem, 6vw, 4rem);
+  }
+
+  .presence { top: 50%; left: 23%; width: min(40vw, 20rem); }
+  .invitation { text-align: left; }
+  .eyebrow { margin-bottom: 0.65rem; }
+  .title { margin: 0; font-size: clamp(2rem, 5.5vw, 3.25rem); }
+  .title .mobileTitleBreak { display: inline; }
+  .intro { max-width: 24rem; margin: 0.8rem 0 0; font-size: 0.76rem; }
+  .accessPanel { width: 100%; padding-top: 1rem; padding-bottom: 0.75rem; }
+  .panelSignal { margin-bottom: 1rem; }
+  .keyField { margin-bottom: 0; }
+  .input { height: 3rem; min-height: 3rem; }
+  .fieldTrace { top: calc(3rem - 1px); }
+  .message { min-height: 2.1rem; font-size: 0.7rem; }
+  .enterButton { min-height: 3rem; }
+  .discretion { margin-top: 0.65rem; }
+  .footer { display: none; }
 }
 
 @media (max-height: 680px) and (min-width: 861px) {

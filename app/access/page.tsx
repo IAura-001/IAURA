@@ -108,7 +108,9 @@ export default function AccessPage() {
             <p className={styles.eyebrow}>Personal intelligence · by invitation</p>
             <h1 id="access-title" className={styles.title}>
               Lo que sigue
-              <span>solo se revela al entrar.</span>
+              <span>
+                solo se revela al<span className={styles.mobileTitleBreak}> entrar.</span>
+              </span>
             </h1>
             <p className={styles.intro}>
               IAURA reconoce una señal privada. Si la tienes, el espacio es tuyo.
