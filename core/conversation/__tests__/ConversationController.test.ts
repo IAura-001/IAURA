@@ -45,6 +45,7 @@ import {
 import {
   ConversationController,
 } from "../ConversationController";
+import { selectBetaContinuity } from "../BetaContinuity";
 import type { ProjectRepository } from "@/core/project/ProjectRepository";
 import type { IAuraProject } from "@/types/project";
 import { parseAuraAssistantPlan } from "@/core/actions";
@@ -1200,7 +1201,9 @@ describe("ConversationController", () => {
       plan.experience.choices[0], "missing", "Context",
     )).rejects.toMatchObject({ code: "IAURA_BETA_CONFIRMATION_INVALID" });
 
-    await controller.sendChoice(plan.experience.choices[0], "recommendation-source", "Context");
+    const readyTurn = await controller.sendChoice(
+      plan.experience.choices[0], "recommendation-source", "Context",
+    );
     expect(conversationRepository.getConversation("iaura-next-step")?.betaWorkflow)
       .toMatchObject({
         status: "ready-to-start",
@@ -1215,6 +1218,33 @@ describe("ConversationController", () => {
     expect(mocks.analyze).toHaveBeenCalledWith(expect.objectContaining({
       userContext: expect.stringContaining("Confirmed next step:\n- Action: Build the card"),
     }));
+    expect(readyTurn.plan.experience.choices.map((choice) => [
+      choice.label,
+      choice.confirmation,
+    ])).toEqual([
+      ["Empezar ahora", { kind: "beta-session-decision", decision: "start-now" }],
+      ["Continuar después", { kind: "beta-session-decision", decision: "continue-later" }],
+    ]);
+    expect(conversationRepository.getConversation("iaura-next-step")?.messages
+      .find((message) => message.messageId === readyTurn.assistantMessageId)
+      ?.structuredResponse?.experience?.choices).toEqual(readyTurn.plan.experience.choices);
+
+    await controller.sendChoice(
+      readyTurn.plan.experience.choices[1], readyTurn.assistantMessageId, "Context",
+    );
+    const deferredConversation = conversationRepository.getConversation("iaura-next-step")!;
+    expect(deferredConversation.betaWorkflow).toMatchObject({
+      status: "deferred",
+      confirmedNextStep: { ...recommendation, sourceMessageId: "recommendation-source" },
+      sessionDecision: {
+        kind: "continue-later", sourceMessageId: readyTurn.assistantMessageId,
+      },
+    });
+    expect(selectBetaContinuity(deferredConversation)).toMatchObject({
+      state: "deferred",
+      confirmedStep: "Build the card",
+      primaryAction: { kind: "resume-deferred", label: "Retomar paso" },
+    });
 
     activeProject = { id: "nova", name: "Nova" } as IAuraProject;
     await expect(controller.sendChoice(
@@ -2069,5 +2099,167 @@ describe("ConversationController", () => {
           "Preserve this message.",
       },
     ]);
+  });
+
+  it.each(["normal", "retry-later"] as const)(
+    "directly resumes trusted deferred continuity for %s provenance once",
+    async (kind) => {
+      const project = { id: `continuity-${kind}`, name: "Continuity" } as IAuraProject;
+      const projects = {
+        getActiveProject: vi.fn(() => project),
+      } as unknown as ProjectRepository;
+      const created = conversationRepository.createConversation({
+        conversationId: `continuity-${kind}`, projectId: project.id,
+      }).conversation!;
+      if (kind === "retry-later") {
+        conversationRepository.appendMessage(created.conversationId, {
+          messageId: "report", role: "user", content: "Partial.",
+        });
+        conversationRepository.appendMessage(created.conversationId, {
+          messageId: "evaluation", role: "assistant", content: "Partial.",
+          structuredResponse: {
+            actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+            sourceUserMessageId: "report",
+            betaExecutionEvaluation: {
+              result: "partial", observation: "Partial", doneWhenSatisfied: false,
+            },
+          },
+        });
+        conversationRepository.appendMessage(created.conversationId, {
+          messageId: "recovery", role: "assistant", content: "Recover.",
+          structuredResponse: {
+            actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+            experience: {
+              kind: "decision", title: "Recovery", summary: "Choose", phases: [],
+              choices: [{ label: "Continuar después", description: "Later", prompt: "Later", confirmation: {
+                kind: "beta-incomplete-execution-recovery", decision: "retry-later",
+              } }], recommendedSurface: "presence",
+            },
+          },
+        });
+      }
+      conversationRepository.updateConversationMetadata(created.conversationId, {
+        betaWorkflow: {
+          version: 1, status: "deferred",
+          confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "context", confirmedAt: "2026-08-14T10:00:00Z" },
+          confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "outcome", confirmedAt: "2026-08-14T10:01:00Z" },
+          confirmedNextStep: { action: "Same step", whyNow: "Now", result: "R", doneWhen: "D", sourceMessageId: "step", confirmedAt: "2026-08-14T10:02:00Z" },
+          sessionDecision: kind === "normal"
+            ? { kind: "continue-later", sourceMessageId: "defer", decidedAt: "2026-08-14T10:03:00Z" }
+            : { kind: "start-now", sourceMessageId: "start", decidedAt: "2026-08-14T10:03:00Z" },
+          ...(kind === "retry-later"
+            ? {
+                verifiedExecutions: [{ evidenceId: "partial", result: "partial", observation: "Partial", doneWhenSatisfied: false, sourceUserMessageId: "report", sourceMessageId: "evaluation", verifiedAt: "2026-08-14T10:04:00Z" }],
+                incompleteExecutionRecoveries: [{ decision: "retry-later", evidenceId: "partial", sourceMessageId: "recovery", confirmedAt: "2026-08-14T10:05:00Z" }],
+              }
+            : {}),
+        },
+      });
+      const before = conversationRepository.getConversation(created.conversationId)!;
+      const controller = new ConversationController({
+        conversations: conversationRepository, projects,
+        contextRetriever: createContextRetriever(),
+        now: () => "2026-08-14T10:06:00Z",
+      });
+      const request = {
+        projectId: project.id,
+        conversationId: before.conversationId,
+        expectedRevision: before.revision,
+        stepSourceMessageId: "step",
+        deferSourceMessageId: kind === "normal" ? "defer" : "recovery",
+      };
+
+      const resumed = controller.resumeDeferredFromContinuity(request);
+      expect(resumed.betaWorkflow).toMatchObject({
+        status: "started",
+        confirmedNextStep: { action: "Same step", sourceMessageId: "step" },
+        sessionDecision: { kind: "start-now" },
+      });
+      const resumeSource = resumed.messages.find(
+        (message) =>
+          message.messageId === resumed.betaWorkflow?.sessionDecision?.sourceMessageId,
+      );
+      expect(resumeSource?.structuredResponse?.experience?.choices).toContainEqual(
+        expect.objectContaining({
+          confirmation: { kind: "beta-session-decision", decision: "start-now" },
+        }),
+      );
+      expect(resumed.betaWorkflow?.verifiedExecutions ?? []).toHaveLength(
+        kind === "retry-later" ? 1 : 0,
+      );
+      expect(resumed.betaWorkflow?.incompleteExecutionRecoveries ?? []).toHaveLength(
+        kind === "retry-later" ? 1 : 0,
+      );
+      expect(() => controller.resumeDeferredFromContinuity(request))
+        .toThrow(expect.objectContaining({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" }));
+
+      const evaluationPlan = parseAuraAssistantPlan({
+        content: "Review the resumed execution.",
+        betaExecutionEvaluation: {
+          result: "passed", observation: "Resumed report", doneWhenSatisfied: false,
+        },
+        experience: {
+          kind: "decision", title: "Evaluation", summary: "Review", phases: [],
+          choices: [{ label: "Confirm", description: "Confirm", prompt: "Confirm", confirmation: {
+            kind: "beta-execution-evaluation", result: "passed",
+            observation: "Resumed report", doneWhenSatisfied: false,
+          } }], recommendedSurface: "presence",
+        },
+      });
+      mocks.analyze.mockReturnValue(cognitiveRequest);
+      mocks.generateCognitiveResponse.mockResolvedValueOnce(evaluationPlan);
+      const reported = await controller.send("New resumed execution report", "Context");
+      expect(reported.plan.betaExecutionEvaluation).toEqual({
+        result: "passed", observation: "Resumed report", doneWhenSatisfied: false,
+      });
+    },
+  );
+
+  it("rejects stale, cross-project, historical, closed, and absent continuity resume state", () => {
+    const project = { id: "continuity-guards", name: "Continuity" } as IAuraProject;
+    const getActiveProject = vi.fn(() => project);
+    const projects = { getActiveProject } as unknown as ProjectRepository;
+    const created = conversationRepository.createConversation({
+      conversationId: "continuity-guards", projectId: project.id,
+    }).conversation!;
+    conversationRepository.updateConversationMetadata(created.conversationId, {
+      betaWorkflow: {
+        version: 1, status: "deferred",
+        confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "context", confirmedAt: "2026-08-14T10:00:00Z" },
+        confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "outcome", confirmedAt: "2026-08-14T10:01:00Z" },
+        confirmedNextStep: { action: "Same step", whyNow: "Now", result: "R", doneWhen: "D", sourceMessageId: "step", confirmedAt: "2026-08-14T10:02:00Z" },
+        sessionDecision: { kind: "continue-later", sourceMessageId: "defer", decidedAt: "2026-08-14T10:03:00Z" },
+      },
+    });
+    const current = conversationRepository.getConversation(created.conversationId)!;
+    const controller = new ConversationController({
+      conversations: conversationRepository, projects,
+      contextRetriever: createContextRetriever(),
+    });
+    const valid = {
+      projectId: project.id, conversationId: current.conversationId,
+      expectedRevision: current.revision, stepSourceMessageId: "step",
+      deferSourceMessageId: "defer",
+    };
+
+    expect(() => controller.resumeDeferredFromContinuity({
+      ...valid, expectedRevision: current.revision - 1,
+    })).toThrow(expect.objectContaining({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" }));
+    getActiveProject.mockReturnValue({ id: "other", name: "Other" } as IAuraProject);
+    expect(() => controller.resumeDeferredFromContinuity(valid))
+      .toThrow(expect.objectContaining({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" }));
+    getActiveProject.mockReturnValue(project);
+    conversationRepository.updateConversationMetadata(created.conversationId, {
+      betaWorkflow: { ...current.betaWorkflow!, status: "closed" },
+    });
+    expect(() => controller.resumeDeferredFromContinuity({
+      ...valid,
+      expectedRevision: conversationRepository.getConversation(created.conversationId)!.revision,
+    })).toThrow(expect.objectContaining({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" }));
+    conversationRepository.updateConversationMetadata(created.conversationId, { betaWorkflow: null });
+    expect(() => controller.resumeDeferredFromContinuity({
+      ...valid,
+      expectedRevision: conversationRepository.getConversation(created.conversationId)!.revision,
+    })).toThrow(expect.objectContaining({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" }));
   });
 });

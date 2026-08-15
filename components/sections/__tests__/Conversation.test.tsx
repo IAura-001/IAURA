@@ -6,6 +6,33 @@ import { I18nProvider } from "@/core/i18n/I18nContext";
 import { Conversation } from "@/components/sections/Conversation";
 
 describe("Conversation windowing controls", () => {
+  it("scrolls a requested trusted message instead of historical content", () => {
+    const scrollIntoView = vi.fn();
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation
+          conversationKey="iaura"
+          messages={[
+            { id: "historical-recovery", role: "assistant", content: "Old recovery" },
+            { id: "current-handoff", role: "assistant", content: "Current handoff" },
+          ]}
+          navigationTargetMessageId="current-handoff"
+          navigationRequestId={1}
+        />
+      </I18nProvider>,
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "center" });
+    expect(scrollIntoView.mock.instances[0]).toHaveAttribute(
+      "data-message-id",
+      "current-handoff",
+    );
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  });
+
   it("positions hydrated history only after two render-ready frames", () => {
     const frames: FrameRequestCallback[] = [];
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
@@ -324,6 +351,33 @@ describe("Conversation windowing controls", () => {
     const card = screen.getByRole("region", { name: "Siguiente paso confirmado" });
     expect(card).toHaveTextContent(title);
     expect(card).toHaveTextContent(detail);
+  });
+
+  it("renders both persisted ready-to-start decisions as actionable choices", async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn().mockResolvedValue(undefined);
+    const choices = [
+      { label: "Empezar ahora", description: "Start", prompt: "Start", confirmation: {
+        kind: "beta-session-decision" as const, decision: "start-now" as const,
+      } },
+      { label: "Continuar después", description: "Later", prompt: "Later", confirmation: {
+        kind: "beta-session-decision" as const, decision: "continue-later" as const,
+      } },
+    ];
+    render(
+      <I18nProvider locale="es-419">
+        <Conversation onChoose={onChoose} messages={[{
+          id: "ready", role: "assistant", content: "Choose when to start.",
+          experience: {
+            kind: "decision", title: "Ready", summary: "Choose", phases: [],
+            choices, recommendedSurface: "presence",
+          },
+        }]} />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole("button", { name: /Empezar ahora/ })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Continuar después/ }));
+    expect(onChoose).toHaveBeenCalledWith(choices[1], "ready");
   });
 
   it("renders and confirms one provisional execution evaluation truthfully", async () => {

@@ -12,7 +12,7 @@ interface WorkspaceProps {
   initialProject?: IAuraProject | null;
   studioRequest?: CreativeStudioRequest;
   onProjectSelected?: (project: IAuraProject | null) => void;
-  onContinueWithAura?: () => void;
+  onContinueWithAura?: (targetMessageId?: string) => void;
   onOpenIntelligence?: () => void;
 }
 

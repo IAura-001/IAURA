@@ -173,6 +173,10 @@ export default function Home({
     useState<ChatMessage[]>([]);
   const [visibleStartIndex, setVisibleStartIndex] =
     useState(0);
+  const [conversationNavigation, setConversationNavigation] = useState<{
+    targetMessageId?: string;
+    requestId: number;
+  }>({ requestId: 0 });
   const [animatedMessageIds, setAnimatedMessageIds] =
     useState<ReadonlySet<string>>(() => new Set());
   const [isSending, setIsSending] =
@@ -345,6 +349,22 @@ export default function Home({
         hasCompletedOnboarding: true,
       });
     }, [updateMemory]);
+
+  const handleContinueWithAura = useCallback((targetMessageId?: string) => {
+    if (targetMessageId) {
+      const targetIndex = messages.findIndex(
+        (message) => message.id === targetMessageId,
+      );
+      if (targetIndex >= 0) {
+        setVisibleStartIndex((current) => Math.min(current, targetIndex));
+      }
+    }
+    setConversationNavigation((current) => ({
+      ...(targetMessageId ? { targetMessageId } : {}),
+      requestId: current.requestId + 1,
+    }));
+    setActiveWorkspaceView("presence");
+  }, [messages]);
 
   const completedMissionIds =
     memory.completedMissionIds ?? [];
@@ -960,6 +980,8 @@ export default function Home({
                       isBusy={
                         isSending
                       }
+                      navigationTargetMessageId={conversationNavigation.targetMessageId}
+                      navigationRequestId={conversationNavigation.requestId}
                     />
 
                     <ChatInput
@@ -1011,11 +1033,7 @@ export default function Home({
                 onProjectSelected={
                   handleWorkspaceProjectSelected
                 }
-                onContinueWithAura={() =>
-                  setActiveWorkspaceView(
-                    "presence",
-                  )
-                }
+                onContinueWithAura={handleContinueWithAura}
                 onOpenIntelligence={() =>
                   setActiveWorkspaceView(
                     "intelligence",

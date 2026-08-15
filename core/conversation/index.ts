@@ -4,6 +4,15 @@ export {
   conversationController,
 } from "./ConversationController";
 export {
+  deferredContinuityProvenance,
+  selectBetaContinuity,
+} from "./BetaContinuity";
+export type {
+  BetaContinuityPrimaryActionKind,
+  BetaContinuityState,
+  BetaContinuityViewModel,
+} from "./BetaContinuity";
+export {
   CONVERSATION_BACKUP_STORAGE_KEY,
   CONVERSATION_STAGING_STORAGE_KEY,
   CONVERSATION_STATE_STORAGE_KEY,
@@ -17,6 +26,7 @@ export {
   conversationRepository,
 } from "./ConversationRepository";
 export type {
+  DeferredContinuityResumeRequest,
   ConversationTurnResult,
   ConversationTurnErrorCode,
 } from "./ConversationController";

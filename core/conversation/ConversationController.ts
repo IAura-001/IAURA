@@ -32,6 +32,7 @@ import {
   type ConversationRepository,
   type BetaWorkflowMetadata,
 } from "./ConversationRepository";
+import { deferredContinuityProvenance } from "./BetaContinuity";
 
 export type ConversationTurnErrorCode =
   | "IAURA_CONVERSATION_PERSISTENCE_FAILED"
@@ -85,6 +86,14 @@ type ResponseGenerator = (
 export interface ConversationTurnResult {
   plan: AuraAssistantPlan;
   assistantMessageId: string;
+}
+
+export interface DeferredContinuityResumeRequest {
+  projectId: string;
+  conversationId: string;
+  expectedRevision: number;
+  stepSourceMessageId: string;
+  deferSourceMessageId: string;
 }
 
 interface ConversationControllerOptions {
@@ -239,6 +248,29 @@ function incompleteExecutionRecoveryChoices(): AuraExperienceChoice[] {
       confirmation: {
         kind: "beta-incomplete-execution-recovery",
         decision: "retry-later",
+      },
+    },
+  ];
+}
+
+function readyToStartChoices(): AuraExperienceChoice[] {
+  return [
+    {
+      label: "Empezar ahora",
+      description: "Inicia el paso confirmado sin afirmar que ya fue ejecutado.",
+      prompt: "Empezar ahora la ejecución del paso confirmado.",
+      confirmation: {
+        kind: "beta-session-decision",
+        decision: "start-now",
+      },
+    },
+    {
+      label: "Continuar después",
+      description: "Conserva el mismo paso confirmado para retomarlo más adelante.",
+      prompt: "Continuar después con el mismo paso confirmado.",
+      confirmation: {
+        kind: "beta-session-decision",
+        decision: "continue-later",
       },
     },
   ];
@@ -518,6 +550,8 @@ export class ConversationController {
         ...generatedResponse.experience,
         choices: recoveryChoiceAllowed
           ? incompleteExecutionRecoveryChoices()
+          : sessionDecisionAllowed
+            ? readyToStartChoices()
           : generatedResponse.experience.choices.filter(
           (choice) =>
             (choice.confirmation?.kind !== "beta-incomplete-execution-recovery" ||
@@ -586,6 +620,109 @@ export class ConversationController {
       message,
       userContext,
     );
+  }
+
+  resumeDeferredFromContinuity(
+    request: DeferredContinuityResumeRequest,
+  ): Conversation {
+    const activeProject = this.projects.getActiveProject();
+    const conversation = this.conversations.getActiveConversation(request.projectId);
+    const workflow = conversation?.betaWorkflow;
+    const provenance = workflow
+      ? deferredContinuityProvenance(workflow)
+      : undefined;
+    if (
+      activeProject?.id !== request.projectId ||
+      !conversation ||
+      conversation.projectId !== request.projectId ||
+      conversation.conversationId !== request.conversationId ||
+      conversation.revision !== request.expectedRevision ||
+      workflow?.status !== "deferred" ||
+      !workflow.confirmedContext ||
+      !workflow.confirmedOutcome ||
+      !workflow.confirmedNextStep ||
+      workflow.confirmedNextStep.sourceMessageId !== request.stepSourceMessageId ||
+      !provenance ||
+      provenance !== request.deferSourceMessageId
+    ) {
+      throw new ConversationTurnError(
+        "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE",
+        "conversation",
+        conversation?.conversationId,
+      );
+    }
+
+    const latestEvidence = workflow.verifiedExecutions?.at(-1);
+    const latestRecovery = latestEvidence
+      ? workflow.incompleteExecutionRecoveries?.find(
+          (recovery) => recovery.evidenceId === latestEvidence.evidenceId,
+        )
+      : undefined;
+    const afterTimestamp = latestRecovery?.confirmedAt ?? workflow.sessionDecision?.decidedAt;
+    const requestedTimestamp = this.now();
+    const decidedAt = afterTimestamp &&
+      Date.parse(requestedTimestamp) <= Date.parse(afterTimestamp)
+      ? new Date(Date.parse(afterTimestamp) + 1).toISOString()
+      : requestedTimestamp;
+    const auditSource = this.conversations.appendMessage(
+      conversation.conversationId,
+      {
+        role: "assistant",
+        content: "El fundador retomó el mismo paso confirmado desde la continuidad del proyecto.",
+        structuredResponse: {
+          actionTypes: [],
+          experienceKind: "decision",
+          recommendedSurface: "presence",
+          experience: {
+            kind: "decision",
+            title: "Paso retomado",
+            summary: "La evidencia anterior permanece preservada.",
+            phases: [],
+            choices: [{
+              label: "Empezar ahora",
+              description: "Reanudación confirmada desde la continuidad del proyecto.",
+              prompt: "Retomar el mismo paso confirmado.",
+              confirmation: {
+                kind: "beta-session-decision",
+                decision: "start-now",
+              },
+            }],
+            recommendedSurface: "presence",
+          },
+        },
+      },
+      this.conversations.getRevision(),
+    );
+    if (!auditSource.ok || !auditSource.message) {
+      throw new ConversationTurnError(
+        "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+        "conversation",
+        conversation.conversationId,
+      );
+    }
+    const write = this.conversations.updateConversationMetadata(
+      conversation.conversationId,
+      {
+        betaWorkflow: {
+          ...workflow,
+          status: "started",
+          sessionDecision: {
+            kind: "start-now",
+            sourceMessageId: auditSource.message.messageId,
+            decidedAt,
+          },
+        },
+      },
+    );
+    const updated = this.conversations.getConversation(conversation.conversationId);
+    if (!write.ok || !updated || updated.betaWorkflow?.status !== "started") {
+      throw new ConversationTurnError(
+        "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+        "conversation",
+        conversation.conversationId,
+      );
+    }
+    return updated;
   }
 
   async sendChoice(

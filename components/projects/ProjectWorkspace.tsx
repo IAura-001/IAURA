@@ -22,6 +22,7 @@ import CreateProjectForm from "./CreateProjectForm";
 import LegacyBrandingStudio from "./BrandingStudio";
 import LaunchStudio from "./LaunchStudio";
 import ProjectList from "./ProjectList";
+import ProjectContinuityCard from "./ProjectContinuityCard";
 
 const CreativeStudio = dynamic(
   () => import("@/components/creative/CreativeStudio"),
@@ -47,7 +48,7 @@ interface ProjectWorkspaceProps {
   initialProject?: IAuraProject | null;
   studioRequest?: CreativeStudioRequest;
   onProjectSelected?: (project: IAuraProject | null) => void;
-  onContinueWithAura?: () => void;
+  onContinueWithAura?: (targetMessageId?: string) => void;
   onOpenIntelligence?: () => void;
 }
 
@@ -381,10 +382,15 @@ export default function ProjectWorkspace({
             </div>
           </div>
 
+          <ProjectContinuityCard
+            projectId={activeProject.id}
+            onOpenConversation={onContinueWithAura}
+          />
+
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={onContinueWithAura}
+              onClick={() => onContinueWithAura?.()}
               disabled={!onContinueWithAura}
               className="min-h-[116px] touch-manipulation rounded-[22px] border border-violet-300/20 bg-violet-500/[0.08] p-5 text-left transition hover:bg-violet-500/[0.13] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transform-none motion-reduce:transition-none"
             >

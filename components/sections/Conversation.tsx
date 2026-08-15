@@ -45,6 +45,8 @@ interface ConversationProps {
   onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
   onOpenSurface?: (surface: AuraExperienceSurface) => void;
   isBusy?: boolean;
+  navigationTargetMessageId?: string;
+  navigationRequestId?: number;
 }
 
 interface AnimatedMessageProps {
@@ -100,6 +102,7 @@ const AnimatedMessage = memo(
 
     return (
       <article
+        data-message-id={message.id}
         className={[
           "aura-message relative overflow-hidden rounded-2xl border p-5",
           animate ? "animate-[message-enter_500ms_ease-out]" : "",
@@ -290,6 +293,8 @@ export function Conversation({
   onChoose,
   onOpenSurface,
   isBusy = false,
+  navigationTargetMessageId,
+  navigationRequestId = 0,
 }: ConversationProps) {
   const { t } = useI18n();
   const branding = project?.branding;
@@ -340,8 +345,24 @@ export function Conversation({
     latestMessageIdRef.current = latestMessageId;
   }, [latestMessageId]);
 
+  useLayoutEffect(() => {
+    if (!navigationTargetMessageId || !contentRef.current) return;
+    const target = Array.from(
+      contentRef.current.querySelectorAll<HTMLElement>("[data-message-id]"),
+    ).find((element) => element.dataset.messageId === navigationTargetMessageId);
+    if (!target) return;
+    initialPositionReadyRef.current = true;
+    autoFollowRef.current = false;
+    setHasUnseenNewContent(false);
+    target.scrollIntoView?.({ behavior: "auto", block: "center" });
+  }, [navigationRequestId, navigationTargetMessageId, setHasUnseenNewContent]);
+
   useEffect(() => {
-    if (!latestMessageId || initialPositionReadyRef.current) return;
+    if (
+      !latestMessageId ||
+      initialPositionReadyRef.current ||
+      navigationTargetMessageId
+    ) return;
 
     const requestedConversationKey = conversationKey;
     initialPositionFrameRef.current = window.requestAnimationFrame(() => {
@@ -385,7 +406,7 @@ export function Conversation({
       }
       initialPositionScrollRef.current = false;
     };
-  }, [conversationKey, latestMessageId, setHasUnseenNewContent]);
+  }, [conversationKey, latestMessageId, navigationTargetMessageId, setHasUnseenNewContent]);
 
   useEffect(() => {
     const handleScroll = () => {

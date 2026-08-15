@@ -252,6 +252,44 @@ describe("project conversation hydration", () => {
       .toMatchObject({ betaNextStepConfirmed: true, betaSessionDecision: "continue-later" });
   });
 
+  it("retains active ready-to-start decisions through hydration until one is confirmed", () => {
+    const conversations = new LocalConversationRepository();
+    const conversation = conversations.createConversation({ projectId: "ready-project" })
+      .conversation!;
+    conversations.appendMessage(conversation.conversationId, {
+      messageId: "ready-decision", role: "assistant", content: "Choose when to start.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "presence",
+        experience: {
+          kind: "decision", title: "Ready", summary: "Choose", phases: [],
+          choices: [
+            { label: "Empezar ahora", description: "Start", prompt: "Start", confirmation: {
+              kind: "beta-session-decision", decision: "start-now",
+            } },
+            { label: "Continuar después", description: "Later", prompt: "Later", confirmation: {
+              kind: "beta-session-decision", decision: "continue-later",
+            } },
+          ], recommendedSurface: "presence",
+        },
+      },
+    });
+    conversations.updateConversationMetadata(conversation.conversationId, {
+      betaWorkflow: {
+        version: 1, status: "ready-to-start",
+        confirmedContext: { goal: "G", blocker: "B", summary: "S", sourceMessageId: "context", confirmedAt: "2026-08-14T10:00:00Z" },
+        confirmedOutcome: { outcome: "O", doneWhen: "D", sourceMessageId: "outcome", confirmedAt: "2026-08-14T10:01:00Z" },
+        confirmedNextStep: { action: "Run tests", whyNow: "Now", result: "R", doneWhen: "D", sourceMessageId: "step", confirmedAt: "2026-08-14T10:02:00Z" },
+      },
+    });
+
+    const hydrated = loadVisibleConversation(
+      new LocalConversationRepository(), "ready-project",
+    );
+    expect(hydrated[0].experience?.choices.map((choice) => choice.label))
+      .toEqual(["Empezar ahora", "Continuar después"]);
+    expect(hydrated[0]).not.toHaveProperty("betaSessionDecisionConfirmed");
+  });
+
   it("hydrates project-scoped provisional and verified execution state", () => {
     const conversations = new LocalConversationRepository();
     const conversation = conversations.createConversation({ projectId: "iaura" }).conversation!;
