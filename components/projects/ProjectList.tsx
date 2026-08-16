@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { projectEngine } from "@/core/project/ProjectEngine";
 import type { IAuraProject } from "@/types/project";
@@ -32,20 +32,30 @@ export default function ProjectList({
   const [isReady, setIsReady] = useState(false);
   const appliedFallbackSignatureRef = useRef<string | null>(null);
   const emittedProjectSignatureRef = useRef<string | null>(null);
+  const readyRef = useRef(false);
+  const fallbackProjectRef = useRef(fallbackProject);
+  const onProjectSelectedRef = useRef(onProjectSelected);
+  const onReadyRef = useRef(onReady);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      let currentProject = projectEngine.getCurrentProject();
+    fallbackProjectRef.current = fallbackProject;
+    onProjectSelectedRef.current = onProjectSelected;
+    onReadyRef.current = onReady;
+  }, [fallbackProject, onProjectSelected, onReady]);
 
-      const fallbackSignature = fallbackProject
-        ? projectSnapshotSignature(fallbackProject)
+  const synchronizeFromRepository = useCallback(() => {
+      let currentProject = projectEngine.getCurrentProject();
+      const currentFallback = fallbackProjectRef.current;
+
+      const fallbackSignature = currentFallback
+        ? projectSnapshotSignature(currentFallback)
         : null;
 
       if (
-        fallbackProject &&
+        currentFallback &&
         fallbackSignature !== appliedFallbackSignatureRef.current
       ) {
-        const storedFallback = projectEngine.getProject(fallbackProject.id);
+        const storedFallback = projectEngine.getProject(currentFallback.id);
         appliedFallbackSignatureRef.current = fallbackSignature;
         if (storedFallback) {
           projectEngine.setCurrentProject(storedFallback);
@@ -53,22 +63,44 @@ export default function ProjectList({
         }
       }
 
-      setProjects(projectEngine.getProjects());
-      setActiveProjectId(currentProject?.id ?? null);
-      setIsReady(true);
-      onReady?.();
+      const nextProjects = projectEngine.getProjects();
+      const nextProjectsSignature = JSON.stringify(nextProjects);
+      setProjects((existing) =>
+        JSON.stringify(existing) === nextProjectsSignature
+          ? existing
+          : nextProjects,
+      );
+      const nextActiveProjectId = currentProject?.id ?? null;
+      setActiveProjectId((existing) =>
+        existing === nextActiveProjectId ? existing : nextActiveProjectId,
+      );
+      if (!readyRef.current) {
+        readyRef.current = true;
+        setIsReady(true);
+        onReadyRef.current?.();
+      }
 
       const currentSignature = currentProject
         ? projectSnapshotSignature(currentProject)
         : null;
       if (currentProject && currentSignature !== emittedProjectSignatureRef.current) {
         emittedProjectSignatureRef.current = currentSignature;
-        onProjectSelected(currentProject);
+        onProjectSelectedRef.current(currentProject);
       }
-    }, 0);
+  }, []);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [fallbackProject, refreshKey, onProjectSelected, onReady]);
+  useEffect(() => {
+    let active = true;
+    const synchronizeIfMounted = () => {
+      if (active) synchronizeFromRepository();
+    };
+    const unsubscribe = projectEngine.subscribe(synchronizeIfMounted);
+    queueMicrotask(synchronizeIfMounted);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [refreshKey, synchronizeFromRepository]);
 
   function handleSelectProject(project: IAuraProject) {
     projectEngine.setCurrentProject(project);

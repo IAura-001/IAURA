@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IAuraProject } from "@/types/project";
@@ -6,6 +6,7 @@ import type { IAuraProject } from "@/types/project";
 const engineState = vi.hoisted(() => ({
   projects: new Map<string, IAuraProject>(),
   current: null as IAuraProject | null,
+  listeners: new Set<() => void>(),
 }));
 
 const projectEngineMock = vi.hoisted(() => ({
@@ -15,6 +16,10 @@ const projectEngineMock = vi.hoisted(() => ({
   setCurrentProject: vi.fn((project: IAuraProject) => {
     engineState.projects.set(project.id, project);
     engineState.current = project;
+  }),
+  subscribe: vi.fn((listener: () => void) => {
+    engineState.listeners.add(listener);
+    return () => engineState.listeners.delete(listener);
   }),
 }));
 
@@ -47,6 +52,7 @@ describe("ProjectList fallback synchronization", () => {
   beforeEach(() => {
     engineState.projects.clear();
     engineState.current = null;
+    engineState.listeners.clear();
     vi.clearAllMocks();
   });
 
@@ -83,7 +89,7 @@ describe("ProjectList fallback synchronization", () => {
     );
 
     await waitFor(() => {
-      expect(onReady).toHaveBeenCalledTimes(2);
+      expect(onReady).toHaveBeenCalledTimes(1);
       expect(engineState.current?.id).toBe("project-a");
       expect(
         screen.getByRole("button", { name: /Project A/i }),
@@ -94,5 +100,48 @@ describe("ProjectList fallback synchronization", () => {
     expect(projectEngineMock.setCurrentProject).not.toHaveBeenCalledWith(projectB);
     expect(onProjectSelected).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: /Project B/i })).not.toBeInTheDocument();
+  });
+
+  it("stays stable with changing callback identities and updates only on repository notification", async () => {
+    const projectA = project("project-a", "Project A");
+    const projectB = project("project-b", "Project B");
+    engineState.projects.set(projectA.id, projectA);
+    engineState.current = projectA;
+
+    const { rerender } = render(
+      <ProjectList
+        refreshKey={0}
+        fallbackProject={projectA}
+        onProjectSelected={vi.fn()}
+        onReady={vi.fn()}
+      />,
+    );
+
+    await screen.findByRole("button", { name: /Project A/i });
+    const initialReadCount = projectEngineMock.getProjects.mock.calls.length;
+
+    for (let index = 0; index < 5; index += 1) {
+      rerender(
+        <ProjectList
+          refreshKey={0}
+          fallbackProject={{ ...projectA }}
+          onProjectSelected={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+    }
+
+    expect(projectEngineMock.getProjects).toHaveBeenCalledTimes(initialReadCount);
+    expect(projectEngineMock.setCurrentProject).toHaveBeenCalledTimes(1);
+
+    engineState.projects.set(projectB.id, projectB);
+    for (const listener of engineState.listeners) listener();
+
+    expect(await screen.findByRole("button", { name: /Project B/i })).toBeInTheDocument();
+    expect(projectEngineMock.getProjects).toHaveBeenCalledTimes(initialReadCount + 1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Project B/i }));
+    expect(projectEngineMock.setCurrentProject).toHaveBeenLastCalledWith(projectB);
+    expect(screen.getByRole("button", { name: /Project B/i })).toHaveAttribute("aria-pressed", "true");
   });
 });

@@ -158,6 +158,10 @@ export class ProjectEngine {
     return this.repository.getProject(projectId);
   }
 
+  subscribe(listener: () => void): () => void {
+    return this.repository.subscribe(listener);
+  }
+
   findEquivalentProject(name: string): IAuraProject | null {
     return this.repository.findEquivalentProject(name);
   }
