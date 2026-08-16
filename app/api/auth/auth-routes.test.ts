@@ -56,6 +56,28 @@ describe("Supabase Auth route boundaries", () => {
     expect(response.headers.get("location")).toBe("https://vaeora.test/iaura");
   });
 
+  it("keeps a real signup error in the calm failure flow", async () => {
+    auth.signUp.mockResolvedValue({ data: { session: null, user: null }, error: new Error("provider detail") });
+    const response = await signup(formRequest("/api/auth/signup", {
+      email: "new@example.com", password: "long-password", next: "/iaura",
+    }));
+    expect(response.headers.get("location")).toContain("/signup?error=signup");
+    expect(response.headers.get("location")).not.toContain("provider");
+  });
+
+  it("shows confirmation-required signup without consuming claim context", async () => {
+    auth.signUp.mockResolvedValue({ data: { session: null, user: { id: "new-user" } }, error: null });
+    const request = formRequest("/api/auth/signup", {
+      email: "new@example.com", password: "long-password", next: "/iaura?view=projects",
+    });
+    request.headers.set("cookie", "iaura_claim_context=preserve-me");
+    const response = await signup(request);
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://vaeora.test/signup?confirmation=required&next=%2Fiaura%3Fview%3Dprojects");
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
   it("rejects malformed credentials before calling Supabase", async () => {
     const response = await signup(formRequest("/api/auth/signup", {
       email: "invalid", password: "short", next: "/iaura",
