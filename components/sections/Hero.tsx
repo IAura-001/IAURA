@@ -16,7 +16,7 @@ export default function Hero({
       </p>
 
       <h2 className="text-3xl font-medium leading-[1.08] tracking-[-0.035em] text-white sm:text-4xl">
-        {t("hero.greeting", { name })}
+        {name ? t("hero.greeting", { name }) : "Hola."}
 
         <span className="mt-2 block bg-gradient-to-r from-violet-300 via-violet-200 to-indigo-300 bg-clip-text text-transparent">
           {t("hero.identity")}

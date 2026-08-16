@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import HomePage from "@/components/pages/HomePage";
+import AuthenticatedHomePage from "@/components/pages/AuthenticatedHomePage";
 import type {
   WorkspaceEntryIntent,
   WorkspaceView,
@@ -48,7 +48,7 @@ export default async function IauraPage({ searchParams }: IauraPageProps) {
     : undefined;
 
   return (
-    <HomePage
+    <AuthenticatedHomePage
       initialView={initialView}
       entryIntent={entryIntent}
     />

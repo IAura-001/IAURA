@@ -67,11 +67,13 @@ import WelcomeOverlay from "@/components/vaeora/WelcomeOverlay";
 interface HomePageProps {
   initialView?: WorkspaceView;
   entryIntent?: WorkspaceEntryIntent;
+  authenticatedDisplayName?: string;
 }
 
 export default function Home({
   initialView = "presence",
   entryIntent,
+  authenticatedDisplayName = "",
 }: HomePageProps) {
   const {
     speak,
@@ -308,8 +310,10 @@ export default function Home({
     setActiveWorkspaceView("presence");
   }, [messages]);
 
-  const userContext =
-    buildUserContext(memory);
+  const userContext = buildUserContext({
+    ...memory,
+    userName: authenticatedDisplayName,
+  });
 
   const visibleMessages = useMemo(
     () => visibleConversationMessages(messages, visibleStartIndex),
@@ -712,7 +716,7 @@ export default function Home({
       <>
         {!memory.hasCompletedOnboarding && (
           <WelcomeOverlay
-            userName={memory.userName}
+            userName={authenticatedDisplayName}
             onContinue={
               handleWelcomeContinue
             }
@@ -721,7 +725,7 @@ export default function Home({
 
         <VaeoraWorkspaceShell
           locale={memory.preferredLocale}
-          userName={memory.userName}
+          userName={authenticatedDisplayName}
           initialView={initialView}
           activeView={
             activeWorkspaceView
@@ -734,9 +738,7 @@ export default function Home({
               <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(420px,1.18fr)]">
                 <section className="order-2 min-w-0 rounded-[30px] border border-white/[0.07] bg-[#09090f] p-5 sm:p-7 xl:order-1">
                   <Hero
-                    name={
-                      memory.userName
-                    }
+                    name={authenticatedDisplayName}
                   />
 
                   <AuraStartingPoints
