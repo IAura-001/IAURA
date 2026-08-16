@@ -1,0 +1,57 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AuthenticatedProjectRepository } from "../AuthenticatedProjectRepository";
+import type { IAuraProject } from "../types";
+
+const project = (id: string, name: string): IAuraProject => ({ id, name, description: "", goal: "", createdAt: "2026-08-16T00:00:00.000Z", updatedAt: "2026-08-16T00:00:00.000Z", status: "planning", kind: "general", studios: { branding: false, website: false, app: false, marketing: false, documents: false } });
+
+describe("AuthenticatedProjectRepository ownership scoping", () => {
+  beforeEach(() => { vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 })); });
+
+  it("replaces all visible state when the authenticated account changes", () => {
+    const repository = new AuthenticatedProjectRepository();
+    repository.configure("user-a", [project("a", "A")]);
+    expect(repository.getProjects().map((item) => item.name)).toEqual(["A"]);
+    repository.configure("user-b", [project("b", "B")]);
+    expect(repository.getProjects().map((item) => item.name)).toEqual(["B"]);
+    expect(repository.getProject("a")).toBeNull();
+  });
+
+  it("restores the same user's server snapshot in a separate context", () => {
+    const contextOne = new AuthenticatedProjectRepository();
+    const contextTwo = new AuthenticatedProjectRepository();
+    const remote = [project("same", "Remote")];
+    contextOne.configure("user-a", remote);
+    contextTwo.configure("user-a", remote);
+    expect(contextTwo.getProjects()).toEqual(contextOne.getProjects());
+  });
+
+  it("persists mutations without sending an owner UUID", async () => {
+    const repository = new AuthenticatedProjectRepository();
+    repository.configure("user-a", []);
+    repository.createProject(project("new", "New"));
+    await repository.flush();
+    expect(fetch).toHaveBeenCalledWith("/api/projects", expect.objectContaining({ method: "POST", body: expect.not.stringContaining("user-a") }));
+  });
+
+  it("hydrates and selects an unchanged project without issuing a PUT", async () => {
+    const repository = new AuthenticatedProjectRepository();
+    const initial = project("existing", "Existing");
+    repository.configure("user-a", [initial]);
+    repository.setActiveProject(initial);
+    repository.setActiveProject(initial);
+    await repository.flush();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("issues one PUT for one real mutation and does not recurse", async () => {
+    const repository = new AuthenticatedProjectRepository();
+    const initial = project("existing", "Existing");
+    repository.configure("user-a", [initial]);
+    repository.updateProject({ ...initial, name: "Changed", updatedAt: "2026-08-16T00:01:00.000Z" });
+    await repository.flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith("/api/projects/existing", expect.objectContaining({ method: "PUT" }));
+    await Promise.resolve();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});

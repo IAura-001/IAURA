@@ -139,7 +139,7 @@ function normalizeStudios(value: unknown): ProjectStudios {
   };
 }
 
-function normalizeProject(value: unknown): IAuraProject | null {
+export function normalizeProject(value: unknown): IAuraProject | null {
   if (!isRecord(value)) return null;
 
   const id = stringValue(value.id).trim();

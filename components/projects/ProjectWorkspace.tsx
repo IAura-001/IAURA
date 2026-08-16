@@ -23,6 +23,7 @@ import LegacyBrandingStudio from "./BrandingStudio";
 import LaunchStudio from "./LaunchStudio";
 import ProjectList from "./ProjectList";
 import ProjectContinuityCard from "./ProjectContinuityCard";
+import FounderProjectImport from "./FounderProjectImport";
 
 const CreativeStudio = dynamic(
   () => import("@/components/creative/CreativeStudio"),
@@ -330,6 +331,7 @@ export default function ProjectWorkspace({
 
   return (
     <section className="space-y-6">
+      <FounderProjectImport />
       {(showCreateForm || (projectListReady && !activeProject)) && (
         <CreateProjectForm onProjectCreated={refreshProjects} />
       )}

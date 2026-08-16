@@ -4,6 +4,7 @@ import {
   type ProjectRepository,
   type ProjectRepositorySnapshot,
 } from "./ProjectRepository";
+import { authenticatedProjectRepository } from "./AuthenticatedProjectRepository";
 import type { StateOperationResult } from "@/core/storage/StateReliability";
 import type {
   BrandingStudioMemory,
@@ -258,4 +259,8 @@ export class ProjectEngine {
   }
 }
 
-export const projectEngine = new ProjectEngine(projectRepository);
+export const projectEngine = new ProjectEngine(
+  process.env.NODE_ENV === "test"
+    ? projectRepository
+    : authenticatedProjectRepository,
+);

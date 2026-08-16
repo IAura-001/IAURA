@@ -50,11 +50,12 @@ describe("ProjectList fallback synchronization", () => {
     vi.clearAllMocks();
   });
 
-  it("applies a new Home fallback when the mounted list moves from A to B", async () => {
+  it("selects only remote projects and never imports a missing memory fallback", async () => {
     const projectA = project("project-a", "Project A");
     const projectB = project("project-b", "Project B");
     const onProjectSelected = vi.fn();
     const onReady = vi.fn();
+    engineState.projects.set(projectA.id, projectA);
     const { rerender } = render(
       <ProjectList
         refreshKey={0}
@@ -82,17 +83,16 @@ describe("ProjectList fallback synchronization", () => {
     );
 
     await waitFor(() => {
-      expect(onProjectSelected).toHaveBeenLastCalledWith(projectB);
-      expect(engineState.current?.id).toBe("project-b");
-      expect(
-        screen.getByRole("button", { name: /Project B/i }),
-      ).toHaveAttribute("aria-pressed", "true");
+      expect(onReady).toHaveBeenCalledTimes(2);
+      expect(engineState.current?.id).toBe("project-a");
       expect(
         screen.getByRole("button", { name: /Project A/i }),
-      ).toHaveAttribute("aria-pressed", "false");
+      ).toHaveAttribute("aria-pressed", "true");
     });
 
     expect(projectEngineMock.setCurrentProject).toHaveBeenCalledWith(projectA);
-    expect(projectEngineMock.setCurrentProject).toHaveBeenCalledWith(projectB);
+    expect(projectEngineMock.setCurrentProject).not.toHaveBeenCalledWith(projectB);
+    expect(onProjectSelected).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /Project B/i })).not.toBeInTheDocument();
   });
 });

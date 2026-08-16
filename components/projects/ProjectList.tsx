@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 
 import { projectEngine } from "@/core/project/ProjectEngine";
-import { mergeProjectSnapshots } from "@/core/project/mergeProjectSnapshots";
 import type { IAuraProject } from "@/types/project";
 
 interface ProjectListProps {
@@ -32,6 +31,7 @@ export default function ProjectList({
     useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const appliedFallbackSignatureRef = useRef<string | null>(null);
+  const emittedProjectSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -46,18 +46,11 @@ export default function ProjectList({
         fallbackSignature !== appliedFallbackSignatureRef.current
       ) {
         const storedFallback = projectEngine.getProject(fallbackProject.id);
-        const synchronizedFallback = !storedFallback
-          ? fallbackProject
-          : storedFallback === fallbackProject
-            ? storedFallback
-            : mergeProjectSnapshots(storedFallback, fallbackProject);
-
-        projectEngine.setCurrentProject(synchronizedFallback);
-        appliedFallbackSignatureRef.current = projectSnapshotSignature(
-          synchronizedFallback,
-        );
-
-        currentProject = synchronizedFallback;
+        appliedFallbackSignatureRef.current = fallbackSignature;
+        if (storedFallback) {
+          projectEngine.setCurrentProject(storedFallback);
+          currentProject = storedFallback;
+        }
       }
 
       setProjects(projectEngine.getProjects());
@@ -65,7 +58,11 @@ export default function ProjectList({
       setIsReady(true);
       onReady?.();
 
-      if (currentProject) {
+      const currentSignature = currentProject
+        ? projectSnapshotSignature(currentProject)
+        : null;
+      if (currentProject && currentSignature !== emittedProjectSignatureRef.current) {
+        emittedProjectSignatureRef.current = currentSignature;
         onProjectSelected(currentProject);
       }
     }, 0);

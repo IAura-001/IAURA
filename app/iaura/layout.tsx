@@ -1,13 +1,19 @@
 import { VoiceProvider } from "@/core/context/VoiceContext";
+import AuthenticatedProjectBoundary from "@/components/projects/AuthenticatedProjectBoundary";
+import { getAuthenticatedUser } from "@/core/auth/session";
+import { listAuthenticatedProjects } from "@/core/project/server";
 
 import styles from "./layout.module.css";
 
-export default function IauraLayout({
+export default async function IauraLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getAuthenticatedUser();
+  const projects = user ? await listAuthenticatedProjects(user.id) : [];
   return (
+    <AuthenticatedProjectBoundary userId={user?.id ?? "unauthenticated"} projects={projects}>
     <VoiceProvider>
       <form action="/api/auth/logout" method="post" className={styles.logoutForm}>
         <button type="submit" className={styles.logoutControl}>
@@ -18,5 +24,6 @@ export default function IauraLayout({
       </form>
       {children}
     </VoiceProvider>
+    </AuthenticatedProjectBoundary>
   );
 }
