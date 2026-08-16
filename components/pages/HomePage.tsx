@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import {
   useCallback,
   useEffect,
@@ -17,8 +16,6 @@ import type { ChatMessage } from "@/types/chat";
 import type { IAuraProject } from "@/types/project";
 
 import { theme } from "@/config/theme";
-import { MISSIONS } from "@/constants/missions";
-
 import {
   formatActionReceipt,
   type AuraExperienceChoice,
@@ -31,24 +28,17 @@ import {
 import { useVoiceContext } from "@/core/context/VoiceContext";
 import {
   I18nProvider,
-  useI18n,
 } from "@/core/i18n/I18nContext";
 import {
   translate,
-  type MessageKey,
 } from "@/core/i18n/messages";
 import { performanceMonitor } from "@/core/performance";
 
 import { useAuraActions } from "@/hooks/useAuraActions";
 import { useMemory } from "@/hooks/useMemory";
 
-import { generateAIResponse } from "@/services/ai";
-
 import { buildUserContext } from "@/utils/context";
 import { cleanAIText } from "@/utils/formatText";
-import { generatePriorities } from "@/utils/intelligence";
-import { buildPrompt } from "@/utils/prompt";
-import { generateRecommendation } from "@/utils/recommendations";
 
 import Workspace from "@/components/pages/Workspace";
 import {
@@ -62,57 +52,17 @@ import {
   visibleConversationMessages,
 } from "@/components/pages/conversationWindowing";
 import { ActionCenter } from "@/components/sections/ActionCenter";
-import { AIActionBar } from "@/components/sections/AIActionBar";
 import AssistantCard from "@/components/sections/AssistantCard";
 import AuraStartingPoints from "@/components/sections/AuraStartingPoints";
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
 import Hero from "@/components/sections/Hero";
+import PersonalIntelligenceCenter from "@/components/sections/PersonalIntelligenceCenter";
 import VaeoraWorkspaceShell, {
   type WorkspaceEntryIntent,
   type WorkspaceView,
 } from "@/components/vaeora/VaeoraWorkspaceShell";
 import WelcomeOverlay from "@/components/vaeora/WelcomeOverlay";
-
-function LocalizedLoading({
-  messageKey,
-}: {
-  messageKey: MessageKey;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-500">
-      {t(messageKey)}
-    </div>
-  );
-}
-
-const DashboardPanel = dynamic(
-  () =>
-    import(
-      "@/components/sections/DashboardPanel"
-    ),
-  {
-    loading: () => (
-      <LocalizedLoading messageKey="loading.dashboard" />
-    ),
-  },
-);
-
-const AIAnalysisPanel = dynamic(
-  () =>
-    import(
-      "@/components/sections/AIAnalysisPanel"
-    ).then(
-      (module) => module.AIAnalysisPanel,
-    ),
-  {
-    loading: () => (
-      <LocalizedLoading messageKey="loading.analysis" />
-    ),
-  },
-);
 
 interface HomePageProps {
   initialView?: WorkspaceView;
@@ -139,8 +89,6 @@ export default function Home({
     memory,
     isLoaded,
     updateMemory,
-    addExperience,
-    markMissionComplete,
     resetMemory,
     replaceMemory,
   } = useMemory();
@@ -155,10 +103,6 @@ export default function Home({
     replaceMemory,
   });
 
-  const [showAnalysis, setShowAnalysis] =
-    useState(false);
-  const [analysis, setAnalysis] =
-    useState("");
   const [
     activeWorkspaceView,
     setActiveWorkspaceView,
@@ -167,8 +111,6 @@ export default function Home({
     creativeStudioRequest,
     setCreativeStudioRequest,
   ] = useState<CreativeStudioRequest>();
-  const [isAnalyzing, setIsAnalyzing] =
-    useState(false);
   const [messages, setMessages] =
     useState<ChatMessage[]>([]);
   const [visibleStartIndex, setVisibleStartIndex] =
@@ -366,96 +308,6 @@ export default function Home({
     setActiveWorkspaceView("presence");
   }, [messages]);
 
-  const completedMissionIds =
-    memory.completedMissionIds ?? [];
-
-  const completedMissions =
-    MISSIONS.filter((mission) =>
-      completedMissionIds.includes(
-        mission.id,
-      ),
-    );
-
-  const pendingMissions =
-    MISSIONS.filter(
-      (mission) =>
-        !completedMissionIds.includes(
-          mission.id,
-        ),
-    );
-
-  const goals = memory.goals;
-  const habits = memory.habits;
-
-  function handleAddGoal(goal: string) {
-    updateMemory({
-      goals: [...goals, goal],
-    });
-  }
-
-  function handleRemoveGoal(
-    goalIndex: number,
-  ) {
-    updateMemory({
-      goals: goals.filter(
-        (_, index) =>
-          index !== goalIndex,
-      ),
-    });
-  }
-
-  function handleAddHabit(
-    habit: string,
-  ) {
-    updateMemory({
-      habits: [...habits, habit],
-    });
-  }
-
-  function handleRemoveHabit(
-    habitIndex: number,
-  ) {
-    updateMemory({
-      habits: habits.filter(
-        (_, index) =>
-          index !== habitIndex,
-      ),
-    });
-  }
-
-  const scoredPriorities =
-    generatePriorities(
-      memory.goals,
-      memory.habits,
-    );
-
-  const intelligencePriorities =
-    scoredPriorities.length > 0
-      ? scoredPriorities.slice(0, 3)
-      : [
-          {
-            title: translate(
-              memory.preferredLocale,
-              "priority.firstGoal",
-            ),
-            score: 100,
-          },
-          {
-            title: translate(
-              memory.preferredLocale,
-              "priority.dailyHabit",
-            ),
-            score: 90,
-          },
-          {
-            title: translate(
-              memory.preferredLocale,
-              "priority.nextMission",
-            ),
-            score: 80,
-          },
-        ];
-
   const userContext =
     buildUserContext(memory);
 
@@ -466,44 +318,6 @@ export default function Home({
   const handleLoadOlderMessages = useCallback(() => {
     setVisibleStartIndex((current) => loadOlderConversationStart(current));
   }, []);
-
-  const recommendation =
-    generateRecommendation(
-      userContext,
-      memory.preferredLocale,
-    );
-
-  const prompt = buildPrompt();
-
-  const handleAnalyze = () => {
-    setIsAnalyzing(true);
-    setShowAnalysis(false);
-
-    window.setTimeout(async () => {
-      try {
-        const newAnalysis =
-          await generateAIResponse(
-            prompt,
-            userContext,
-          );
-
-        setAnalysis(newAnalysis);
-        setShowAnalysis(true);
-      } catch (error) {
-        console.error(
-          "IAURA analysis generation failed:",
-          error,
-        );
-
-        setAnalysis(
-          "IAURA no pudo generar el análisis.",
-        );
-        setShowAnalysis(true);
-      } finally {
-        setIsAnalyzing(false);
-      }
-    }, 700);
-  };
 
   const stopAuraLive =
     useCallback(() => {
@@ -1043,114 +857,10 @@ export default function Home({
             </section>
           }
           intelligence={
-            <div className="min-w-0 space-y-6">
-              <section className="min-w-0 rounded-[28px] border border-white/[0.07] bg-[#09090f] p-5 sm:p-6">
-                <AIActionBar
-                  onAnalyze={
-                    handleAnalyze
-                  }
-                  isLoading={
-                    isAnalyzing
-                  }
-                />
-
-                {showAnalysis && (
-                  <div className="mt-5">
-                    <AIAnalysisPanel
-                      analysis={
-                        analysis
-                      }
-                    />
-                  </div>
-                )}
-              </section>
-
-              <section className="grid min-w-0 gap-5 [&>*]:min-w-0 md:grid-cols-2">
-                <DashboardPanel
-                  name={
-                    memory.userName
-                  }
-                  preferredLocale={
-                    memory.preferredLocale
-                  }
-                  goals={goals}
-                  onSaveName={(
-                    name,
-                  ) =>
-                    updateMemory({
-                      userName: name,
-                    })
-                  }
-                  onLanguageChange={(
-                    preferredLocale,
-                  ) =>
-                    updateMemory({
-                      preferredLocale,
-                    })
-                  }
-                  onAddGoal={
-                    handleAddGoal
-                  }
-                  onRemoveGoal={
-                    handleRemoveGoal
-                  }
-                  habits={habits}
-                  onAddHabit={
-                    handleAddHabit
-                  }
-                  onRemoveHabit={
-                    handleRemoveHabit
-                  }
-                  priorities={
-                    intelligencePriorities
-                  }
-                  recommendation={
-                    recommendation
-                  }
-                  completedCount={
-                    completedMissions.length
-                  }
-                  totalMissions={
-                    MISSIONS.length
-                  }
-                  experience={
-                    memory.experience
-                  }
-                  onEarnXP={() =>
-                    addExperience(25)
-                  }
-                  onResetMemory={
-                    resetMemory
-                  }
-                  messageCount={
-                    messages.length
-                  }
-                  goalsCount={
-                    memory.goals
-                      .length
-                  }
-                  habitsCount={
-                    memory.habits
-                      .length
-                  }
-                  missions={
-                    pendingMissions
-                  }
-                  completedMissionIds={
-                    memory.completedMissionIds ??
-                    []
-                  }
-                  onMissionComplete={(
-                    missionId,
-                  ) =>
-                    markMissionComplete(
-                      missionId,
-                      25,
-                    )
-                  }
-                />
-              </section>
-            </div>
+            <PersonalIntelligenceCenter
+              requestedProjectId={activeProjectId}
+              onResetMemory={resetMemory}
+            />
           }
         />
       </>
