@@ -15,12 +15,26 @@ export class AuthenticatedProjectRepository implements ProjectRepository {
   private pending: Promise<void> = Promise.resolve();
   private lastResult: StateOperationResult = { ok: true, outcome: "unchanged", revision: 0 };
 
-  configure(userId: string, projects: IAuraProject[]): void {
+  configure(
+    userId: string,
+    projects: IAuraProject[],
+    activeProjectId: string | null = null,
+    persistInitialState = false,
+  ): void {
     if (this.userId === userId && this.revision > 0) return;
     this.userId = userId;
     this.projects = projects.map(normalizeProject).filter((value): value is IAuraProject => Boolean(value));
-    this.activeProjectId = null;
+    this.activeProjectId =
+      activeProjectId &&
+      this.projects.some((project) => project.id === activeProjectId)
+        ? activeProjectId
+        : null;
     this.revision += 1;
+
+    if (persistInitialState) {
+      this.queueActiveProjectId(this.activeProjectId);
+    }
+
     this.notify();
   }
 
@@ -51,6 +65,36 @@ export class AuthenticatedProjectRepository implements ProjectRepository {
     });
   }
 
+  private queueActiveProjectId(activeProjectId: string | null): void {
+    const scopedUser = this.userId;
+
+    this.pending = this.pending.catch(() => undefined).then(async () => {
+      if (!scopedUser || scopedUser !== this.userId) return;
+
+      const response = await fetch("/api/project-state", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ activeProjectId }),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Project state persistence failed (${response.status}).`,
+        );
+      }
+    }).catch(() => {
+      this.lastResult = {
+        ok: false,
+        outcome: "failed",
+        revision: this.revision,
+        code: "IAURA_STATE_PERSISTENCE_FAILED",
+      };
+      this.notify();
+    });
+  }
+
   private result(ok = true, outcome: StateOperationResult["outcome"] = "committed"): StateOperationResult {
     this.revision += ok ? 1 : 0;
     return (this.lastResult = { ok, outcome, revision: this.revision });
@@ -61,12 +105,18 @@ export class AuthenticatedProjectRepository implements ProjectRepository {
     if (!normalized || !this.userId) return { project, persisted: false, created: false, ...this.result(false, "failed") };
     const index = this.projects.findIndex((item) => item.id === normalized.id);
     if (index >= 0 && JSON.stringify(this.projects[index]) === JSON.stringify(normalized)) {
+      const activeChanged = this.activeProjectId !== normalized.id;
       this.activeProjectId = normalized.id;
+      if (activeChanged) {
+        this.queueActiveProjectId(normalized.id);
+        this.notify();
+      }
       return { project: clone(normalized), persisted: true, created: false, ...this.result(true, "unchanged") };
     }
     if (index >= 0) this.projects[index] = normalized; else this.projects.push(normalized);
     this.activeProjectId = normalized.id;
     this.queue(index >= 0 ? "PUT" : "POST", normalized, index >= 0 ? normalized.id : undefined);
+    this.queueActiveProjectId(normalized.id);
     this.notify();
     return { project: clone(normalized), persisted: true, created, ...this.result() };
   }
@@ -80,9 +130,33 @@ export class AuthenticatedProjectRepository implements ProjectRepository {
   updateProject(project: IAuraProject): ProjectWriteResult { return this.write(project, false); }
   setActiveProject(project: IAuraProject): ProjectWriteResult { const exists = this.projects.some((p) => p.id === project.id); return this.write(project, !exists); }
   setActiveProjectId(id: string): boolean { return this.setActiveProjectIdResult(id).ok; }
-  setActiveProjectIdResult(id: string): StateOperationResult { if (!this.projects.some((p) => p.id === id)) return this.result(false, "failed"); this.activeProjectId = id; this.notify(); return this.result(true, "unchanged"); }
+  setActiveProjectIdResult(id: string): StateOperationResult {
+    if (!this.projects.some((p) => p.id === id)) {
+      return this.result(false, "failed");
+    }
+
+    const changed = this.activeProjectId !== id;
+    this.activeProjectId = id;
+
+    if (changed) {
+      this.queueActiveProjectId(id);
+      this.notify();
+    }
+
+    return this.result(true, "unchanged");
+  }
   clearActiveProject(): boolean { return this.clearActiveProjectResult().ok; }
-  clearActiveProjectResult(): StateOperationResult { this.activeProjectId = null; this.notify(); return this.result(true, "unchanged"); }
+  clearActiveProjectResult(): StateOperationResult {
+    const changed = this.activeProjectId !== null;
+    this.activeProjectId = null;
+
+    if (changed) {
+      this.queueActiveProjectId(null);
+      this.notify();
+    }
+
+    return this.result(true, "unchanged");
+  }
   deleteProject(id: string): boolean { return this.deleteProjectResult(id).ok; }
   deleteProjectResult(id: string): StateOperationResult { const before = this.projects.length; this.projects = this.projects.filter((p) => p.id !== id); if (before === this.projects.length) return this.result(false, "failed"); if (this.activeProjectId === id) this.activeProjectId = null; this.queue("DELETE", undefined, id); this.notify(); return this.result(); }
   replaceSnapshot(snapshot: ProjectRepositorySnapshot): boolean { return this.replaceSnapshotResult(snapshot).ok; }

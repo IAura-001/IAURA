@@ -10,3 +10,30 @@ export async function listAuthenticatedProjects(userId: string): Promise<IAuraPr
   if (error) throw error;
   return (data ?? []).map((row) => normalizeProject(row.data)).filter((project): project is IAuraProject => Boolean(project));
 }
+
+
+export interface AuthenticatedProjectState {
+  exists: boolean;
+  activeProjectId: string | null;
+}
+
+export async function getAuthenticatedProjectState(
+  userId: string,
+): Promise<AuthenticatedProjectState> {
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("project_state")
+    .select("active_project_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    exists: Boolean(data),
+    activeProjectId: data?.active_project_id ?? null,
+  };
+}

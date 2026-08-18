@@ -1,0 +1,313 @@
+import type {
+  MigrationOutcome,
+  StateOperationResult,
+} from "@/core/storage/StateReliability";
+
+import {
+  LocalConversationRepository,
+  type AppendConversationMessageInput,
+  type Conversation,
+  type ConversationMessage,
+  type ConversationMessageWriteResult,
+  type ConversationMetadataUpdate,
+  type ConversationRepository,
+  type ConversationRepositorySnapshot,
+  type ConversationWriteResult,
+  type CreateConversationInput,
+  type WorkingHistoryOptions,
+} from "./ConversationRepository";
+
+type Listener = () => void;
+
+export class AuthenticatedConversationRepository
+  implements ConversationRepository
+{
+  private userId: string | null = null;
+
+  private readonly local = new LocalConversationRepository({
+    synchronize: false,
+  });
+
+  private pending: Promise<void> = Promise.resolve();
+
+  private persistenceFailure: StateOperationResult | null = null;
+
+  private listeners = new Set<Listener>();
+
+  configure(
+    userId: string,
+    remoteSnapshot: ConversationRepositorySnapshot | null,
+  ): void {
+    if (this.userId === userId) {
+      return;
+    }
+
+    this.userId = userId;
+    this.persistenceFailure = null;
+
+    if (remoteSnapshot) {
+      this.local.replaceSnapshotResult(remoteSnapshot);
+      this.notify();
+      return;
+    }
+
+    this.local.clearAllConversations();
+    this.notify();
+  }
+
+  reset(): void {
+    this.userId = null;
+    this.persistenceFailure = null;
+    this.notify();
+  }
+
+  async flush(): Promise<void> {
+    await this.pending;
+  }
+
+  private queueSnapshot(
+    snapshot: ConversationRepositorySnapshot,
+  ): void {
+    const scopedUser = this.userId;
+
+    if (!scopedUser) {
+      return;
+    }
+
+    this.pending = this.pending
+      .catch(() => undefined)
+      .then(async () => {
+        if (
+          !this.userId ||
+          this.userId !== scopedUser
+        ) {
+          return;
+        }
+
+        const response = await fetch("/api/conversations", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            snapshot,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Conversation persistence failed (${response.status}).`,
+          );
+        }
+
+        this.persistenceFailure = null;
+      })
+      .catch(() => {
+        this.persistenceFailure = {
+          ok: false,
+          outcome: "failed",
+          revision: this.local.getRevision(),
+          code: "IAURA_STATE_PERSISTENCE_FAILED",
+        };
+
+        this.notify();
+      });
+  }
+
+  private persistIfSuccessful(
+    result: StateOperationResult,
+  ): void {
+    if (!result.ok || !this.userId) {
+      return;
+    }
+
+    this.queueSnapshot(this.local.getSnapshot());
+  }
+
+  private persistWriteIfSuccessful(
+    result: ConversationWriteResult,
+  ): void {
+    if (!result.ok || !this.userId) {
+      return;
+    }
+
+    this.queueSnapshot(this.local.getSnapshot());
+  }
+
+  private persistMessageIfSuccessful(
+    result: ConversationMessageWriteResult,
+  ): void {
+    if (!result.ok || !this.userId) {
+      return;
+    }
+
+    this.queueSnapshot(this.local.getSnapshot());
+  }
+
+  getSnapshot(): ConversationRepositorySnapshot {
+    return this.local.getSnapshot();
+  }
+
+  listConversations(
+    options?: {
+      includeArchived?: boolean;
+    },
+  ): Conversation[] {
+    return this.local.listConversations(options);
+  }
+
+  getConversation(
+    conversationId: string,
+  ): Conversation | null {
+    return this.local.getConversation(conversationId);
+  }
+
+  getActiveConversation(
+    projectId?: string | null,
+  ): Conversation | null {
+    return this.local.getActiveConversation(projectId);
+  }
+
+  createConversation(
+    input?: CreateConversationInput,
+  ): ConversationWriteResult {
+    const result = this.local.createConversation(input);
+    this.persistWriteIfSuccessful(result);
+    return result;
+  }
+
+  setActiveConversation(
+    conversationId: string,
+  ): StateOperationResult {
+    const result =
+      this.local.setActiveConversation(conversationId);
+
+    this.persistIfSuccessful(result);
+
+    return result;
+  }
+
+  appendMessage(
+    conversationId: string,
+    input: AppendConversationMessageInput,
+    expectedRevision?: number,
+  ): ConversationMessageWriteResult {
+    const result = this.local.appendMessage(
+      conversationId,
+      input,
+      expectedRevision,
+    );
+
+    this.persistMessageIfSuccessful(result);
+
+    return result;
+  }
+
+  updateConversationMetadata(
+    conversationId: string,
+    update: ConversationMetadataUpdate,
+  ): ConversationWriteResult {
+    const result =
+      this.local.updateConversationMetadata(
+        conversationId,
+        update,
+      );
+
+    this.persistWriteIfSuccessful(result);
+
+    return result;
+  }
+
+  associateWithProject(
+    conversationId: string,
+    projectId: string | null,
+  ): ConversationWriteResult {
+    const result = this.local.associateWithProject(
+      conversationId,
+      projectId,
+    );
+
+    this.persistWriteIfSuccessful(result);
+
+    return result;
+  }
+
+  archiveConversation(
+    conversationId: string,
+  ): StateOperationResult {
+    const result =
+      this.local.archiveConversation(conversationId);
+
+    this.persistIfSuccessful(result);
+
+    return result;
+  }
+
+  deleteConversation(
+    conversationId: string,
+  ): StateOperationResult {
+    const result =
+      this.local.deleteConversation(conversationId);
+
+    this.persistIfSuccessful(result);
+
+    return result;
+  }
+
+  clearAllConversations(): StateOperationResult {
+    const result =
+      this.local.clearAllConversations();
+
+    this.persistIfSuccessful(result);
+
+    return result;
+  }
+
+  getWorkingHistory(
+    conversationId: string,
+    options?: WorkingHistoryOptions,
+  ): ConversationMessage[] {
+    return this.local.getWorkingHistory(
+      conversationId,
+      options,
+    );
+  }
+
+  getRevision(): number {
+    return this.local.getRevision();
+  }
+
+  getMigrationOutcome(): MigrationOutcome {
+    return this.local.getMigrationOutcome();
+  }
+
+  getLastOperationResult(): StateOperationResult {
+    return (
+      this.persistenceFailure ??
+      this.local.getLastOperationResult()
+    );
+  }
+
+  subscribe(
+    listener: Listener,
+  ): () => void {
+    this.listeners.add(listener);
+
+    const unsubscribeLocal =
+      this.local.subscribe(listener);
+
+    return () => {
+      this.listeners.delete(listener);
+      unsubscribeLocal();
+    };
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+}
+
+export const authenticatedConversationRepository =
+  new AuthenticatedConversationRepository();

@@ -32,6 +32,7 @@ import {
   type ConversationRepository,
   type BetaWorkflowMetadata,
 } from "./ConversationRepository";
+import { authenticatedConversationRepository } from "./AuthenticatedConversationRepository";
 import { deferredContinuityProvenance } from "./BetaContinuity";
 
 export type ConversationTurnErrorCode =
@@ -1229,4 +1230,9 @@ export class ConversationController {
 }
 
 export const conversationController =
-  new ConversationController();
+  new ConversationController({
+    conversations:
+      process.env.NODE_ENV === "test"
+        ? conversationRepository
+        : authenticatedConversationRepository,
+  });

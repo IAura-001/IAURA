@@ -23,8 +23,10 @@ import {
 } from "@/core/actions";
 import {
   conversationController,
-  conversationRepository,
 } from "@/core/conversation";
+import {
+  authenticatedConversationRepository as conversationRepository,
+} from "@/core/conversation/AuthenticatedConversationRepository";
 import { useVoiceContext } from "@/core/context/VoiceContext";
 import {
   I18nProvider,

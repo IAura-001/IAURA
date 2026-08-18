@@ -1657,6 +1657,12 @@ export class LocalConversationRepository implements ConversationRepository {
     for (const listener of this.listeners) listener();
   }
 
+  replaceSnapshotResult(
+    snapshot: ConversationRepositorySnapshot,
+  ): StateOperationResult {
+    return this.commit(snapshot, this.state.revision);
+  }
+
   getSnapshot(): ConversationRepositorySnapshot {
     return cloneSnapshot(this.state);
   }

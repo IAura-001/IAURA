@@ -124,6 +124,7 @@ export default function ProjectWorkspace({
 
   const handleProjectSelected = useCallback(
     (project: IAuraProject) => {
+      projectEngine.setCurrentProject(project);
       setActiveProject(project);
       setShowCreateForm(false);
       onProjectSelected?.(project);
