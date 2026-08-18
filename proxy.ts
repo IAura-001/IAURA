@@ -22,7 +22,15 @@ export async function proxy(request: NextRequest) {
   ) {
     return NextResponse.next();
   }
-
+if (
+  (
+    request.nextUrl.pathname === "/login" ||
+    request.nextUrl.pathname === "/api/auth/login"
+  ) &&
+  !isRequestAuthorized(request)
+) {
+  return NextResponse.next();
+}
   if (
     request.nextUrl.pathname.startsWith("/api/creative/") &&
     !hasValidAccessConfiguration()
