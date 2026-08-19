@@ -10,7 +10,9 @@ import { rewardXP } from "@/utils/xp";
 import { completeMission } from "@/utils/mission";
 import { DEFAULT_MEMORY } from "@/constants/memory";
 import { normalizeLocale } from "@/core/i18n/languages";
-import { memoryRepository } from "@/core/memory/MemoryRepository";
+import {
+  authenticatedMemoryRepository as memoryRepository,
+} from "@/core/memory/AuthenticatedMemoryRepository";
 import type { Memory } from "@/types/memory";
 
 function loadStoredMemory(): Memory {

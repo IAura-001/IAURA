@@ -2,12 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const auth = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
+  getUser: vi.fn().mockResolvedValue({
+    data: {
+      user: {
+        id: "test-user",
+        email: "test@example.com",
+      },
+    },
+    error: null,
+  }),
   signUp: vi.fn(),
   signOut: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createServerSupabaseClient: vi.fn(async () => ({ auth })),
+  createServerSupabaseClient: vi.fn(async () => ({ auth, from: membershipFrom })),
 }));
 
 import { POST as login } from "./login/route";
@@ -19,6 +28,39 @@ function formRequest(path: string, values: Record<string, string>) {
   for (const [key, value] of Object.entries(values)) body.set(key, value);
   return new Request(`https://vaeora.test${path}`, { method: "POST", body });
 }
+
+
+const membershipQuery = {
+  select: vi.fn(),
+  eq: vi.fn(),
+  limit: vi.fn(),
+  maybeSingle: vi.fn(),
+  single: vi.fn(),
+};
+
+membershipQuery.select.mockReturnValue(membershipQuery);
+membershipQuery.eq.mockReturnValue(membershipQuery);
+membershipQuery.limit.mockReturnValue(membershipQuery);
+
+membershipQuery.maybeSingle.mockResolvedValue({
+  data: {
+    role: "member",
+    status: "active",
+    claimed_at: "2026-08-18T00:00:00.000Z",
+  },
+  error: null,
+});
+
+membershipQuery.single.mockResolvedValue({
+  data: {
+    role: "member",
+    status: "active",
+    claimed_at: "2026-08-18T00:00:00.000Z",
+  },
+  error: null,
+});
+
+const membershipFrom = vi.fn().mockReturnValue(membershipQuery);
 
 describe("Supabase Auth route boundaries", () => {
   beforeEach(() => {
@@ -36,7 +78,7 @@ describe("Supabase Auth route boundaries", () => {
     }));
     expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: "user@example.com", password: "long-password" });
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("https://vaeora.test/iaura?view=projects");
+    expect(response.headers.get("location")).toBe("https://vaeora.test/access?next=%2Fiaura%3Fview%3Dprojects");
   });
 
   it("uses a generic login failure for wrong credentials", async () => {
@@ -53,7 +95,7 @@ describe("Supabase Auth route boundaries", () => {
       email: "new@example.com", password: "long-password", next: "https://evil.test",
     }));
     expect(auth.signUp).toHaveBeenCalledWith({ email: "new@example.com", password: "long-password" });
-    expect(response.headers.get("location")).toBe("https://vaeora.test/iaura");
+    expect(response.headers.get("location")).toBe("https://vaeora.test/access?next=%2Fiaura");
   });
 
   it("keeps a real signup error in the calm failure flow", async () => {

@@ -19,7 +19,7 @@ describe("automatic post-Auth invite claim", () => {
     const response = await completePostAuthClaim(new Request("https://vaeora.test/api/auth/login"), "/iaura");
     expect(mocks.claim).toHaveBeenCalledWith("a".repeat(32));
     expect(mocks.clear).toHaveBeenCalledOnce();
-    expect(response.headers.get("location")).toBe("https://vaeora.test/iaura");
+    expect(response.headers.get("location")).toBe("https://vaeora.test/access?next=%2Fiaura");
   });
 
   it("clears context without consuming capacity for an active member", async () => {
@@ -40,7 +40,7 @@ describe("automatic post-Auth invite claim", () => {
     mocks.read.mockReturnValue(null);
     mocks.has.mockReturnValue(false);
     const response = await completePostAuthClaim(new Request("https://vaeora.test/api/auth/login"), "/iaura?view=projects");
-    expect(response.headers.get("location")).toBe("https://vaeora.test/iaura?view=projects");
+    expect(response.headers.get("location")).toBe("https://vaeora.test/access?next=%2Fiaura%3Fview%3Dprojects");
     expect(mocks.claim).not.toHaveBeenCalled();
   });
 

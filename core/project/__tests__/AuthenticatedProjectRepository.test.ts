@@ -40,7 +40,12 @@ describe("AuthenticatedProjectRepository ownership scoping", () => {
     repository.setActiveProject(initial);
     repository.setActiveProject(initial);
     await repository.flush();
-    expect(fetch).not.toHaveBeenCalled();
+
+    const projectWrites = vi.mocked(fetch).mock.calls.filter(
+      ([url]) => url === "/api/projects/existing",
+    );
+
+    expect(projectWrites).toHaveLength(0);
   });
 
   it("issues one PUT for one real mutation and does not recurse", async () => {
@@ -49,9 +54,24 @@ describe("AuthenticatedProjectRepository ownership scoping", () => {
     repository.configure("user-a", [initial]);
     repository.updateProject({ ...initial, name: "Changed", updatedAt: "2026-08-16T00:01:00.000Z" });
     await repository.flush();
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith("/api/projects/existing", expect.objectContaining({ method: "PUT" }));
+
+    const projectWrites = vi.mocked(fetch).mock.calls.filter(
+      ([url]) => url === "/api/projects/existing",
+    );
+
+    expect(projectWrites).toHaveLength(1);
+    expect(projectWrites[0]).toEqual([
+      "/api/projects/existing",
+      expect.objectContaining({ method: "PUT" }),
+    ]);
+
     await Promise.resolve();
-    expect(fetch).toHaveBeenCalledTimes(1);
+
+    const projectWritesAfterMicrotask =
+      vi.mocked(fetch).mock.calls.filter(
+        ([url]) => url === "/api/projects/existing",
+      );
+
+    expect(projectWritesAfterMicrotask).toHaveLength(1);
   });
 });

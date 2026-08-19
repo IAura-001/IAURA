@@ -4,7 +4,7 @@ import { DEFAULT_LOCALE } from "@/core/i18n/languages";
 export const DEFAULT_MEMORY: Memory = {
   id: "default",
 
-  userName: "Diego",
+  userName: "",
 
   preferredLocale: DEFAULT_LOCALE,
 

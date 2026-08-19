@@ -1,8 +1,10 @@
 import { VoiceProvider } from "@/core/context/VoiceContext";
 import AuthenticatedProjectBoundary from "@/components/projects/AuthenticatedProjectBoundary";
+import AuthenticatedMemoryBoundary from "@/components/memory/AuthenticatedMemoryBoundary";
 import AuthenticatedConversationBoundary from "@/components/conversation/AuthenticatedConversationBoundary";
 import { getAuthenticatedUser } from "@/core/auth/session";
 import { listAuthenticatedProjects } from "@/core/project/server";
+import { getAuthenticatedMemoryState } from "@/core/memory/server";
 import { getAuthenticatedProjectState } from "@/core/project/server";
 import { getAuthenticatedConversationSnapshot } from "@/core/conversation/server";
 import { getAuthenticatedProfile } from "@/core/profile/server";
@@ -27,6 +29,12 @@ export default async function IauraLayout({
         exists: false,
         activeProjectId: null,
       };
+  const memoryState = user && isProfileComplete(profile)
+    ? await getAuthenticatedMemoryState(user.id)
+    : {
+        exists: false,
+        memory: null,
+      };
   const conversationSnapshot = user && isProfileComplete(profile)
     ? await getAuthenticatedConversationSnapshot(user.id)
     : null;
@@ -46,12 +54,17 @@ export default async function IauraLayout({
           activeProjectId={projectState.activeProjectId}
           remoteStateExists={projectState.exists}
         >
+          <AuthenticatedMemoryBoundary
+            userId={user?.id ?? "unauthenticated"}
+            memory={memoryState.memory}
+          >
           <AuthenticatedConversationBoundary
             userId={user?.id ?? "unauthenticated"}
             snapshot={conversationSnapshot}
           >
             {children}
           </AuthenticatedConversationBoundary>
+          </AuthenticatedMemoryBoundary>
         </AuthenticatedProjectBoundary>
       </AuthenticatedIdentityBoundary>
     </VoiceProvider>
