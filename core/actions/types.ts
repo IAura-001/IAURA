@@ -208,6 +208,8 @@ export interface ActionExecutionResult {
 
 export interface AuraActionHistoryEntry {
   id: string;
+  /** Undefined identifies a legacy entry whose project scope is unknown. */
+  projectId?: string | null;
   createdAt: string;
   status: "completed" | "undone";
   summaries: string[];

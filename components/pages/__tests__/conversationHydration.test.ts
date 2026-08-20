@@ -6,6 +6,7 @@ import {
 } from "@/core/conversation";
 import {
   canApplyConversationHydration,
+  canApplyConversationTurnResult,
   didActiveProjectChange,
   loadVisibleConversation,
 } from "../conversationHydration";
@@ -76,6 +77,33 @@ describe("project conversation hydration", () => {
       activeProjectId: "project-a",
       scheduledMessageGeneration: 0,
       currentMessageGeneration: 0,
+    })).toBe(true);
+  });
+
+  it("rejects a late response from A after switching to B", () => {
+    expect(canApplyConversationTurnResult({
+      requestedProjectId: "project-a",
+      activeProjectId: "project-b",
+      requestedMessageGeneration: 5,
+      currentMessageGeneration: 6,
+    })).toBe(false);
+  });
+
+  it("rejects a superseded response even if the user returns to A", () => {
+    expect(canApplyConversationTurnResult({
+      requestedProjectId: "project-a",
+      activeProjectId: "project-a",
+      requestedMessageGeneration: 5,
+      currentMessageGeneration: 7,
+    })).toBe(false);
+  });
+
+  it("allows a response only for its unchanged active project generation", () => {
+    expect(canApplyConversationTurnResult({
+      requestedProjectId: "project-b",
+      activeProjectId: "project-b",
+      requestedMessageGeneration: 8,
+      currentMessageGeneration: 8,
     })).toBe(true);
   });
 

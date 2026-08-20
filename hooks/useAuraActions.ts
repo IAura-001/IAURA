@@ -18,13 +18,22 @@ import type { Memory } from "@/types/memory";
 import { memoryRepository } from "@/core/memory/MemoryRepository";
 import { projectEngine } from "@/core/project/ProjectEngine";
 
-const ACTION_HISTORY_KEY =
+const LEGACY_ACTION_HISTORY_KEY =
   "iaura-action-history";
 const MAX_HISTORY_ENTRIES = 20;
 
 interface UseAuraActionsInput {
   memory: Memory;
+  userId: string;
+  activeProjectId: string | null;
   replaceMemory: (memory: Memory) => void;
+}
+
+export function projectActionHistory(
+  history: AuraActionHistoryEntry[],
+  projectId: string | null,
+): AuraActionHistoryEntry[] {
+  return history.filter((entry) => entry.projectId === projectId);
 }
 
 function cloneMemory(memory: Memory): Memory {
@@ -56,14 +65,18 @@ function createHistoryId(): string {
     .slice(2)}`;
 }
 
-function loadHistory(): AuraActionHistoryEntry[] {
+function actionHistoryKey(userId: string): string {
+  return `${LEGACY_ACTION_HISTORY_KEY}:${userId}`;
+}
+
+function loadHistory(userId: string): AuraActionHistoryEntry[] {
   if (typeof window === "undefined") {
     return [];
   }
 
   try {
     const savedHistory = localStorage.getItem(
-      ACTION_HISTORY_KEY
+      actionHistoryKey(userId)
     );
 
     if (!savedHistory) {
@@ -90,6 +103,8 @@ function loadHistory(): AuraActionHistoryEntry[] {
 
 export function useAuraActions({
   memory,
+  userId,
+  activeProjectId,
   replaceMemory,
 }: UseAuraActionsInput) {
   const memoryRef = useRef(memory);
@@ -98,15 +113,15 @@ export function useAuraActions({
     memoryRef.current = memory;
   }, [memory]);
 
-  const [history, setHistory] = useState<
+  const [allHistory, setAllHistory] = useState<
     AuraActionHistoryEntry[]
-  >(loadHistory);
+  >(() => loadHistory(userId));
 
   useEffect(() => {
     try {
       localStorage.setItem(
-        ACTION_HISTORY_KEY,
-        JSON.stringify(history)
+        actionHistoryKey(userId),
+        JSON.stringify(allHistory)
       );
     } catch (error) {
       console.error(
@@ -114,11 +129,17 @@ export function useAuraActions({
         error
       );
     }
-  }, [history]);
+  }, [allHistory, userId]);
+
+  const history = useMemo(
+    () => projectActionHistory(allHistory, activeProjectId),
+    [activeProjectId, allHistory],
+  );
 
   const executeActions = useCallback(
     (
-      actions: PlannedAuraAction[]
+      actions: PlannedAuraAction[],
+      requestedProjectId: string | null = activeProjectId,
     ): ActionExecutionItem[] => {
       if (actions.length === 0) {
         return [];
@@ -143,6 +164,11 @@ export function useAuraActions({
       }
 
       const after = cloneMemory(result.memory);
+      const historyProjectId = requestedProjectId ?? (
+        executedItems.some((item) => item.type === "create_project")
+          ? after.activeProject?.id ?? null
+          : null
+      );
       const projectRevisionAfterActions = projectEngine.getRevision();
       const memoryWrite = memoryRepository.saveMemoryResult(
         after,
@@ -167,6 +193,7 @@ export function useAuraActions({
 
       const historyEntry: AuraActionHistoryEntry = {
         id: createHistoryId(),
+        projectId: historyProjectId,
         createdAt: new Date().toISOString(),
         status: "completed",
         summaries: executedItems.map(
@@ -183,7 +210,7 @@ export function useAuraActions({
       };
 
       replaceMemory(after);
-      setHistory((currentHistory) =>
+      setAllHistory((currentHistory) =>
         [
           historyEntry,
           ...currentHistory,
@@ -192,7 +219,7 @@ export function useAuraActions({
 
       return result.items;
     },
-    [replaceMemory]
+    [activeProjectId, replaceMemory]
   );
 
   const latestCompletedEntry = useMemo(
@@ -291,7 +318,7 @@ export function useAuraActions({
 
     replaceMemory(restoredMemory);
 
-    setHistory((currentHistory) =>
+    setAllHistory((currentHistory) =>
       currentHistory.map((entry) =>
         entry.id === latestCompletedEntry.id
           ? {

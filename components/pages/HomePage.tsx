@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -45,6 +46,7 @@ import { cleanAIText } from "@/utils/formatText";
 import Workspace from "@/components/pages/Workspace";
 import {
   canApplyConversationHydration,
+  canApplyConversationTurnResult,
   didActiveProjectChange,
   loadVisibleConversation,
 } from "@/components/pages/conversationHydration";
@@ -69,12 +71,14 @@ import WelcomeOverlay from "@/components/vaeora/WelcomeOverlay";
 interface HomePageProps {
   initialView?: WorkspaceView;
   entryIntent?: WorkspaceEntryIntent;
+  authenticatedUserId?: string;
   authenticatedDisplayName?: string;
 }
 
 export default function Home({
   initialView = "presence",
   entryIntent,
+  authenticatedUserId = "unauthenticated",
   authenticatedDisplayName = "",
 }: HomePageProps) {
   const {
@@ -104,6 +108,8 @@ export default function Home({
     undoLast,
   } = useAuraActions({
     memory,
+    userId: authenticatedUserId,
+    activeProjectId: memory.activeProject?.id ?? null,
     replaceMemory,
   });
 
@@ -117,6 +123,8 @@ export default function Home({
   ] = useState<CreativeStudioRequest>();
   const [messages, setMessages] =
     useState<ChatMessage[]>([]);
+  const [messagesProjectId, setMessagesProjectId] =
+    useState<string | null>(null);
   const [visibleStartIndex, setVisibleStartIndex] =
     useState(0);
   const [conversationNavigation, setConversationNavigation] = useState<{
@@ -167,8 +175,11 @@ export default function Home({
   const activeProject = memory.activeProject;
   const activeProjectId = activeProject?.id ?? null;
 
-  useEffect(() => {
-    activeProjectIdRef.current = activeProjectId;
+  useLayoutEffect(() => {
+    if (activeProjectIdRef.current !== activeProjectId) {
+      activeProjectIdRef.current = activeProjectId;
+      messageGenerationRef.current += 1;
+    }
   }, [activeProjectId]);
 
   useEffect(() => {
@@ -191,6 +202,7 @@ export default function Home({
         requestedProjectId,
       );
       setMessages(hydratedMessages);
+      setMessagesProjectId(requestedProjectId);
       setVisibleStartIndex(
         initialConversationVisibleStart(hydratedMessages.length),
       );
@@ -276,8 +288,10 @@ export default function Home({
         const nextProjectId = project?.id ?? null;
 
         if (didActiveProjectChange(activeProjectId, nextProjectId)) {
+          activeProjectIdRef.current = nextProjectId;
           messageGenerationRef.current += 1;
           setMessages([]);
+          setMessagesProjectId(nextProjectId);
           setVisibleStartIndex(0);
           setAnimatedMessageIds(new Set());
         }
@@ -318,8 +332,10 @@ export default function Home({
   });
 
   const visibleMessages = useMemo(
-    () => visibleConversationMessages(messages, visibleStartIndex),
-    [messages, visibleStartIndex],
+    () => messagesProjectId === activeProjectId
+      ? visibleConversationMessages(messages, visibleStartIndex)
+      : [],
+    [activeProjectId, messages, messagesProjectId, visibleStartIndex],
   );
   const handleLoadOlderMessages = useCallback(() => {
     setVisibleStartIndex((current) => loadOlderConversationStart(current));
@@ -431,14 +447,20 @@ export default function Home({
         content: trimmedInput,
       };
 
+      const requestedProjectId = activeProjectId;
       messageGenerationRef.current += 1;
+      const requestedMessageGeneration = messageGenerationRef.current;
+      setMessagesProjectId(requestedProjectId);
       setAnimatedMessageIds((current) =>
-        new Set([...current, userMessage.id]),
+        messagesProjectId === requestedProjectId
+          ? new Set([...current, userMessage.id])
+          : new Set([userMessage.id]),
       );
-      setMessages((previous) => [
-        ...previous,
-        userMessage,
-      ]);
+      setMessages((previous) =>
+        messagesProjectId === requestedProjectId
+          ? [...previous, userMessage]
+          : [userMessage],
+      );
 
       setIsSending(true);
 
@@ -455,6 +477,15 @@ export default function Home({
                 userContext,
               );
         const response = turn.plan;
+
+        if (!canApplyConversationTurnResult({
+          requestedProjectId,
+          activeProjectId: activeProjectIdRef.current,
+          requestedMessageGeneration,
+          currentMessageGeneration: messageGenerationRef.current,
+        })) {
+          return;
+        }
 
         if (
           typeof missionOverride === "object" &&
@@ -537,6 +568,7 @@ export default function Home({
         const actionItems =
           executeActions(
             response.actions,
+            requestedProjectId,
           );
         const actionReceipt =
           formatActionReceipt(
@@ -626,6 +658,15 @@ export default function Home({
           }
         }
       } catch (error) {
+        if (!canApplyConversationTurnResult({
+          requestedProjectId,
+          activeProjectId: activeProjectIdRef.current,
+          requestedMessageGeneration,
+          currentMessageGeneration: messageGenerationRef.current,
+        })) {
+          return;
+        }
+
         console.error(
           "IAURA conversation failed:",
           error,
@@ -685,8 +726,10 @@ export default function Home({
     },
     [
       executeActions,
+      activeProjectId,
       isSending,
       memory.preferredLocale,
+      messagesProjectId,
       scheduleAuraLiveListening,
       speak,
       userContext,
@@ -744,6 +787,7 @@ export default function Home({
                   />
 
                   <AuraStartingPoints
+                    key={activeProjectId ?? "general"}
                     disabled={
                       isSending
                     }
@@ -755,6 +799,7 @@ export default function Home({
 
                 <div className="order-1 min-w-0 space-y-5 xl:order-2">
                   <AssistantCard
+                    key={activeProjectId ?? "general"}
                     onStart={
                       handleSend
                     }
@@ -776,7 +821,7 @@ export default function Home({
                       onLoadOlder={handleLoadOlderMessages}
                       animatedMessageIds={animatedMessageIds}
                       isThinking={
-                        isSending
+                        isSending && messagesProjectId === activeProjectId
                       }
                       project={
                         activeProject
@@ -803,6 +848,7 @@ export default function Home({
                     />
 
                     <ChatInput
+                      key={activeProjectId ?? "general"}
                       onSend={
                         handleSend
                       }

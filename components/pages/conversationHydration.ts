@@ -21,6 +21,18 @@ export function canApplyConversationHydration(input: {
   );
 }
 
+export function canApplyConversationTurnResult(input: {
+  requestedProjectId: string | null;
+  activeProjectId: string | null;
+  requestedMessageGeneration: number;
+  currentMessageGeneration: number;
+}): boolean {
+  return (
+    input.requestedProjectId === input.activeProjectId &&
+    input.requestedMessageGeneration === input.currentMessageGeneration
+  );
+}
+
 export function loadVisibleConversation(
   conversations: Pick<ConversationRepository, "getActiveConversation">,
   projectId: string | null,

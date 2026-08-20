@@ -6,5 +6,5 @@ import type { WorkspaceEntryIntent, WorkspaceView } from "@/components/vaeora/Va
 
 export default function AuthenticatedHomePage({ initialView, entryIntent }: { initialView?: WorkspaceView; entryIntent?: WorkspaceEntryIntent }) {
   const identity = useAuthenticatedIdentity();
-  return <HomePage initialView={initialView} entryIntent={entryIntent} authenticatedDisplayName={identity?.displayName?.trim() ?? ""} />;
+  return <HomePage initialView={initialView} entryIntent={entryIntent} authenticatedUserId={identity?.id ?? "unauthenticated"} authenticatedDisplayName={identity?.displayName?.trim() ?? ""} />;
 }
