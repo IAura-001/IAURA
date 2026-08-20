@@ -187,6 +187,23 @@
   color: rgba(246, 244, 250, 0.92);
 }
 
+.supportEntry {
+  display: block;
+  width: fit-content;
+  margin-top: 0.8rem;
+  border-radius: 0.25rem;
+  color: rgba(199, 194, 211, 0.38);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: color 180ms ease;
+}
+
+.supportEntry:hover { color: rgba(229, 225, 238, 0.76); }
+.supportEntry:focus-visible { outline: 2px solid rgba(194, 186, 255, 0.78); outline-offset: 0.35rem; }
+
 .entry:hover .entryLine,
 .entry:focus-visible .entryLine {
   background: linear-gradient(

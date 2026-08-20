@@ -27,6 +27,8 @@ describe("VaeoraLanding", () => {
     expect(
       screen.getByRole("link", { name: "Intelligence" }),
     ).toHaveAttribute("href", "/iaura?view=intelligence");
+    expect(screen.getByRole("link", { name: "Support VAEORA" }))
+      .toHaveAttribute("href", "/support");
   });
 
   it("lets keyboard focus tune the phenomenon without activating a link", async () => {
@@ -41,6 +43,11 @@ describe("VaeoraLanding", () => {
       "data-signal",
       "idle",
     );
+
+    await user.tab();
+    expect(
+      screen.getByRole("link", { name: "Support VAEORA" }),
+    ).toHaveFocus();
 
     await user.tab();
     const presence = screen.getByRole("link", { name: "Presence" });

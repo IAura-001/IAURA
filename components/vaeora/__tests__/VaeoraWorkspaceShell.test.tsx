@@ -31,6 +31,11 @@ function renderShell(initialView?: "presence" | "projects" | "intelligence") {
 }
 
 describe("VaeoraWorkspaceShell", () => {
+  it("offers discreet support navigation in the authenticated shell", () => {
+    renderShell();
+    expect(screen.getByRole("link", { name: "Support" }))
+      .toHaveAttribute("href", "/support");
+  });
   it("exposes three accessible, persistent workspace views", () => {
     renderShell();
 

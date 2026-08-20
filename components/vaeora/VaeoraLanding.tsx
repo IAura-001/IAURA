@@ -7,6 +7,7 @@ import VaeoraPhenomenon from "./VaeoraPhenomenon";
 import VaeoraSignalDock, {
   type VaeoraSignal,
 } from "./VaeoraSignalDock";
+import { VAEORA_SUPPORT_URL } from "@/config/support";
 import styles from "./VaeoraLanding.module.css";
 
 export default function VaeoraLanding() {
@@ -31,6 +32,11 @@ export default function VaeoraLanding() {
             <span className={styles.entryLine} aria-hidden="true" />
             <span aria-hidden="true">↗</span>
           </Link>
+          {VAEORA_SUPPORT_URL ? (
+            <Link className={styles.supportEntry} href="/support">
+              Support VAEORA
+            </Link>
+          ) : null}
         </div>
 
         <VaeoraSignalDock

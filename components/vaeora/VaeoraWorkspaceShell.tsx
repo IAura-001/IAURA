@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import type { SupportedLocale } from "@/core/i18n/languages";
+import { VAEORA_SUPPORT_URL } from "@/config/support";
 
 import styles from "./VaeoraWorkspaceShell.module.css";
 
@@ -280,6 +281,11 @@ export default function VaeoraWorkspaceShell({
           </nav>
 
           <div className={styles.identityStatus}>
+            {VAEORA_SUPPORT_URL ? (
+              <Link className={styles.supportLink} href="/support">
+                Support
+              </Link>
+            ) : null}
             <span className={styles.statusDot} aria-hidden="true" />
             <span className={styles.statusText}>{copy.auraStatus}</span>
             <span className={styles.userName}>{userName}</span>

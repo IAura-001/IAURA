@@ -169,6 +169,23 @@
   font-size: 0.68rem;
 }
 
+.supportLink {
+  margin-right: 0.35rem;
+  padding-right: 0.9rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.2rem;
+  color: #777382;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: color 180ms ease;
+}
+
+.supportLink:hover { color: #c5c0ce; }
+.supportLink:focus-visible { outline: 1px solid var(--vaeora-focus); outline-offset: 4px; }
+
 .statusDot {
   width: 5px;
   height: 5px;
@@ -300,6 +317,12 @@
   .workspaceLabel,
   .statusText {
     display: none;
+  }
+
+  .supportLink {
+    margin-right: 0.2rem;
+    padding-right: 0.6rem;
+    font-size: 0.52rem;
   }
 
   .userName {
