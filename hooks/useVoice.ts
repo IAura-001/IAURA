@@ -60,6 +60,11 @@ interface SpeechRecognitionInstance {
   continuous: boolean;
   interimResults: boolean;
   onstart: (() => void) | null;
+  onaudiostart: (() => void) | null;
+  onsoundstart: (() => void) | null;
+  onspeechstart: (() => void) | null;
+  onspeechend: (() => void) | null;
+  onaudioend: (() => void) | null;
   onresult:
     | ((event: SpeechRecognitionEvent) => void)
     | null;
@@ -86,6 +91,7 @@ const NO_SPEECH_TIMEOUT_MS = 10_000;
 const SILENCE_AFTER_SPEECH_MS = 1_150;
 export const HANDS_FREE_END_OF_UTTERANCE_MS = 2_600;
 const HANDS_FREE_RESTART_DELAY_MS = 180;
+const HANDS_FREE_MAX_RESTART_ATTEMPTS = 3;
 const VOICE_ACTIVITY_THRESHOLD = 0.035;
 const VOICE_MODE_STORAGE_KEY =
   "iaura.voice.enabled";
@@ -100,6 +106,12 @@ function appendTranscript(current: string, segment: string): string {
   if (left === right || left.endsWith(right)) return left;
   if (right.startsWith(left)) return right;
   return `${left} ${right}`.replace(/\s+/g, " ").trim();
+}
+
+function traceRecognition(event: string, details?: unknown): void {
+  if (process.env.NODE_ENV !== "production") {
+    console.debug(`[IAURA voice] ${event}`, details ?? "");
+  }
 }
 
 function getVoiceModeSnapshot(): boolean {
@@ -245,6 +257,7 @@ export function useVoice() {
   const handsFreeProcessingRef = useRef(false);
   const handsFreeSilenceTimerRef = useRef<number | null>(null);
   const recognitionRestartTimerRef = useRef<number | null>(null);
+  const recognitionRestartAttemptsRef = useRef(0);
 
   const clearHandsFreeTimers = useCallback(() => {
     if (handsFreeSilenceTimerRef.current !== null) {
@@ -673,7 +686,7 @@ console.info(
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    const startRecognitionSafely = () => {
+    function startRecognitionSafely() {
       if (
         recognitionActiveRef.current ||
         !continuousListeningRef.current ||
@@ -684,18 +697,31 @@ console.info(
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.start();
-      } catch {
-        // The browser may still be closing the previous session.
+        traceRecognition("restart requested");
+      } catch (error) {
+        recognitionActiveRef.current = false;
+        setState("idle");
+        traceRecognition("restart deferred", error);
+        recognitionRestartAttemptsRef.current += 1;
+        if (
+          recognitionRestartAttemptsRef.current >=
+          HANDS_FREE_MAX_RESTART_ATTEMPTS
+        ) {
+          continuousListeningRef.current = false;
+          setVoiceError("transcription-failed");
+          return;
+        }
+        scheduleRecognitionRestart();
       }
-    };
+    }
 
-    const scheduleRecognitionRestart = () => {
+    function scheduleRecognitionRestart() {
       if (recognitionRestartTimerRef.current !== null) return;
       recognitionRestartTimerRef.current = window.setTimeout(() => {
         recognitionRestartTimerRef.current = null;
         startRecognitionSafely();
       }, HANDS_FREE_RESTART_DELAY_MS);
-    };
+    }
 
     const finishHandsFreeUtterance = () => {
       if (
@@ -729,6 +755,8 @@ console.info(
 
     recognition.onstart = () => {
       recognitionActiveRef.current = true;
+      recognitionRestartAttemptsRef.current = 0;
+      traceRecognition("start");
       if (!getVoiceModeSnapshot()) {
         recognition.abort();
         return;
@@ -738,7 +766,14 @@ console.info(
       setState("listening");
     };
 
+    recognition.onaudiostart = () => traceRecognition("audio start");
+    recognition.onsoundstart = () => traceRecognition("sound start");
+    recognition.onspeechstart = () => traceRecognition("speech start");
+    recognition.onspeechend = () => traceRecognition("speech end");
+    recognition.onaudioend = () => traceRecognition("audio end");
+
     recognition.onresult = (event) => {
+      traceRecognition("result", event.results);
       if (!getVoiceModeSnapshot()) {
         return;
       }
@@ -752,7 +787,12 @@ console.info(
         return;
       }
 
+      const previousTranscript = appendTranscript(
+        handsFreeFinalTranscriptRef.current,
+        handsFreeInterimTranscriptRef.current,
+      );
       let interim = "";
+      let receivedFinal = false;
       const startIndex = event.resultIndex ?? 0;
       const resultCount = event.results.length ?? (event.results[0] ? 1 : 0);
       for (let index = startIndex; index < resultCount; index += 1) {
@@ -760,6 +800,7 @@ console.info(
         const segment = result?.[0]?.transcript?.trim() ?? "";
         if (!segment) continue;
         if (result.isFinal) {
+          receivedFinal = true;
           handsFreeFinalTranscriptRef.current = appendTranscript(
             handsFreeFinalTranscriptRef.current,
             segment,
@@ -768,15 +809,37 @@ console.info(
           interim = appendTranscript(interim, segment);
         }
       }
-      handsFreeInterimTranscriptRef.current = interim;
-      if (handsFreeFinalTranscriptRef.current || interim) {
+      if (interim) {
+        handsFreeInterimTranscriptRef.current = interim;
+      } else if (receivedFinal) {
+        handsFreeInterimTranscriptRef.current = "";
+      }
+      const nextTranscript = appendTranscript(
+        handsFreeFinalTranscriptRef.current,
+        handsFreeInterimTranscriptRef.current,
+      );
+      if (nextTranscript) {
         setState("listening");
-        scheduleEndOfUtterance();
+        if (nextTranscript !== previousTranscript) {
+          scheduleEndOfUtterance();
+        }
       }
     };
 
     recognition.onend = () => {
       recognitionActiveRef.current = false;
+      traceRecognition("end");
+      if (
+        continuousListeningRef.current &&
+        !handsFreeProcessingRef.current &&
+        handsFreeInterimTranscriptRef.current
+      ) {
+        handsFreeFinalTranscriptRef.current = appendTranscript(
+          handsFreeFinalTranscriptRef.current,
+          handsFreeInterimTranscriptRef.current,
+        );
+        handsFreeInterimTranscriptRef.current = "";
+      }
       if (
         continuousListeningRef.current &&
         !handsFreeProcessingRef.current &&
@@ -794,6 +857,7 @@ console.info(
 
     recognition.onerror = (event) => {
       recognitionActiveRef.current = false;
+      traceRecognition("error", event.error);
       const permissionError =
         event.error === "not-allowed" ||
         event.error ===
@@ -801,11 +865,22 @@ console.info(
 
       const fatalError = permissionError || event.error === "audio-capture";
       const recoverableError = event.error === "no-speech" || event.error === "aborted" || event.error === "network";
+      const hasUsableTranscript = Boolean(appendTranscript(
+        handsFreeFinalTranscriptRef.current,
+        handsFreeInterimTranscriptRef.current,
+      ));
       if (fatalError) {
         continuousListeningRef.current = false;
         resetHandsFreeUtterance();
         setVoiceError(permissionError ? "permission-denied" : "unavailable");
         setState("idle");
+        return;
+      }
+      if (continuousListeningRef.current && hasUsableTranscript) {
+        if (handsFreeSilenceTimerRef.current === null) {
+          scheduleEndOfUtterance();
+        }
+        scheduleRecognitionRestart();
         return;
       }
       if (continuousListeningRef.current && recoverableError) {
@@ -820,6 +895,11 @@ console.info(
 
     return () => {
       recognition.onstart = null;
+      recognition.onaudiostart = null;
+      recognition.onsoundstart = null;
+      recognition.onspeechstart = null;
+      recognition.onspeechend = null;
+      recognition.onaudioend = null;
       recognition.onresult = null;
       recognition.onend = null;
       recognition.onerror = null;

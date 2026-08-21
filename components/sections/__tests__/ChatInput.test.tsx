@@ -6,7 +6,7 @@ import { I18nProvider } from "@/core/i18n/I18nContext";
 import type { VoiceCaptureMode, VoiceError } from "@/hooks/useVoice";
 
 const voiceMock = vi.hoisted(() => ({
-  state: "idle" as const,
+  state: "idle" as "idle" | "listening" | "processing" | "speaking",
   transcript: "",
   voiceMode: true,
   captureMode: "speech-recognition" as VoiceCaptureMode,
@@ -44,6 +44,8 @@ function renderInput(
 describe("ChatInput interaction feedback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    voiceMock.state = "idle";
+    voiceMock.transcript = "";
     voiceMock.captureMode = "speech-recognition";
     voiceMock.voiceError = null;
     vi.stubGlobal(
@@ -129,6 +131,31 @@ describe("ChatInput interaction feedback", () => {
     await waitFor(() => {
       expect(screen.getByText("Mensaje enviado")).toBeInTheDocument();
     });
+  });
+
+  it("forwards one published hands-free transcript to onSend", async () => {
+    const onSend = vi.fn(() => new Promise<void>(() => undefined));
+    const view = renderInput(onSend);
+
+    voiceMock.state = "processing";
+    voiceMock.transcript = "Quiero organizar mis proyectos";
+    view.rerender(
+      <I18nProvider locale="es-419">
+        <ChatInput onSend={onSend} />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(onSend).toHaveBeenCalledOnce();
+    });
+    expect(onSend).toHaveBeenCalledWith("Quiero organizar mis proyectos");
+
+    view.rerender(
+      <I18nProvider locale="es-419">
+        <ChatInput onSend={onSend} />
+      </I18nProvider>,
+    );
+    expect(onSend).toHaveBeenCalledOnce();
   });
 
   it("exposes an alert and keeps the draft when sending fails", async () => {
