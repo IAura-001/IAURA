@@ -10,6 +10,7 @@ import { getAuthenticatedConversationSnapshot } from "@/core/conversation/server
 import { getAuthenticatedProfile } from "@/core/profile/server";
 import { isProfileComplete } from "@/core/profile/types";
 import AuthenticatedIdentityBoundary from "@/components/profile/AuthenticatedIdentityBoundary";
+import BetaUsageEntryTracker from "@/components/betaUsage/BetaUsageEntryTracker";
 
 import styles from "./layout.module.css";
 
@@ -48,6 +49,7 @@ export default async function IauraLayout({
         </button>
       </form>
       <AuthenticatedIdentityBoundary profile={profile}>
+        {user ? <BetaUsageEntryTracker userId={user.id} /> : null}
         <AuthenticatedProjectBoundary
           userId={user?.id ?? "unauthenticated"}
           projects={projects}

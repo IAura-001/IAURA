@@ -26,6 +26,7 @@ export class AuthenticatedConversationRepository
 
   private readonly local = new LocalConversationRepository({
     synchronize: false,
+    persistLocally: false,
   });
 
   private pending: Promise<void> = Promise.resolve();
@@ -63,6 +64,9 @@ export class AuthenticatedConversationRepository
 
   async flush(): Promise<void> {
     await this.pending;
+    if (this.persistenceFailure) {
+      throw new Error("Conversation persistence failed.");
+    }
   }
 
   private queueSnapshot(
@@ -91,12 +95,17 @@ export class AuthenticatedConversationRepository
           },
           body: JSON.stringify({
             snapshot,
+            expectedRevision: Math.max(0, snapshot.revision - 1),
           }),
         });
 
         if (!response.ok) {
+          const failure = await response.json().catch(() => null) as {
+            code?: unknown;
+            error?: unknown;
+          } | null;
           throw new Error(
-            `Conversation persistence failed (${response.status}).`,
+            `Conversation persistence failed (${response.status}, ${String(failure?.code ?? "unknown")}): ${String(failure?.error ?? "unknown")}`,
           );
         }
 

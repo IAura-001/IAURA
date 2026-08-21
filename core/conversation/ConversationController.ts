@@ -24,6 +24,7 @@ import {
   projectRepository,
   type ProjectRepository,
 } from "../project/ProjectRepository";
+import { authenticatedProjectRepository } from "../project/AuthenticatedProjectRepository";
 import {
   assistantMessageMetadata,
   conversationRepository,
@@ -311,6 +312,26 @@ export class ConversationController {
   private readonly now: () => string;
   private readonly evidenceIdFactory: () => string;
 
+  private async flushConversationPersistence(
+    stage: ConversationTurnStage,
+    conversationId: string,
+    userMessageId?: string,
+  ): Promise<void> {
+    if (!("flush" in this.conversations) || typeof this.conversations.flush !== "function") {
+      return;
+    }
+    try {
+      await this.conversations.flush();
+    } catch {
+      throw new ConversationTurnError(
+        "IAURA_CONVERSATION_PERSISTENCE_FAILED",
+        stage,
+        conversationId,
+        userMessageId,
+      );
+    }
+  }
+
   constructor(options: ConversationControllerOptions = {}) {
     this.conversations =
       options.conversations ?? conversationRepository;
@@ -383,10 +404,10 @@ export class ConversationController {
     return created.conversation;
   }
 
-  private persistUserMessage(
+  private async persistUserMessage(
     conversation: Conversation,
     message: string,
-  ): ConversationMessage {
+  ): Promise<ConversationMessage> {
     const lastMessage =
       conversation.messages.at(-1);
 
@@ -413,6 +434,12 @@ export class ConversationController {
         conversation.conversationId,
       );
     }
+
+    await this.flushConversationPersistence(
+      "user_message",
+      conversation.conversationId,
+      write.message.messageId,
+    );
 
     return write.message;
   }
@@ -450,7 +477,7 @@ export class ConversationController {
     } = {},
   ): Promise<ConversationTurnResult> {
     const userMessage =
-      this.persistUserMessage(
+      await this.persistUserMessage(
         conversation,
         message,
       );
@@ -604,6 +631,12 @@ export class ConversationController {
         userMessage.messageId,
       );
     }
+
+    await this.flushConversationPersistence(
+      "assistant_message",
+      conversation.conversationId,
+      userMessage.messageId,
+    );
 
     return {
       plan: response,
@@ -1235,4 +1268,8 @@ export const conversationController =
       process.env.NODE_ENV === "test"
         ? conversationRepository
         : authenticatedConversationRepository,
+    projects:
+      process.env.NODE_ENV === "test"
+        ? projectRepository
+        : authenticatedProjectRepository,
   });

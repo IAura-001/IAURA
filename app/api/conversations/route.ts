@@ -109,9 +109,17 @@ export async function PUT(request: Request) {
     .json()
     .catch(() => null) as {
       snapshot?: unknown;
+      expectedRevision?: unknown;
     } | null;
 
-  if (!body || !isConversationSnapshot(body.snapshot)) {
+  if (
+    !body ||
+    !isConversationSnapshot(body.snapshot) ||
+    typeof body.expectedRevision !== "number" ||
+    !Number.isInteger(body.expectedRevision) ||
+    body.expectedRevision < 0 ||
+    body.snapshot.revision !== body.expectedRevision + 1
+  ) {
     return NextResponse.json(
       {
         error: "Invalid conversation state.",
@@ -125,24 +133,51 @@ export async function PUT(request: Request) {
 
   const supabase = await createServerSupabaseClient();
 
-  const { data, error } = await supabase
-    .from("conversation_state")
-    .upsert(
-      {
-        user_id: user.id,
-        data: body.snapshot,
-      },
-      {
-        onConflict: "user_id",
-      },
-    )
-    .select("data")
-    .single();
+  const table = supabase.from("conversation_state");
+  let data: { data: ConversationRepositorySnapshot } | null = null;
+  let error: { code?: string; message?: string; details?: string; hint?: string } | null = null;
+
+  if (body.expectedRevision === 0) {
+    const existing = await table.select("data").eq("user_id", user.id).maybeSingle();
+    if (!existing.error && !existing.data) {
+      const inserted = await table.insert({ user_id: user.id, data: body.snapshot })
+        .select("data").single();
+      data = inserted.data as typeof data;
+      error = inserted.error;
+    } else if (existing.error) {
+      error = existing.error;
+    }
+  }
+
+  if (!data && !error) {
+    const updated = await table.update({ data: body.snapshot })
+      .eq("user_id", user.id)
+      .eq("data->>revision", String(body.expectedRevision))
+      .select("data")
+      .maybeSingle();
+    data = updated.data as typeof data;
+    error = updated.error;
+  }
+
+  if (!error && !data) {
+    return NextResponse.json(
+      { error: "Conversation state changed in another session.", code: "IAURA_STATE_STALE_WRITE" },
+      { status: 409, headers },
+    );
+  }
 
   if (error) {
+    console.error("Conversation state persistence failed:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      userId: user.id,
+    });
     return NextResponse.json(
       {
         error: "Unable to persist conversation state.",
+        code: error.code,
       },
       {
         status: 500,
@@ -153,7 +188,7 @@ export async function PUT(request: Request) {
 
   return NextResponse.json(
     {
-      snapshot: data.data,
+      snapshot: data!.data,
     },
     {
       headers,

@@ -4,11 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   conversationController,
-  conversationRepository,
+  conversationRepository as localConversationRepository,
   deferredContinuityProvenance,
   selectBetaContinuity,
   type Conversation,
 } from "@/core/conversation";
+import { authenticatedConversationRepository as conversationRepository } from "@/core/conversation/AuthenticatedConversationRepository";
+
+const continuityConversationRepository = process.env.NODE_ENV === "test"
+  ? localConversationRepository
+  : conversationRepository;
 
 interface ProjectContinuityCardProps {
   projectId: string;
@@ -26,17 +31,17 @@ export default function ProjectContinuityCard({
   onOpenConversation,
 }: ProjectContinuityCardProps) {
   const [conversation, setConversation] = useState<Conversation | null>(() =>
-    conversationRepository.getActiveConversation(projectId));
+    continuityConversationRepository.getActiveConversation(projectId));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const refresh = () => {
-      setConversation(conversationRepository.getActiveConversation(projectId));
+      setConversation(continuityConversationRepository.getActiveConversation(projectId));
       setError("");
     };
     refresh();
-    return conversationRepository.subscribe(refresh);
+    return continuityConversationRepository.subscribe(refresh);
   }, [projectId]);
 
   const continuity = useMemo(
@@ -45,7 +50,7 @@ export default function ProjectContinuityCard({
   );
 
   function reconcile(): void {
-    setConversation(conversationRepository.getActiveConversation(projectId));
+    setConversation(continuityConversationRepository.getActiveConversation(projectId));
   }
 
   async function activatePrimaryAction(): Promise<void> {

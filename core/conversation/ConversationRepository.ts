@@ -271,6 +271,7 @@ export interface ConversationRepository {
 
 interface LocalConversationRepositoryOptions {
   synchronize?: boolean;
+  persistLocally?: boolean;
   writerId?: string;
   now?: () => string;
   idFactory?: () => string;
@@ -1405,12 +1406,14 @@ export class LocalConversationRepository implements ConversationRepository {
   private readonly listeners = new Set<ConversationRepositoryListener>();
   private readonly storageListener?: (event: StorageEvent) => void;
   private blockedByFutureVersion = false;
+  private readonly persistLocally: boolean;
 
   constructor(options: LocalConversationRepositoryOptions = {}) {
+    this.persistLocally = options.persistLocally !== false;
     this.writerId = options.writerId ?? createWriterId();
     this.now = options.now ?? (() => new Date().toISOString());
     this.idFactory = options.idFactory ?? createWriterId;
-    this.state = this.loadAndMigrate();
+    this.state = this.persistLocally ? this.loadAndMigrate() : this.emptyState();
     this.lastResult = {
       ok: this.migrationOutcome !== "failed_safely",
       outcome: this.migrationOutcome === "failed_safely" ? "failed" : "unchanged",
@@ -1603,6 +1606,16 @@ export class LocalConversationRepository implements ConversationRepository {
       });
     }
 
+    if (!this.persistLocally) {
+      this.state = candidate;
+      this.notify();
+      return this.remember({
+        ok: true,
+        outcome: "committed",
+        revision: candidate.revision,
+      });
+    }
+
     const write = atomicWriteState({
       scope: "conversation",
       storageKey: CONVERSATION_STATE_STORAGE_KEY,
@@ -1660,6 +1673,25 @@ export class LocalConversationRepository implements ConversationRepository {
   replaceSnapshotResult(
     snapshot: ConversationRepositorySnapshot,
   ): StateOperationResult {
+    if (!this.persistLocally) {
+      const authoritative = normalizeCurrentState(snapshot);
+      if (!authoritative) {
+        return this.remember({
+          ok: false,
+          outcome: "failed",
+          revision: this.state.revision,
+          code: "IAURA_STATE_VALIDATION_FAILED",
+        });
+      }
+      this.state = authoritative;
+      this.canonicalRaw = null;
+      this.notify();
+      return this.remember({
+        ok: true,
+        outcome: "committed",
+        revision: authoritative.revision,
+      });
+    }
     return this.commit(snapshot, this.state.revision);
   }
 

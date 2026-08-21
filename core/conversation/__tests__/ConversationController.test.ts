@@ -41,6 +41,7 @@ import { conversationMemory } from "../ConversationMemory";
 import {
   assistantMessageMetadata,
   conversationRepository,
+  LocalConversationRepository,
 } from "../ConversationRepository";
 import {
   ConversationController,
@@ -380,6 +381,28 @@ describe("ConversationController", () => {
     expect(result.plan.content).toBe("Persisted response.");
     expect(result.assistantMessageId).toBe(persisted?.messageId);
     expect(result.assistantMessageId).toMatch(/^message-/);
+  });
+
+  it("waits for both user and assistant remote flushes before completing the turn", async () => {
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(
+      createAssistantPlan("Persisted response.", []),
+    );
+    const repository = new LocalConversationRepository({
+      synchronize: false,
+      persistLocally: false,
+    });
+    const flush = vi.fn().mockResolvedValue(undefined);
+    const controller = new ConversationController({
+      conversations: Object.assign(repository, { flush }),
+      contextRetriever: createContextRetriever(),
+    });
+
+    await controller.send("Persist this.", "Context");
+
+    expect(flush).toHaveBeenCalledTimes(2);
+    expect(repository.getActiveConversation(null)?.messages.map(({ role }) => role))
+      .toEqual(["user", "assistant"]);
   });
 
   it("uses a fresh turn's returned assistant id to confirm beta context without reload", async () => {

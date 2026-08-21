@@ -25,11 +25,7 @@ export default function PersonalIntelligenceCenter({ requestedProjectId, onReset
     () => projects.find((project) => project.id === requestedProjectId) ?? null,
     [projects, requestedProjectId],
   );
-  const latestProject = useMemo(
-    () => projects.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null,
-    [projects],
-  );
-  const contextProject = activeProject ?? latestProject;
+  const contextProject = requestedProjectId ? activeProject : null;
 
   return (
     <div className="relative min-w-0 overflow-hidden rounded-[32px] border border-white/[0.07] bg-[#07070c] p-5 sm:p-8 lg:p-10">

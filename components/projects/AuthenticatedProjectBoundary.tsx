@@ -91,7 +91,6 @@ function BoundaryInstance({
 
     return () => {
       unsubscribe();
-      authenticatedProjectRepository.reset();
     };
   }, []);
 

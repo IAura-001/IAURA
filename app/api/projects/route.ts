@@ -23,5 +23,11 @@ export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.from("projects").insert({ id: project.id, user_id: user.id, data: project });
   if (error) return NextResponse.json({ error: "Unable to create project." }, { status: error.code === "23505" ? 409 : 500, headers });
+  await supabase.from("beta_usage_events").insert({
+    user_id: user.id,
+    event_type: "project_created",
+    project_id: project.id,
+    metadata: {},
+  });
   return NextResponse.json({ project }, { status: 201, headers });
 }

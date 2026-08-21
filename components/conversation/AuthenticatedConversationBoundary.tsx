@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -44,12 +43,6 @@ function BoundaryInstance({
 
     return true;
   });
-
-  useEffect(() => {
-    return () => {
-      authenticatedConversationRepository.reset();
-    };
-  }, []);
 
   return configured ? children : null;
 }

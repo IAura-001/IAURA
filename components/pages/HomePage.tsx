@@ -28,6 +28,8 @@ import {
 import {
   authenticatedConversationRepository as conversationRepository,
 } from "@/core/conversation/AuthenticatedConversationRepository";
+import { authenticatedProjectRepository } from "@/core/project/AuthenticatedProjectRepository";
+import { useAuthenticatedActiveProject } from "@/core/project/useAuthenticatedActiveProject";
 import { useVoiceContext } from "@/core/context/VoiceContext";
 import {
   I18nProvider,
@@ -36,6 +38,7 @@ import {
   translate,
 } from "@/core/i18n/messages";
 import { performanceMonitor } from "@/core/performance";
+import { trackBetaUsage } from "@/core/betaUsage/client";
 
 import { useAuraActions } from "@/hooks/useAuraActions";
 import { useMemory } from "@/hooks/useMemory";
@@ -101,6 +104,9 @@ export default function Home({
     replaceMemory,
   } = useMemory();
 
+  const activeProject = useAuthenticatedActiveProject();
+  const activeProjectId = activeProject?.id ?? null;
+
   const {
     history: actionHistory,
     executeActions,
@@ -109,7 +115,7 @@ export default function Home({
   } = useAuraActions({
     memory,
     userId: authenticatedUserId,
-    activeProjectId: memory.activeProject?.id ?? null,
+    activeProjectId,
     replaceMemory,
   });
 
@@ -171,9 +177,6 @@ export default function Home({
       }
     };
   }, []);
-
-  const activeProject = memory.activeProject;
-  const activeProjectId = activeProject?.id ?? null;
 
   useLayoutEffect(() => {
     if (activeProjectIdRef.current !== activeProjectId) {
@@ -287,6 +290,12 @@ export default function Home({
       ) => {
         const nextProjectId = project?.id ?? null;
 
+        if (project) {
+          authenticatedProjectRepository.setActiveProject(project);
+        } else {
+          authenticatedProjectRepository.clearActiveProject();
+        }
+
         if (didActiveProjectChange(activeProjectId, nextProjectId)) {
           activeProjectIdRef.current = nextProjectId;
           messageGenerationRef.current += 1;
@@ -294,6 +303,9 @@ export default function Home({
           setMessagesProjectId(nextProjectId);
           setVisibleStartIndex(0);
           setAnimatedMessageIds(new Set());
+          if (nextProjectId) {
+            void trackBetaUsage({ type: "project_opened", projectId: nextProjectId });
+          }
         }
 
         updateMemory({
@@ -477,6 +489,20 @@ export default function Home({
                 userContext,
               );
         const response = turn.plan;
+
+        void trackBetaUsage({ type: "message_sent", projectId: requestedProjectId });
+        if (requestedProjectId) {
+          const milestone = typeof missionOverride === "object"
+            ? missionOverride.confirmation?.kind
+            : undefined;
+          if (milestone) {
+            void trackBetaUsage({
+              type: "beta_step_completed",
+              projectId: requestedProjectId,
+              milestone,
+            });
+          }
+        }
 
         if (!canApplyConversationTurnResult({
           requestedProjectId,

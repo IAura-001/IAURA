@@ -19,7 +19,8 @@ describe("PersonalIntelligenceCenter", () => {
     state.projects = [project("safe", "Proyecto seguro")];
     const { rerender } = render(<PersonalIntelligenceCenter requestedProjectId="stale-local" onResetMemory={vi.fn()} />);
     expect(screen.queryByText("stale-local")).not.toBeInTheDocument();
-    expect(screen.getByText("Proyecto seguro")).toBeVisible();
+    expect(screen.queryByText("Proyecto seguro")).not.toBeInTheDocument();
+    expect(screen.getByText(/Un espacio listo para tu direcci/)).toBeVisible();
     rerender(<PersonalIntelligenceCenter requestedProjectId="safe" onResetMemory={vi.fn()} />);
     expect(screen.getByText("Crear con claridad")).toBeVisible();
   });
