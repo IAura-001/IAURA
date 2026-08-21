@@ -126,7 +126,11 @@ export class AuthenticatedConversationRepository
   private persistIfSuccessful(
     result: StateOperationResult,
   ): void {
-    if (!result.ok || !this.userId) {
+    if (
+      !result.ok ||
+      result.outcome !== "committed" ||
+      !this.userId
+    ) {
       return;
     }
 
@@ -136,7 +140,11 @@ export class AuthenticatedConversationRepository
   private persistWriteIfSuccessful(
     result: ConversationWriteResult,
   ): void {
-    if (!result.ok || !this.userId) {
+    if (
+      !result.ok ||
+      result.outcome !== "committed" ||
+      !this.userId
+    ) {
       return;
     }
 
@@ -146,7 +154,11 @@ export class AuthenticatedConversationRepository
   private persistMessageIfSuccessful(
     result: ConversationMessageWriteResult,
   ): void {
-    if (!result.ok || !this.userId) {
+    if (
+      !result.ok ||
+      result.outcome !== "committed" ||
+      !this.userId
+    ) {
       return;
     }
 
