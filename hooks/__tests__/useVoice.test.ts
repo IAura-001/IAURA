@@ -36,9 +36,9 @@ class RecognitionMock {
   continuous = false;
   interimResults = false;
   onstart: (() => void) | null = null;
-  onresult = null;
+  onresult: ((event: { results: Array<{ 0: { transcript: string }; isFinal: boolean }>; resultIndex: number }) => void) | null = null;
   onend: (() => void) | null = null;
-  onerror = null;
+  onerror: ((event: { error?: string }) => void) | null = null;
   start = vi.fn(() => this.onstart?.());
   stop = vi.fn(() => this.onend?.());
   abort = vi.fn(() => this.onend?.());
@@ -46,6 +46,13 @@ class RecognitionMock {
   constructor() {
     RecognitionMock.latest = this;
   }
+}
+
+function emitRecognitionResult(transcript: string, isFinal = true) {
+  RecognitionMock.latest?.onresult?.({
+    resultIndex: 0,
+    results: [{ 0: { transcript }, isFinal }],
+  });
 }
 
 describe("IAURA voice capture selection", () => {
@@ -289,5 +296,126 @@ describe("useVoice safe stop", () => {
       "es-419"
     );
     expect(result.current.state).toBe("idle");
+  });
+});
+
+describe("useVoice hands-free end of utterance", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    Object.defineProperty(window, "isSecureContext", { configurable: true, value: true });
+    Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Desktop" });
+    Object.defineProperty(navigator, "maxTouchPoints", { configurable: true, value: 0 });
+    Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: RecognitionMock });
+    Object.defineProperty(window, "webkitSpeechRecognition", { configurable: true, value: undefined });
+    vi.stubGlobal("MediaRecorder", undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  async function startHandsFree() {
+    const hook = renderHook(() => useVoice());
+    await waitFor(() => expect(hook.result.current.captureMode).toBe("speech-recognition"));
+    await act(async () => { await hook.result.current.startContinuousListening(); });
+    vi.useFakeTimers();
+    return hook;
+  }
+
+  it("keeps ordinary push-to-talk as a single immediate submission", async () => {
+    const { result } = renderHook(() => useVoice());
+    await waitFor(() => expect(result.current.captureMode).toBe("speech-recognition"));
+    await act(async () => { await result.current.startListening(); });
+    act(() => emitRecognitionResult("Mensaje normal", true));
+    await waitFor(() => expect(result.current.transcript).toBe("Mensaje normal"));
+    expect(RecognitionMock.latest?.continuous).toBe(false);
+    expect(RecognitionMock.latest?.interimResults).toBe(false);
+  });
+
+  it("does not submit after natural pauses of one or two seconds", async () => {
+    const { result } = await startHandsFree();
+    act(() => emitRecognitionResult("Quiero crear una aplicaciÃ³n", true));
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(result.current.transcript).toBe("");
+    expect(result.current.state).toBe("listening");
+  });
+
+  it("submits exactly once after the 2.6 second grace period", async () => {
+    const { result } = await startHandsFree();
+    act(() => emitRecognitionResult("Una frase normal", true));
+    act(() => vi.advanceTimersByTime(2_600));
+    act(() => vi.runOnlyPendingTimers());
+    expect(result.current.transcript).toBe("Una frase normal");
+    expect(result.current.state).toBe("processing");
+    const committed = result.current.transcript;
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(result.current.transcript).toBe(committed);
+  });
+
+  it("combines speech across a pause without duplicating interim and final segments", async () => {
+    const { result } = await startHandsFree();
+    act(() => emitRecognitionResult("Quiero crear una aplicaciÃ³n", false));
+    act(() => vi.advanceTimersByTime(1_500));
+    act(() => emitRecognitionResult("Quiero crear una aplicaciÃ³n", true));
+    act(() => emitRecognitionResult("para organizar mis finanzas.", true));
+    act(() => vi.advanceTimersByTime(2_600));
+    act(() => vi.runOnlyPendingTimers());
+    expect(result.current.transcript).toBe(
+      "Quiero crear una aplicaciÃ³n para organizar mis finanzas.",
+    );
+  });
+
+  it("restarts after browser auto-end without treating it as submit", async () => {
+    const { result } = await startHandsFree();
+    const recognition = RecognitionMock.latest!;
+    act(() => emitRecognitionResult("TodavÃ­a estoy pensando", true));
+    act(() => recognition.onend?.());
+    expect(result.current.transcript).toBe("");
+    act(() => vi.advanceTimersByTime(180));
+    expect(recognition.start).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not listen while processing and returns to listening after the response cycle", async () => {
+    const { result } = await startHandsFree();
+    const recognition = RecognitionMock.latest!;
+    act(() => emitRecognitionResult("Procesa esto", true));
+    act(() => vi.advanceTimersByTime(2_600));
+    act(() => vi.runOnlyPendingTimers());
+    expect(result.current.state).toBe("processing");
+    expect(recognition.start).toHaveBeenCalledTimes(1);
+    act(() => recognition.onend?.());
+    act(() => vi.advanceTimersByTime(500));
+    expect(recognition.start).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.clearTranscript());
+    await act(async () => { await result.current.startListening(); });
+    expect(recognition.start).toHaveBeenCalledTimes(2);
+    expect(result.current.state).toBe("listening");
+  });
+
+  it("manual stop cancels grace and automatic restart", async () => {
+    const { result } = await startHandsFree();
+    const recognition = RecognitionMock.latest!;
+    act(() => emitRecognitionResult("No enviar", true));
+    act(() => result.current.stopContinuousListening());
+    act(() => vi.runAllTimers());
+    expect(result.current.transcript).toBe("");
+    expect(result.current.state).toBe("idle");
+    expect(recognition.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("recovers no-speech but stops permanently on permission error", async () => {
+    const { result } = await startHandsFree();
+    const recognition = RecognitionMock.latest!;
+    act(() => recognition.onerror?.({ error: "no-speech" }));
+    act(() => vi.advanceTimersByTime(180));
+    expect(recognition.start).toHaveBeenCalledTimes(2);
+    act(() => recognition.onerror?.({ error: "not-allowed" }));
+    act(() => vi.runAllTimers());
+    expect(result.current.voiceError).toBe("permission-denied");
+    expect(recognition.start).toHaveBeenCalledTimes(2);
   });
 });

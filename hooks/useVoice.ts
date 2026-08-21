@@ -38,14 +38,17 @@ interface SpeechRecognitionAlternative {
 
 interface SpeechRecognitionResult {
   readonly [index: number]: SpeechRecognitionAlternative;
+  readonly isFinal?: boolean;
 }
 
 interface SpeechRecognitionResultList {
   readonly [index: number]: SpeechRecognitionResult;
+  readonly length?: number;
 }
 
 interface SpeechRecognitionEvent {
   results: SpeechRecognitionResultList;
+  resultIndex?: number;
 }
 
 interface SpeechRecognitionErrorEvent {
@@ -81,11 +84,23 @@ interface VoiceWindow extends Window {
 const MAX_RECORDING_MS = 30_000;
 const NO_SPEECH_TIMEOUT_MS = 10_000;
 const SILENCE_AFTER_SPEECH_MS = 1_150;
+export const HANDS_FREE_END_OF_UTTERANCE_MS = 2_600;
+const HANDS_FREE_RESTART_DELAY_MS = 180;
 const VOICE_ACTIVITY_THRESHOLD = 0.035;
 const VOICE_MODE_STORAGE_KEY =
   "iaura.voice.enabled";
 const VOICE_MODE_EVENT =
   "iaura:voice-mode-change";
+
+function appendTranscript(current: string, segment: string): string {
+  const left = current.trim();
+  const right = segment.trim();
+  if (!right) return left;
+  if (!left) return right;
+  if (left === right || left.endsWith(right)) return left;
+  if (right.startsWith(left)) return right;
+  return `${left} ${right}`.replace(/\s+/g, " ").trim();
+}
 
 function getVoiceModeSnapshot(): boolean {
   if (typeof window === "undefined") {
@@ -223,6 +238,31 @@ export function useVoice() {
     );
   const speechOperationRef = useRef(0);
   const listeningOperationRef = useRef(0);
+  const recognitionActiveRef = useRef(false);
+  const handsFreeFinalTranscriptRef = useRef("");
+  const handsFreeInterimTranscriptRef = useRef("");
+  const handsFreeSubmissionRef = useRef(false);
+  const handsFreeProcessingRef = useRef(false);
+  const handsFreeSilenceTimerRef = useRef<number | null>(null);
+  const recognitionRestartTimerRef = useRef<number | null>(null);
+
+  const clearHandsFreeTimers = useCallback(() => {
+    if (handsFreeSilenceTimerRef.current !== null) {
+      window.clearTimeout(handsFreeSilenceTimerRef.current);
+      handsFreeSilenceTimerRef.current = null;
+    }
+    if (recognitionRestartTimerRef.current !== null) {
+      window.clearTimeout(recognitionRestartTimerRef.current);
+      recognitionRestartTimerRef.current = null;
+    }
+  }, []);
+
+  const resetHandsFreeUtterance = useCallback(() => {
+    clearHandsFreeTimers();
+    handsFreeFinalTranscriptRef.current = "";
+    handsFreeInterimTranscriptRef.current = "";
+    handsFreeSubmissionRef.current = false;
+  }, [clearHandsFreeTimers]);
 
   const releaseVoiceActivity =
     useCallback((keepContext = false) => {
@@ -275,6 +315,8 @@ export function useVoice() {
 
   const cancelListeningResources = useCallback(() => {
     continuousListeningRef.current = false;
+    handsFreeProcessingRef.current = false;
+    resetHandsFreeUtterance();
 
     if (
       recorderRef.current?.state ===
@@ -287,7 +329,7 @@ export function useVoice() {
 
     recognitionRef.current?.abort();
     releaseRecording(false);
-  }, [releaseRecording]);
+  }, [releaseRecording, resetHandsFreeUtterance]);
 
   const setVoiceMode = useCallback(
     (enabled: boolean) => {
@@ -432,7 +474,9 @@ export function useVoice() {
               const silenceComplete =
                 heardVoice &&
                 now - lastVoiceAt >=
-                  SILENCE_AFTER_SPEECH_MS;
+                  (continuousListeningRef.current
+                    ? HANDS_FREE_END_OF_UTTERANCE_MS
+                    : SILENCE_AFTER_SPEECH_MS);
               const noSpeechTimeout =
                 !heardVoice &&
                 now - recordingStartedAt >=
@@ -629,7 +673,62 @@ console.info(
     recognition.continuous = false;
     recognition.interimResults = false;
 
+    const startRecognitionSafely = () => {
+      if (
+        recognitionActiveRef.current ||
+        !continuousListeningRef.current ||
+        handsFreeProcessingRef.current ||
+        !getVoiceModeSnapshot()
+      ) return;
+      try {
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.start();
+      } catch {
+        // The browser may still be closing the previous session.
+      }
+    };
+
+    const scheduleRecognitionRestart = () => {
+      if (recognitionRestartTimerRef.current !== null) return;
+      recognitionRestartTimerRef.current = window.setTimeout(() => {
+        recognitionRestartTimerRef.current = null;
+        startRecognitionSafely();
+      }, HANDS_FREE_RESTART_DELAY_MS);
+    };
+
+    const finishHandsFreeUtterance = () => {
+      if (
+        !continuousListeningRef.current ||
+        handsFreeSubmissionRef.current ||
+        handsFreeProcessingRef.current
+      ) return;
+      const text = appendTranscript(
+        handsFreeFinalTranscriptRef.current,
+        handsFreeInterimTranscriptRef.current,
+      );
+      if (!text) return;
+      handsFreeSubmissionRef.current = true;
+      handsFreeProcessingRef.current = true;
+      clearHandsFreeTimers();
+      setState("processing");
+      setTranscript("");
+      if (recognitionActiveRef.current) recognition.abort();
+      window.setTimeout(() => setTranscript(text), 0);
+    };
+
+    const scheduleEndOfUtterance = () => {
+      if (handsFreeSilenceTimerRef.current !== null) {
+        window.clearTimeout(handsFreeSilenceTimerRef.current);
+      }
+      handsFreeSilenceTimerRef.current = window.setTimeout(() => {
+        handsFreeSilenceTimerRef.current = null;
+        finishHandsFreeUtterance();
+      }, HANDS_FREE_END_OF_UTTERANCE_MS);
+    };
+
     recognition.onstart = () => {
+      recognitionActiveRef.current = true;
       if (!getVoiceModeSnapshot()) {
         recognition.abort();
         return;
@@ -644,20 +743,48 @@ console.info(
         return;
       }
 
-      const text =
-        event.results[0]?.[0]?.transcript
-          ?.trim();
+      if (!continuousListeningRef.current) {
+        const text = event.results[0]?.[0]?.transcript?.trim();
+        if (!text) return;
+        setTranscript("");
+        setState("processing");
+        window.setTimeout(() => setTranscript(text), 0);
+        return;
+      }
 
-      if (!text) return;
-
-      setTranscript("");
-      setState("processing");
-      window.setTimeout(() => {
-        setTranscript(text);
-      }, 0);
+      let interim = "";
+      const startIndex = event.resultIndex ?? 0;
+      const resultCount = event.results.length ?? (event.results[0] ? 1 : 0);
+      for (let index = startIndex; index < resultCount; index += 1) {
+        const result = event.results[index];
+        const segment = result?.[0]?.transcript?.trim() ?? "";
+        if (!segment) continue;
+        if (result.isFinal) {
+          handsFreeFinalTranscriptRef.current = appendTranscript(
+            handsFreeFinalTranscriptRef.current,
+            segment,
+          );
+        } else {
+          interim = appendTranscript(interim, segment);
+        }
+      }
+      handsFreeInterimTranscriptRef.current = interim;
+      if (handsFreeFinalTranscriptRef.current || interim) {
+        setState("listening");
+        scheduleEndOfUtterance();
+      }
     };
 
     recognition.onend = () => {
+      recognitionActiveRef.current = false;
+      if (
+        continuousListeningRef.current &&
+        !handsFreeProcessingRef.current &&
+        getVoiceModeSnapshot()
+      ) {
+        scheduleRecognitionRestart();
+        return;
+      }
       setState((currentState) =>
         currentState === "listening"
           ? "idle"
@@ -666,16 +793,26 @@ console.info(
     };
 
     recognition.onerror = (event) => {
+      recognitionActiveRef.current = false;
       const permissionError =
         event.error === "not-allowed" ||
         event.error ===
           "service-not-allowed";
 
-      setVoiceError(
-        permissionError
-          ? "permission-denied"
-          : "transcription-failed"
-      );
+      const fatalError = permissionError || event.error === "audio-capture";
+      const recoverableError = event.error === "no-speech" || event.error === "aborted" || event.error === "network";
+      if (fatalError) {
+        continuousListeningRef.current = false;
+        resetHandsFreeUtterance();
+        setVoiceError(permissionError ? "permission-denied" : "unavailable");
+        setState("idle");
+        return;
+      }
+      if (continuousListeningRef.current && recoverableError) {
+        scheduleRecognitionRestart();
+        return;
+      }
+      setVoiceError("transcription-failed");
       setState("idle");
     };
 
@@ -686,10 +823,12 @@ console.info(
       recognition.onresult = null;
       recognition.onend = null;
       recognition.onerror = null;
+      recognitionActiveRef.current = false;
+      clearHandsFreeTimers();
       recognition.abort();
       recognitionRef.current = null;
     };
-  }, [captureMode, language]);
+  }, [captureMode, clearHandsFreeTimers, language, resetHandsFreeUtterance]);
 
   useEffect(() => {
     return () => {
@@ -910,6 +1049,15 @@ console.info(
         recognitionRef.current
       ) {
         try {
+          if (continuousListeningRef.current) {
+            handsFreeProcessingRef.current = false;
+            resetHandsFreeUtterance();
+            recognitionRef.current.continuous = true;
+            recognitionRef.current.interimResults = true;
+          } else {
+            recognitionRef.current.continuous = false;
+            recognitionRef.current.interimResults = false;
+          }
           recognitionRef.current.start();
         } catch (error) {
           console.error(
@@ -930,6 +1078,7 @@ console.info(
       captureMode,
       setVoiceMode,
       startMediaRecording,
+      resetHandsFreeUtterance,
     ]
   );
 
@@ -954,6 +1103,8 @@ console.info(
   const stopContinuousListening =
     useCallback(() => {
       continuousListeningRef.current = false;
+      handsFreeProcessingRef.current = false;
+      resetHandsFreeUtterance();
 
       if (
         recorderRef.current?.state ===
@@ -967,10 +1118,12 @@ console.info(
       recognitionRef.current?.abort();
       releaseRecording(false);
       setState("idle");
-    }, [releaseRecording]);
+    }, [releaseRecording, resetHandsFreeUtterance]);
 
   const cancelListening = useCallback(() => {
     continuousListeningRef.current = false;
+    handsFreeProcessingRef.current = false;
+    resetHandsFreeUtterance();
 
     if (
       recorderRef.current?.state ===
@@ -984,7 +1137,7 @@ console.info(
     recognitionRef.current?.abort();
     releaseRecording(false);
     setState("idle");
-  }, [releaseRecording]);
+  }, [releaseRecording, resetHandsFreeUtterance]);
 
   const transcribeAudioFile = useCallback(
     async (file: File) => {
