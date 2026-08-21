@@ -62,6 +62,10 @@ export class AuthenticatedConversationRepository
     this.notify();
   }
 
+  getAuthenticatedUserId(): string | null {
+    return this.userId;
+  }
+
   async flush(): Promise<void> {
     await this.pending;
     if (this.persistenceFailure) {

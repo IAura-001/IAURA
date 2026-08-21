@@ -4,6 +4,11 @@ import type {
   IntelligenceUpdateInput,
   IntelligenceScopeType,
 } from "./domain";
+import type { IAuraProject } from "@/types/project";
+import {
+  buildIntelligenceContextProjection,
+  type IntelligenceContextProjection,
+} from "./contextProjection";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -29,6 +34,13 @@ export class AuthenticatedIntelligenceRepository {
       : "?scope=global";
     const body = await request<{ records: IntelligenceRecord[] }>(`/api/intelligence${query}`);
     return body.records;
+  }
+
+  async loadContextProjection(
+    activeProject: IAuraProject | null,
+  ): Promise<IntelligenceContextProjection> {
+    const records = await this.loadProjection(activeProject?.id ?? null);
+    return buildIntelligenceContextProjection(records, activeProject);
   }
 
   async create(input: IntelligenceCreateInput): Promise<IntelligenceRecord> {
@@ -67,3 +79,6 @@ export class AuthenticatedIntelligenceRepository {
     return body.records;
   }
 }
+
+export const authenticatedIntelligenceRepository =
+  new AuthenticatedIntelligenceRepository();

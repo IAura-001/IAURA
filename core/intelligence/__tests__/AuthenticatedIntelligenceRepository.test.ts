@@ -51,4 +51,25 @@ describe("AuthenticatedIntelligenceRepository", () => {
       expect.objectContaining({ method: "DELETE" }),
     );
   });
+
+  it("loads context through the authenticated exact-project projection endpoint", async () => {
+    const project = { id: "project-a", goal: "Primary objective" } as Parameters<
+      AuthenticatedIntelligenceRepository["loadContextProjection"]
+    >[0];
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ records: [record] }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const projection = await new AuthenticatedIntelligenceRepository()
+      .loadContextProjection(project);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/intelligence?projectId=project-a",
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(projection.global.goals[0]?.title).toBe("Canonical goal");
+    expect(projection.project?.projectGoal).toBe("Primary objective");
+  });
 });

@@ -25,6 +25,13 @@ import {
   type ProjectRepository,
 } from "../project/ProjectRepository";
 import { authenticatedProjectRepository } from "../project/AuthenticatedProjectRepository";
+import type { IAuraProject } from "@/types/project";
+import {
+  authenticatedIntelligenceRepository,
+  emptyIntelligenceContextProjection,
+  type IntelligenceContextProjection,
+} from "../intelligence";
+import { serializeIntelligenceContext } from "../prompt/PromptBuilder";
 import {
   assistantMessageMetadata,
   conversationRepository,
@@ -81,6 +88,12 @@ interface ContextRetrievalService {
   ): Promise<ContextPackage>;
 }
 
+interface IntelligenceContextSource {
+  loadContextProjection(
+    activeProject: IAuraProject | null,
+  ): Promise<IntelligenceContextProjection>;
+}
+
 type ResponseGenerator = (
   request: CognitiveRequest,
 ) => Promise<AuraAssistantPlan>;
@@ -104,6 +117,8 @@ interface ConversationControllerOptions {
   brain?: BrainAnalyzer;
   generateResponse?: ResponseGenerator;
   contextRetriever?: ContextRetrievalService;
+  intelligenceContextSource?: IntelligenceContextSource | null;
+  authenticatedUserId?: () => string | null;
   now?: () => string;
   evidenceIdFactory?: () => string;
 }
@@ -309,6 +324,8 @@ export class ConversationController {
   private readonly brain: BrainAnalyzer;
   private readonly generateResponse: ResponseGenerator;
   private readonly contextRetriever: ContextRetrievalService;
+  private readonly intelligenceContextSource: IntelligenceContextSource | null;
+  private readonly authenticatedUserId: () => string | null;
   private readonly now: () => string;
   private readonly evidenceIdFactory: () => string;
 
@@ -355,6 +372,13 @@ export class ConversationController {
         memorySource:
           new LocalMemoryContextSource(),
       });
+    this.intelligenceContextSource = options.intelligenceContextSource ??
+      (process.env.NODE_ENV === "test" ? null : authenticatedIntelligenceRepository);
+    this.authenticatedUserId = options.authenticatedUserId ?? (() =>
+      "getAuthenticatedUserId" in this.conversations &&
+      typeof this.conversations.getAuthenticatedUserId === "function"
+        ? this.conversations.getAuthenticatedUserId() as string | null
+        : null);
     this.now = options.now ?? (() => new Date().toISOString());
     this.evidenceIdFactory = options.evidenceIdFactory ??
       (() => `evidence-${crypto.randomUUID()}`);
@@ -451,7 +475,7 @@ export class ConversationController {
   ): Promise<ContextPackage> {
     try {
       return await this.contextRetriever.retrieve({
-        userId: "local-user",
+        userId: this.authenticatedUserId() ?? "local-user",
          conversationId:
            conversation.conversationId,
          projectId: conversation.projectId,
@@ -464,6 +488,23 @@ export class ConversationController {
         conversation.conversationId,
         userMessage.messageId,
       );
+    }
+  }
+
+  private async loadIntelligenceContext(
+    activeProject: IAuraProject | null,
+  ): Promise<IntelligenceContextProjection> {
+    if (!this.intelligenceContextSource) {
+      return emptyIntelligenceContextProjection(activeProject);
+    }
+    try {
+      return await this.intelligenceContextSource.loadContextProjection(activeProject);
+    } catch (error) {
+      console.warn(
+        "IAURA Intelligence context retrieval failed; continuing without canonical Intelligence.",
+        error instanceof Error ? error.message.slice(0, 300) : "Unknown Intelligence retrieval failure.",
+      );
+      return emptyIntelligenceContextProjection(activeProject);
     }
   }
 
@@ -499,12 +540,21 @@ export class ConversationController {
         message,
       );
 
+    const activeProject = this.projects.getActiveProject();
+    const intelligenceContext = await this.loadIntelligenceContext(
+      activeProject?.id === conversation.projectId ? activeProject : null,
+    );
+    const serializedIntelligence = serializeIntelligenceContext(intelligenceContext);
+
     const retrievedContext =
       serializeContextPackage(contextPackage);
 
     const enrichedUserContext =
       mergeUserContext(
-        mergeUserContext(userContext, serializeBetaWorkflow(conversation)),
+        mergeUserContext(
+          mergeUserContext(userContext, serializedIntelligence),
+          serializeBetaWorkflow(conversation),
+        ),
         retrievedContext,
       );
 

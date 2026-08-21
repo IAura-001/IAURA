@@ -2285,4 +2285,86 @@ describe("ConversationController", () => {
       expectedRevision: conversationRepository.getConversation(created.conversationId)!.revision,
     })).toThrow(expect.objectContaining({ code: "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE" }));
   });
+
+  it("threads authenticated identity and exact active-project Intelligence into read-only context", async () => {
+    const project = {
+      id: "project-a",
+      name: "VAEORA",
+      goal: "Ship the primary objective",
+    } as IAuraProject;
+    const projects = { getActiveProject: vi.fn(() => project) } as unknown as ProjectRepository;
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const contextRetriever = createContextRetriever();
+    const intelligenceContextSource = {
+      loadContextProjection: vi.fn(async () => ({
+        global: {
+          direction: { content: "Build a disciplined life" },
+          priorities: [{ position: 1, label: "Build VAEORA", source: "title" as const }],
+          goals: [],
+          recurringCommitments: [],
+        },
+        project: {
+          projectId: "project-a",
+          projectGoal: "Ship the primary objective",
+          direction: null,
+          priorities: [],
+          goals: [{ title: "Project A additional goal", targetDate: null }],
+          recurringCommitments: [],
+        },
+      })),
+    };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Aware", []));
+
+    await new ConversationController({
+      conversations,
+      projects,
+      contextRetriever,
+      intelligenceContextSource,
+      authenticatedUserId: () => "authenticated-user-a",
+    }).send("What matters?", "Identity and project preferences");
+
+    expect(contextRetriever.retrieve).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "authenticated-user-a",
+      projectId: "project-a",
+    }));
+    expect(intelligenceContextSource.loadContextProjection).toHaveBeenCalledWith(project);
+    expect(mocks.analyze).toHaveBeenCalledWith(expect.objectContaining({
+      userContext: expect.stringContaining('<user_intelligence trust="user-context-data" access="read-only">'),
+    }));
+    const submitted = mocks.analyze.mock.calls.at(-1)?.[0].userContext as string;
+    expect(submitted).toContain("Project Primary Objective (authoritative)");
+    expect(submitted).toContain("Project A additional goal");
+    expect(submitted).not.toContain("Memory.goals");
+    expect(mocks.executeMemoryUpdates).toHaveBeenCalledWith([], "project-a");
+  });
+
+  it("continues safely with no stale Intelligence when canonical retrieval fails", async () => {
+    const project = { id: "project-a", name: "VAEORA", goal: "Primary survives" } as IAuraProject;
+    const projects = { getActiveProject: vi.fn(() => project) } as unknown as ProjectRepository;
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Continued", []));
+
+    await expect(new ConversationController({
+      conversations,
+      projects,
+      contextRetriever: createContextRetriever(),
+      intelligenceContextSource: {
+        loadContextProjection: vi.fn().mockRejectedValue(new Error("read unavailable")),
+      },
+      authenticatedUserId: () => "authenticated-user-a",
+    }).send("Continue", "Existing safe context")).resolves.toMatchObject({
+      plan: { content: "Continued" },
+    });
+
+    const submitted = mocks.analyze.mock.calls.at(-1)?.[0].userContext as string;
+    expect(submitted).toContain("Primary survives");
+    expect(submitted).not.toContain("Project B");
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining("continuing without canonical Intelligence"),
+      "read unavailable",
+    );
+  });
 });
