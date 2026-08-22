@@ -22,6 +22,7 @@ import {
   type PlannedMemoryUpdate,
 } from "./types";
 import type { ProjectKind } from "@/types/project";
+import type { IntelligenceActionProposal, ProposalBase } from "@/core/intelligence/actionTypes";
 
 const actionTypes = new Set<string>(
   IAURA_ACTION_TYPES,
@@ -89,6 +90,75 @@ function readConfidence(
   }
 
   return Math.min(1, Math.max(0, value));
+}
+
+export function parseIntelligenceProposal(value: unknown, trustApplicationExecutionId = false): IntelligenceActionProposal | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const p = value as Record<string, unknown>;
+  const scopeType = p.scopeType;
+  const projectId = p.projectId;
+  const expectedActiveProjectId = p.expectedActiveProjectId;
+  if ((scopeType !== "global" && scopeType !== "project") ||
+    (scopeType === "global" && (projectId !== null || expectedActiveProjectId !== null)) ||
+    (scopeType === "project" && (typeof projectId !== "string" || !projectId.trim() || expectedActiveProjectId !== projectId))) return null;
+  const base: ProposalBase = {
+    ...(trustApplicationExecutionId && typeof p.executionId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(p.executionId)
+      ? { executionId: p.executionId } : {}),
+    scopeType,
+    projectId: projectId as string | null,
+    expectedActiveProjectId: expectedActiveProjectId as string | null,
+    projectName: typeof p.projectName === "string" && p.projectName.trim() ? p.projectName.trim().slice(0, 200) : null,
+    currentSummary: readText(p.currentSummary, 1000),
+    proposedSummary: readText(p.proposedSummary, 1000),
+  };
+  if (!base.proposedSummary) return null;
+  const validRecordId = (candidate: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate);
+  const validUpdatedAt = (candidate: string) => Number.isFinite(Date.parse(candidate));
+  const recordId = readText(p.recordId, 200);
+  const expectedUpdatedAt = readText(p.expectedUpdatedAt, 100);
+  if ((recordId && !validRecordId(recordId)) || (expectedUpdatedAt && !validUpdatedAt(expectedUpdatedAt))) return null;
+  if (p.operation === "intelligence_set_direction") {
+    const content = readText(p.content, 2000);
+    if (!content || Boolean(recordId) !== Boolean(expectedUpdatedAt)) return null;
+    return { ...base, operation: p.operation, recordId: recordId || null, expectedUpdatedAt: expectedUpdatedAt || null, content };
+  }
+  if (p.operation === "intelligence_create_goal") {
+    const title = readText(p.title, 500); return title ? { ...base, operation: p.operation, title } : null;
+  }
+  if (p.operation === "intelligence_set_goal_status" && recordId && expectedUpdatedAt && (p.status === "completed" || p.status === "archived"))
+    return { ...base, operation: p.operation, recordId, expectedUpdatedAt, status: p.status };
+  if (p.operation === "intelligence_create_priority") {
+    const title = readText(p.title, 500) || null; const goalId = readText(p.goalId, 200) || null;
+    if (goalId && !validRecordId(goalId)) return null;
+    return Boolean(title) !== Boolean(goalId) ? { ...base, operation: p.operation, title, goalId } : null;
+  }
+  if (p.operation === "intelligence_reorder_priorities" && Array.isArray(p.orderedPriorityIds) && Array.isArray(p.expectedPriorities)) {
+    const ids = p.orderedPriorityIds.map((id) => readText(id, 200));
+    const snapshot = p.expectedPriorities.flatMap((item) => {
+      if (typeof item !== "object" || item === null) return [];
+      const row = item as Record<string, unknown>; const id = readText(row.recordId, 200); const updatedAt = readText(row.updatedAt, 100); const label = readText(row.label, 500);
+      return id && updatedAt && label && Number.isInteger(row.position) && Number(row.position) >= 1 && Number(row.position) <= 3
+        ? [{ recordId: id, position: Number(row.position), updatedAt, label }] : [];
+    });
+    const snapshotIds = snapshot.map((row) => row.recordId);
+    const snapshotPositions = snapshot.map((row) => row.position);
+    if (!ids.length || ids.some((id) => !id || !validRecordId(id)) || ids.length > 3 || new Set(ids).size !== ids.length ||
+      snapshot.length !== ids.length || snapshot.some((row) => !validRecordId(row.recordId) || !validUpdatedAt(row.updatedAt)) ||
+      new Set(snapshotIds).size !== snapshotIds.length || new Set(snapshotPositions).size !== snapshotPositions.length ||
+      ids.some((id) => !snapshotIds.includes(id))) return null;
+    return { ...base, operation: p.operation, orderedPriorityIds: ids, expectedPriorities: snapshot };
+  }
+  if (p.operation === "intelligence_archive_priority" && recordId && expectedUpdatedAt)
+    return { ...base, operation: p.operation, recordId, expectedUpdatedAt };
+  if (p.operation === "intelligence_create_recurring_commitment") {
+    const title = readText(p.title, 500); const cadenceDetail = readText(p.cadenceDetail, 500) || null;
+    if (!title || (p.cadence !== "daily" && p.cadence !== "weekly" && p.cadence !== "custom") || (p.cadence === "custom" && !cadenceDetail)) return null;
+    return { ...base, operation: p.operation, title, cadence: p.cadence, cadenceDetail };
+  }
+  if (p.operation === "intelligence_set_recurring_commitment_status" && recordId && expectedUpdatedAt && (p.status === "active" || p.status === "paused" || p.status === "archived"))
+    return { ...base, operation: p.operation, recordId, expectedUpdatedAt, status: p.status };
+  return null;
 }
 
 function parseAction(
@@ -261,6 +331,11 @@ function parseChoice(
       ? candidate.confirmation as Record<string, unknown>
       : null;
   const confirmation = (() => {
+    if (rawConfirmation && rawConfirmation.kind === "intelligence-action" &&
+      (rawConfirmation.decision === "confirm" || rawConfirmation.decision === "cancel")) {
+      const proposal = parseIntelligenceProposal(rawConfirmation.proposal);
+      return proposal ? { kind: "intelligence-action" as const, decision: rawConfirmation.decision as "confirm" | "cancel", proposal } : undefined;
+    }
     if (!rawConfirmation) return undefined;
     if (rawConfirmation.kind === "project-decision") {
       const content = readText(rawConfirmation.content, 600);

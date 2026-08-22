@@ -20,6 +20,7 @@ import { BetaNextStepCard } from "../cards/BetaNextStepCard";
 import { BetaExecutionEvaluationCard } from "../cards/BetaExecutionEvaluationCard";
 import { BetaSessionReviewCard } from "../cards/BetaSessionReviewCard";
 import AuraExperienceCard from "./AuraExperienceCard";
+import IntelligenceActionCard from "../cards/IntelligenceActionCard";
 import { useI18n } from "@/core/i18n/I18nContext";
 import {
   BRAND_PALETTE_PRESETS,
@@ -179,7 +180,7 @@ const AnimatedMessage = memo(
               </div>
 
               {message.experience ? (
-                <AuraExperienceCard
+                <><AuraExperienceCard
                   experience={message.experience}
                   sourceMessageId={message.id}
                   disabled={isBusy}
@@ -189,11 +190,19 @@ const AnimatedMessage = memo(
                     !message.betaNextStep && !message.betaExecutionEvaluation
                     && !message.betaSessionEvaluation
                     && !message.betaSessionDecisionConfirmed
+                    && !message.experience.choices.some((choice) => choice.confirmation?.kind === "intelligence-action")
                   }
                   confirmedRecoveryDecision={
                     message.betaIncompleteExecutionRecoveryDecision
                   }
                 />
+                <IntelligenceActionCard
+                  choices={message.experience.choices}
+                  sourceMessageId={message.id}
+                  disabled={isBusy}
+                  resolved={message.intelligenceActionResolved}
+                  onChoose={onChoose}
+                /></>
               ) : null}
 
               {message.betaNextStep ? (

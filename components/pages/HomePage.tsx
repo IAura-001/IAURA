@@ -24,6 +24,7 @@ import {
 } from "@/core/actions";
 import {
   conversationController,
+  ConversationTurnError,
 } from "@/core/conversation";
 import {
   authenticatedConversationRepository as conversationRepository,
@@ -698,8 +699,10 @@ export default function Home({
           error,
         );
 
-        const errorContent =
-          translate(
+        const errorContent = error instanceof ConversationTurnError &&
+          error.code === "IAURA_CONVERSATION_STALE_CONFIRMATION"
+          ? error.message
+          : translate(
             memory.preferredLocale,
             "error.conversation",
           );

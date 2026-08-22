@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { authenticationRequiredResponse, getAuthenticatedUser } from "@/core/auth/session";
-import { archiveIntelligenceRecord, updateIntelligenceRecord } from "@/core/intelligence/server";
-import type { IntelligenceUpdateInput } from "@/core/intelligence/domain";
+import { archiveIntelligenceRecord, requireCurrentIntelligenceScope, updateIntelligenceRecord } from "@/core/intelligence/server";
+import type { IntelligenceScopeType, IntelligenceUpdateInput } from "@/core/intelligence/domain";
 
 const headers = { "Cache-Control": "no-store" };
 
@@ -10,9 +10,10 @@ function failure(error: unknown): NextResponse {
   const code = error instanceof Error ? error.message : "IAURA_INTELLIGENCE_FAILED";
   const notFound = code === "IAURA_INTELLIGENCE_NOT_FOUND";
   const invalid = code.startsWith("IAURA_INTELLIGENCE_INVALID_");
+  const stale = code === "IAURA_INTELLIGENCE_STALE";
   return NextResponse.json(
-    { error: notFound || invalid ? code : "Unable to update intelligence record." },
-    { status: notFound ? 404 : invalid ? 400 : 500, headers },
+    { error: notFound || invalid || stale ? code : "Unable to update intelligence record." },
+    { status: notFound ? 404 : stale ? 409 : invalid ? 400 : 500, headers },
   );
 }
 
@@ -30,10 +31,12 @@ export async function PATCH(
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return authenticationRequiredResponse();
-  const body = await request.json().catch(() => null) as { updates?: IntelligenceUpdateInput } | null;
+  const body = await request.json().catch(() => null) as { updates?: IntelligenceUpdateInput; expectedUpdatedAt?: string; authority?: { scopeType?: IntelligenceScopeType; projectId?: string | null; expectedActiveProjectId?: string | null } } | null;
   if (!body?.updates || typeof body.updates !== "object") return failure(new Error("IAURA_INTELLIGENCE_INVALID_INPUT"));
   try {
-    const record = await updateIntelligenceRecord(user.id, await recordId(context), body.updates);
+    if (!body.authority) throw new Error("IAURA_INTELLIGENCE_STALE");
+    await requireCurrentIntelligenceScope(user.id, body.authority.scopeType as IntelligenceScopeType, body.authority.projectId ?? null, body.authority.expectedActiveProjectId ?? null);
+    const record = await updateIntelligenceRecord(user.id, await recordId(context), body.updates, body.expectedUpdatedAt);
     return NextResponse.json({ record }, { headers });
   } catch (error) {
     return failure(error);

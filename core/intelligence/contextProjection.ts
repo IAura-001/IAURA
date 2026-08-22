@@ -10,6 +10,8 @@ export const INTELLIGENCE_CONTEXT_LIMITS = {
 } as const;
 
 export interface IntelligenceContextDirection {
+  recordId: string;
+  updatedAt: string;
   content: string;
 }
 
@@ -17,14 +19,21 @@ export interface IntelligenceContextPriority {
   position: number;
   label: string;
   source: "title" | "goal";
+  recordId: string;
+  updatedAt: string;
+  goalId: string | null;
 }
 
 export interface IntelligenceContextGoal {
+  recordId: string;
+  updatedAt: string;
   title: string;
   targetDate: string | null;
 }
 
 export interface IntelligenceContextRecurringCommitment {
+  recordId: string;
+  updatedAt: string;
   title: string;
   cadence: "daily" | "weekly" | "custom";
   cadenceDetail: string | null;
@@ -66,21 +75,21 @@ function projectScope(records: IntelligenceRecord[]): IntelligenceContextScope {
       .filter((record): record is Extract<IntelligenceRecord, { type: "direction" }> => record.type === "direction")
       .sort(compareCreated)
       .slice(0, INTELLIGENCE_CONTEXT_LIMITS.directionsPerScope)
-      .map(({ content }) => ({ content }))[0] ?? null,
+      .map(({ id: recordId, updatedAt, content }) => ({ recordId, updatedAt, content }))[0] ?? null,
     priorities: active
       .filter((record): record is Extract<IntelligenceRecord, { type: "priority" }> => record.type === "priority")
       .sort((left, right) => left.position - right.position || compareCreated(left, right))
       .slice(0, INTELLIGENCE_CONTEXT_LIMITS.prioritiesPerScope)
       .flatMap((priority) => {
         const label = priority.title ?? (priority.goalId ? goalTitles.get(priority.goalId) : undefined);
-        return label ? [{ position: priority.position, label, source: priority.title ? "title" as const : "goal" as const }] : [];
+        return label ? [{ position: priority.position, label, source: priority.title ? "title" as const : "goal" as const, recordId: priority.id, updatedAt: priority.updatedAt, goalId: priority.goalId }] : [];
       }),
-    goals: goals.map(({ title, targetDate }) => ({ title, targetDate })),
+    goals: goals.map(({ id: recordId, updatedAt, title, targetDate }) => ({ recordId, updatedAt, title, targetDate })),
     recurringCommitments: active
       .filter((record): record is Extract<IntelligenceRecord, { type: "recurring_commitment" }> => record.type === "recurring_commitment")
       .sort(compareCreated)
       .slice(0, INTELLIGENCE_CONTEXT_LIMITS.recurringCommitmentsPerScope)
-      .map(({ title, cadence, cadenceDetail }) => ({ title, cadence, cadenceDetail })),
+      .map(({ id: recordId, updatedAt, title, cadence, cadenceDetail }) => ({ recordId, updatedAt, title, cadence, cadenceDetail })),
   };
 }
 

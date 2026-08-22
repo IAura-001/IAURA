@@ -52,6 +52,22 @@ describe("AuthenticatedIntelligenceRepository", () => {
     );
   });
 
+  it("sends trusted execution identity with an idempotent create", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ record }), { status: 201, headers: { "Content-Type": "application/json" } },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+    await new AuthenticatedIntelligenceRepository().create(
+      { type: "goal", scopeType: "global", projectId: null, title: "Canonical goal", targetDate: null },
+      "70000000-0000-4000-8000-000000000001",
+      "intelligence_create_goal",
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      executionId: "70000000-0000-4000-8000-000000000001",
+      operation: "intelligence_create_goal",
+    });
+  });
+
   it("loads context through the authenticated exact-project projection endpoint", async () => {
     const project = { id: "project-a", goal: "Primary objective" } as Parameters<
       AuthenticatedIntelligenceRepository["loadContextProjection"]

@@ -67,7 +67,7 @@ describe("Intelligence context projection", () => {
     ];
 
     const scope = buildIntelligenceContextProjection(records, null).global;
-    expect(scope.direction).toEqual({ content: "d0" });
+    expect(scope.direction).toEqual({ recordId: "d0", updatedAt: "2026-08-21T01:00:00Z", content: "d0" });
     expect(scope.priorities).toHaveLength(INTELLIGENCE_CONTEXT_LIMITS.prioritiesPerScope);
     expect(scope.goals).toHaveLength(INTELLIGENCE_CONTEXT_LIMITS.goalsPerScope);
     expect(scope.recurringCommitments).toHaveLength(INTELLIGENCE_CONTEXT_LIMITS.recurringCommitmentsPerScope);

@@ -3,6 +3,7 @@ import type { ProjectKind } from "@/types/project";
 import type {
   ProjectRepositorySnapshot,
 } from "@/core/project/ProjectRepository";
+import type { IntelligenceActionConfirmation } from "@/core/intelligence/actionTypes";
 
 export const IAURA_ACTION_TYPES = [
   "add_goal",
@@ -98,6 +99,7 @@ export type BetaPostClosureDecision =
   | "begin-another-cycle";
 
 export type AuraExperienceConfirmation =
+  | IntelligenceActionConfirmation
   | {
       kind: "project-decision";
       content: string;

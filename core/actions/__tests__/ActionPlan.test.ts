@@ -62,6 +62,11 @@ describe("ActionPlan", () => {
       expect.objectContaining({
         type: "object",
         additionalProperties: false,
+        required: ["kind", "decision", "proposal"],
+      }),
+      expect.objectContaining({
+        type: "object",
+        additionalProperties: false,
         required: ["kind", "content"],
         properties: expect.objectContaining({
           kind: expect.objectContaining({ enum: ["project-decision"] }),
@@ -120,10 +125,64 @@ describe("ActionPlan", () => {
       { type: "null" },
     ]);
     const objectProperties =
-      schema.properties.confirmation.anyOf[0].properties;
+      schema.properties.confirmation.anyOf[1].properties;
     expect(objectProperties).not.toHaveProperty("projectId");
     expect(objectProperties).not.toHaveProperty("scope");
     expect(objectProperties).not.toHaveProperty("tags");
+  });
+
+  it("parses a narrow Intelligence proposal and rejects invalid global scope authority", () => {
+    const proposal = {
+      operation: "intelligence_create_goal", scopeType: "global", projectId: null,
+      expectedActiveProjectId: null, projectName: null, currentSummary: "None",
+      proposedSummary: "Goal: Finish v2", title: "Finish v2",
+    };
+    const plan = parseAuraAssistantPlan({ content: "Review", experience: {
+      kind: "decision", title: "Goal", summary: "Review", phases: [], recommendedSurface: "intelligence",
+      choices: [{ label: "Confirm", description: "Create", prompt: "Confirm", confirmation: {
+        kind: "intelligence-action", decision: "confirm", proposal,
+      } }],
+    } });
+    expect(plan.experience.choices[0].confirmation).toEqual({
+      kind: "intelligence-action", decision: "confirm", proposal,
+    });
+
+    const hostileAuthority = parseAuraAssistantPlan({ content: "Review", experience: {
+      kind: "decision", title: "Goal", summary: "Review", phases: [], recommendedSurface: "intelligence",
+      choices: [{ label: "Confirm", description: "Create", prompt: "Confirm", confirmation: {
+        kind: "intelligence-action", decision: "confirm",
+        proposal: { ...proposal, executionId: "70000000-0000-4000-8000-000000000099" },
+      } }],
+    } });
+    expect((hostileAuthority.experience.choices[0].confirmation as { proposal: { executionId?: string } }).proposal.executionId)
+      .toBeUndefined();
+
+    const invalid = parseAuraAssistantPlan({ content: "Review", experience: {
+      kind: "decision", title: "Goal", summary: "Review", phases: [], recommendedSurface: "intelligence",
+      choices: [{ label: "Confirm", description: "Create", prompt: "Confirm", confirmation: {
+        kind: "intelligence-action", decision: "confirm", proposal: { ...proposal, projectId: "hostile-project" },
+      } }],
+    } });
+    expect(invalid.experience.choices[0].confirmation).toBeUndefined();
+  });
+
+  it("rejects malformed or mismatched canonical Intelligence references", () => {
+    const base = {
+      operation: "intelligence_set_goal_status", scopeType: "global", projectId: null,
+      expectedActiveProjectId: null, projectName: null, currentSummary: "Active goal",
+      proposedSummary: "Complete goal", status: "completed",
+      recordId: "not-a-uuid", expectedUpdatedAt: "not-a-timestamp",
+    };
+    const parse = (proposal: object) => parseAuraAssistantPlan({ content: "Review", experience: {
+      kind: "decision", title: "Goal", summary: "Review", phases: [], recommendedSurface: "intelligence",
+      choices: [{ label: "Confirm", description: "Apply", prompt: "Confirm", confirmation: {
+        kind: "intelligence-action", decision: "confirm", proposal,
+      } }],
+    } }).experience.choices[0].confirmation;
+
+    expect(parse(base)).toBeUndefined();
+    expect(parse({ ...base, recordId: "00000000-0000-4000-8000-000000000001", expectedUpdatedAt: "still-not-a-timestamp" }))
+      .toBeUndefined();
   });
 
   it.each(["start-now", "continue-later"] as const)(
@@ -586,6 +645,46 @@ describe("ActionPlan", () => {
       label: "Tell me more",
       description: "Keep exploring.",
       prompt: "Tell me more about the options.",
+    });
+  });
+
+  it("preserves a validated reorder snapshot with canonical display labels", () => {
+    const firstId = "00000000-0000-4000-8000-000000000001";
+    const secondId = "00000000-0000-4000-8000-000000000002";
+    const proposal = {
+      operation: "intelligence_reorder_priorities",
+      scopeType: "global",
+      projectId: null,
+      expectedActiveProjectId: null,
+      projectName: null,
+      currentSummary: "Current priorities",
+      proposedSummary: "Proposed priorities",
+      orderedPriorityIds: [secondId, firstId],
+      expectedPriorities: [
+        { recordId: firstId, position: 1, updatedAt: "2026-08-21T00:00:00Z", label: "Finish Intelligence v2" },
+        { recordId: secondId, position: 2, updatedAt: "2026-08-21T00:00:01Z", label: "Train consistently" },
+      ],
+    };
+    const plan = parseAuraAssistantPlan({
+      content: "Confirm the reorder.",
+      experience: {
+        kind: "decision",
+        title: "Reorder global priorities",
+        summary: "Confirm the exact order.",
+        phases: [],
+        choices: [
+          { label: "Confirm", description: "Apply", prompt: "Confirm", confirmation: { kind: "intelligence-action", decision: "confirm", proposal } },
+          { label: "Cancel", description: "Keep", prompt: "Cancel", confirmation: { kind: "intelligence-action", decision: "cancel", proposal } },
+        ],
+        recommendedSurface: "presence",
+      },
+    });
+
+    expect(plan.experience.choices).toHaveLength(2);
+    expect(plan.experience.choices[0].confirmation).toMatchObject({
+      kind: "intelligence-action",
+      decision: "confirm",
+      proposal: { operation: "intelligence_reorder_priorities", expectedPriorities: proposal.expectedPriorities },
     });
   });
 });

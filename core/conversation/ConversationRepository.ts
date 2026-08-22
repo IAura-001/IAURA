@@ -27,6 +27,7 @@ import {
   type AuraExperienceSurface,
   type IAuraActionType,
 } from "@/core/actions";
+import { parseIntelligenceProposal } from "@/core/actions/ActionPlan";
 
 export const CONVERSATION_STATE_STORAGE_KEY = "iaura.conversation-state";
 export const CONVERSATION_STATE_VERSION = 1;
@@ -654,6 +655,11 @@ function normalizeExperience(value: unknown): AuraExperience | undefined {
 
     const rawConfirmation = choice.confirmation;
     const confirmation = (() => {
+      if (isRecord(rawConfirmation) && rawConfirmation.kind === "intelligence-action" &&
+        (rawConfirmation.decision === "confirm" || rawConfirmation.decision === "cancel")) {
+        const proposal = parseIntelligenceProposal(rawConfirmation.proposal, true);
+        return proposal ? { kind: "intelligence-action" as const, decision: rawConfirmation.decision as "confirm" | "cancel", proposal } : undefined;
+      }
       if (!isRecord(rawConfirmation)) return undefined;
       if (
         rawConfirmation.kind === "project-decision" &&

@@ -50,6 +50,9 @@ export function loadVisibleConversation(
       return targetId ? [[targetId, workflow] as const] : [];
     }),
   );
+  const resolvedIntelligenceSources = new Set(
+    conversation?.messages.flatMap((message) => message.verifiedActionReceiptReferences ?? []) ?? [],
+  );
 
   return conversation?.messages.map((message) => ({
     id: message.messageId,
@@ -59,7 +62,14 @@ export function loadVisibleConversation(
       : message.content,
     ...(message.role === "assistant" &&
     message.structuredResponse?.experience
-      ? { experience: message.structuredResponse.experience }
+      ? {
+          experience: message.structuredResponse.experience,
+          ...(message.structuredResponse.experience.choices.some(
+            (choice) => choice.confirmation?.kind === "intelligence-action",
+          ) && resolvedIntelligenceSources.has(message.messageId)
+            ? { intelligenceActionResolved: true }
+            : {}),
+        }
       : {}),
     ...(message.role === "assistant" &&
     message.structuredResponse?.betaNextStep

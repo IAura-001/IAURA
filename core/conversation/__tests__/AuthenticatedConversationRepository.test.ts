@@ -132,6 +132,37 @@ describe("AuthenticatedConversationRepository", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(remoteRevision).toBe(remote.getRevision() + 2);
   });
+
+  it("reloads authoritative remote state after a stale-tab CAS conflict and permits a safe retry", async () => {
+    const remote = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    remote.createConversation({ conversationId: "conversation-a" });
+    remote.appendMessage("conversation-a", { messageId: "proposal", role: "assistant", content: "Persisted proposal" });
+    const repository = new AuthenticatedConversationRepository();
+    repository.configure("user-a", remote.getSnapshot());
+
+    remote.appendMessage("conversation-a", { messageId: "tab-b", role: "user", content: "Changed in tab B" });
+    let remoteSnapshot = remote.getSnapshot();
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "GET") return { ok: true, json: async () => ({ snapshot: remoteSnapshot }) };
+      const body = JSON.parse(String(init?.body)) as { expectedRevision: number; snapshot: typeof remoteSnapshot };
+      if (body.expectedRevision !== remoteSnapshot.revision) return {
+        ok: false, status: 409,
+        json: async () => ({ code: "IAURA_STATE_STALE_WRITE", error: "Conversation state changed in another session." }),
+      };
+      remoteSnapshot = body.snapshot;
+      return { ok: true };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    repository.appendMessage("conversation-a", { role: "user", content: "Confirm" });
+    await expect(repository.flush()).rejects.toMatchObject({ code: "IAURA_STATE_STALE_WRITE" });
+    expect(repository.getConversation("conversation-a")?.messages.map((message) => message.messageId))
+      .toEqual(["proposal", "tab-b"]);
+
+    repository.appendMessage("conversation-a", { role: "user", content: "Confirm" });
+    await expect(repository.flush()).resolves.toBeUndefined();
+    expect(remoteSnapshot.conversations[0].messages.at(-1)?.content).toBe("Confirm");
+  });
 });
   it("reproduces the former user-message failure when browser storage rejects the snapshot", () => {
     const local = new LocalConversationRepository({ synchronize: false });

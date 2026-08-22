@@ -19,6 +19,15 @@ import {
 
 type Listener = () => void;
 
+export class AuthenticatedConversationPersistenceError extends Error {
+  constructor(readonly code: "IAURA_STATE_STALE_WRITE" | "IAURA_STATE_PERSISTENCE_FAILED") {
+    super(code === "IAURA_STATE_STALE_WRITE"
+      ? "Conversation state changed in another session."
+      : "Conversation persistence failed.");
+    this.name = "AuthenticatedConversationPersistenceError";
+  }
+}
+
 export class AuthenticatedConversationRepository
   implements ConversationRepository
 {
@@ -69,8 +78,22 @@ export class AuthenticatedConversationRepository
   async flush(): Promise<void> {
     await this.pending;
     if (this.persistenceFailure) {
-      throw new Error("Conversation persistence failed.");
+      throw new AuthenticatedConversationPersistenceError(
+        this.persistenceFailure.code === "IAURA_STATE_STALE_WRITE"
+          ? "IAURA_STATE_STALE_WRITE" : "IAURA_STATE_PERSISTENCE_FAILED",
+      );
     }
+  }
+
+  private async reconcileRemoteSnapshot(): Promise<boolean> {
+    const response = await fetch("/api/conversations", { method: "GET", cache: "no-store" });
+    if (!response.ok) return false;
+    const body = await response.json().catch(() => null) as { snapshot?: ConversationRepositorySnapshot | null } | null;
+    if (!body?.snapshot) return false;
+    const replaced = this.local.replaceSnapshotResult(body.snapshot);
+    if (!replaced.ok) return false;
+    this.notify();
+    return true;
   }
 
   private queueSnapshot(
@@ -108,6 +131,10 @@ export class AuthenticatedConversationRepository
             code?: unknown;
             error?: unknown;
           } | null;
+          if (response.status === 409 && failure?.code === "IAURA_STATE_STALE_WRITE") {
+            await this.reconcileRemoteSnapshot();
+            throw new AuthenticatedConversationPersistenceError("IAURA_STATE_STALE_WRITE");
+          }
           throw new Error(
             `Conversation persistence failed (${response.status}, ${String(failure?.code ?? "unknown")}): ${String(failure?.error ?? "unknown")}`,
           );
@@ -115,12 +142,14 @@ export class AuthenticatedConversationRepository
 
         this.persistenceFailure = null;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        const stale = error instanceof AuthenticatedConversationPersistenceError &&
+          error.code === "IAURA_STATE_STALE_WRITE";
         this.persistenceFailure = {
           ok: false,
           outcome: "failed",
           revision: this.local.getRevision(),
-          code: "IAURA_STATE_PERSISTENCE_FAILED",
+          code: stale ? "IAURA_STATE_STALE_WRITE" : "IAURA_STATE_PERSISTENCE_FAILED",
         };
 
         this.notify();

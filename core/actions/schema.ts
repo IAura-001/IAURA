@@ -1,3 +1,49 @@
+const scopeProperties = {
+  scopeType: { type: "string", enum: ["global", "project"] },
+  projectId: { anyOf: [{ type: "string", minLength: 1 }, { type: "null" }] },
+  expectedActiveProjectId: { anyOf: [{ type: "string", minLength: 1 }, { type: "null" }] },
+  projectName: { anyOf: [{ type: "string", minLength: 1 }, { type: "null" }] },
+  currentSummary: { type: "string" },
+  proposedSummary: { type: "string", minLength: 1 },
+} as const;
+
+function intelligenceProposalSchema(
+  operation: string,
+  properties: Record<string, unknown>,
+) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["operation", ...Object.keys(scopeProperties), ...Object.keys(properties)],
+    properties: {
+      operation: { type: "string", enum: [operation] },
+      ...scopeProperties,
+      ...properties,
+    },
+  };
+}
+
+const recordId = { type: "string", minLength: 1 } as const;
+const nullableRecordId = { anyOf: [recordId, { type: "null" }] } as const;
+const expectedUpdatedAt = { type: "string", minLength: 1 } as const;
+const nullableUpdatedAt = { anyOf: [expectedUpdatedAt, { type: "null" }] } as const;
+
+const INTELLIGENCE_PROPOSAL_SCHEMA = {
+  anyOf: [
+    intelligenceProposalSchema("intelligence_set_direction", { recordId: nullableRecordId, expectedUpdatedAt: nullableUpdatedAt, content: { type: "string", minLength: 1 } }),
+    intelligenceProposalSchema("intelligence_create_goal", { title: { type: "string", minLength: 1 } }),
+    intelligenceProposalSchema("intelligence_set_goal_status", { recordId, expectedUpdatedAt, status: { type: "string", enum: ["completed", "archived"] } }),
+    intelligenceProposalSchema("intelligence_create_priority", { title: nullableRecordId, goalId: nullableRecordId }),
+    intelligenceProposalSchema("intelligence_reorder_priorities", {
+      orderedPriorityIds: { type: "array", maxItems: 3, items: recordId },
+      expectedPriorities: { type: "array", maxItems: 3, items: { type: "object", additionalProperties: false, required: ["recordId", "position", "updatedAt", "label"], properties: { recordId, position: { type: "integer", minimum: 1, maximum: 3 }, updatedAt: expectedUpdatedAt, label: { type: "string", minLength: 1, maxLength: 500 } } } },
+    }),
+    intelligenceProposalSchema("intelligence_archive_priority", { recordId, expectedUpdatedAt }),
+    intelligenceProposalSchema("intelligence_create_recurring_commitment", { title: { type: "string", minLength: 1 }, cadence: { type: "string", enum: ["daily", "weekly", "custom"] }, cadenceDetail: { anyOf: [{ type: "string", minLength: 1 }, { type: "null" }] } }),
+    intelligenceProposalSchema("intelligence_set_recurring_commitment_status", { recordId, expectedUpdatedAt, status: { type: "string", enum: ["active", "paused", "archived"] } }),
+  ],
+} as const;
+
 export const IAURA_RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -225,6 +271,16 @@ export const IAURA_RESPONSE_SCHEMA = {
               },
               confirmation: {
                 anyOf: [
+                  {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "decision", "proposal"],
+                    properties: {
+                      kind: { type: "string", enum: ["intelligence-action"] },
+                      decision: { type: "string", enum: ["confirm", "cancel"] },
+                      proposal: INTELLIGENCE_PROPOSAL_SCHEMA,
+                    },
+                  },
                   {
                     type: "object",
                     additionalProperties: false,

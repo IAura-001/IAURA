@@ -30,6 +30,9 @@ import {
   authenticatedIntelligenceRepository,
   emptyIntelligenceContextProjection,
   type IntelligenceContextProjection,
+  intelligenceActionExecutor,
+  type IntelligenceActionProposal,
+  type IntelligenceActionReceipt,
 } from "../intelligence";
 import { serializeIntelligenceContext } from "../prompt/PromptBuilder";
 import {
@@ -40,13 +43,14 @@ import {
   type ConversationRepository,
   type BetaWorkflowMetadata,
 } from "./ConversationRepository";
-import { authenticatedConversationRepository } from "./AuthenticatedConversationRepository";
+import { authenticatedConversationRepository, AuthenticatedConversationPersistenceError } from "./AuthenticatedConversationRepository";
 import { deferredContinuityProvenance } from "./BetaContinuity";
 
 export type ConversationTurnErrorCode =
   | "IAURA_CONVERSATION_PERSISTENCE_FAILED"
   | "IAURA_CONVERSATION_PROVIDER_FAILED"
   | "IAURA_CONTEXT_RETRIEVAL_FAILED"
+  | "IAURA_CONVERSATION_STALE_CONFIRMATION"
   | "IAURA_BETA_CONFIRMATION_INVALID"
   | "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE";
 
@@ -67,7 +71,9 @@ export class ConversationTurnError extends Error {
     readonly userMessageId?: string,
   ) {
     super(
-      code === "IAURA_CONVERSATION_PROVIDER_FAILED"
+      code === "IAURA_CONVERSATION_STALE_CONFIRMATION"
+        ? "This proposal is stale because the conversation changed in another session. Refresh and ask Aura to regenerate it."
+        : code === "IAURA_CONVERSATION_PROVIDER_FAILED"
         ? "IAURA could not generate a response. Your message was preserved for retry."
         : code === "IAURA_CONTEXT_RETRIEVAL_FAILED"
           ? "IAURA could not retrieve the context required for this response. Your message was preserved for retry."
@@ -92,6 +98,10 @@ interface IntelligenceContextSource {
   loadContextProjection(
     activeProject: IAuraProject | null,
   ): Promise<IntelligenceContextProjection>;
+}
+
+interface IntelligenceMutationExecutor {
+  execute(proposal: IntelligenceActionProposal, sourceMessageId: string, activeProject: IAuraProject | null): Promise<IntelligenceActionReceipt>;
 }
 
 type ResponseGenerator = (
@@ -119,6 +129,7 @@ interface ConversationControllerOptions {
   contextRetriever?: ContextRetrievalService;
   intelligenceContextSource?: IntelligenceContextSource | null;
   authenticatedUserId?: () => string | null;
+  intelligenceActionExecutor?: IntelligenceMutationExecutor;
   now?: () => string;
   evidenceIdFactory?: () => string;
 }
@@ -196,7 +207,16 @@ function sameChoice(
   left: AuraExperienceChoice,
   right: AuraExperienceChoice,
 ): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  const canonicalize = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === "object") return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+        .map(([key, nested]) => [key, canonicalize(nested)]),
+    );
+    return value;
+  };
+  return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
 }
 
 function sameNextStep(
@@ -326,6 +346,8 @@ export class ConversationController {
   private readonly contextRetriever: ContextRetrievalService;
   private readonly intelligenceContextSource: IntelligenceContextSource | null;
   private readonly authenticatedUserId: () => string | null;
+  private readonly intelligenceMutationExecutor: IntelligenceMutationExecutor;
+  private readonly pendingIntelligenceConfirmations = new Map<string, Promise<ConversationTurnResult>>();
   private readonly now: () => string;
   private readonly evidenceIdFactory: () => string;
 
@@ -339,7 +361,8 @@ export class ConversationController {
     }
     try {
       await this.conversations.flush();
-    } catch {
+    } catch (error) {
+      if (error instanceof AuthenticatedConversationPersistenceError) throw error;
       throw new ConversationTurnError(
         "IAURA_CONVERSATION_PERSISTENCE_FAILED",
         stage,
@@ -379,6 +402,7 @@ export class ConversationController {
       typeof this.conversations.getAuthenticatedUserId === "function"
         ? this.conversations.getAuthenticatedUserId() as string | null
         : null);
+    this.intelligenceMutationExecutor = options.intelligenceActionExecutor ?? intelligenceActionExecutor;
     this.now = options.now ?? (() => new Date().toISOString());
     this.evidenceIdFactory = options.evidenceIdFactory ??
       (() => `evidence-${crypto.randomUUID()}`);
@@ -589,6 +613,53 @@ export class ConversationController {
       );
     }
 
+    const intelligenceChoices = generatedResponse.experience.choices.filter(
+      (choice) => choice.confirmation?.kind === "intelligence-action",
+    );
+    const hasIntelligenceProposal = intelligenceChoices.length > 0;
+    if (hasIntelligenceProposal) {
+      const confirmations = intelligenceChoices.map((choice) =>
+        choice.confirmation?.kind === "intelligence-action" ? choice.confirmation : null);
+      const decisions = new Set(confirmations.map((confirmation) => confirmation?.decision));
+      const proposals = confirmations.map((confirmation) => JSON.stringify(confirmation?.proposal));
+      if (confirmations.length !== 2 || !decisions.has("confirm") || !decisions.has("cancel") || proposals[0] !== proposals[1]) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PROVIDER_FAILED", "generation", conversation.conversationId, userMessage.messageId,
+        );
+      }
+      const proposal = confirmations[0]!.proposal;
+      if (proposal.scopeType === "project" &&
+        (proposal.projectId !== conversation.projectId ||
+          proposal.expectedActiveProjectId !== conversation.projectId ||
+          activeProject?.id !== conversation.projectId)) {
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_PROVIDER_FAILED", "generation", conversation.conversationId, userMessage.messageId,
+        );
+      }
+    }
+    if (hasIntelligenceProposal && generatedResponse.actions.some((action) =>
+      ["add_goal", "remove_goal", "add_habit", "remove_habit"].includes(action.type))) {
+      throw new ConversationTurnError(
+        "IAURA_CONVERSATION_PROVIDER_FAILED",
+        "generation",
+        conversation.conversationId,
+        userMessage.messageId,
+      );
+    }
+    if (hasIntelligenceProposal) {
+      const executionId = crypto.randomUUID();
+      generatedResponse = {
+        ...generatedResponse,
+        experience: {
+          ...generatedResponse.experience,
+          choices: generatedResponse.experience.choices.map((choice) =>
+            choice.confirmation?.kind === "intelligence-action"
+              ? { ...choice, confirmation: { ...choice.confirmation, proposal: { ...choice.confirmation.proposal, executionId } } }
+              : choice),
+        },
+      };
+    }
+
     const evaluationAllowed =
       options.allowBetaExecutionEvaluation !== false &&
       conversation.betaWorkflow?.status === "started" &&
@@ -688,8 +759,9 @@ export class ConversationController {
       userMessage.messageId,
     );
 
+    const authoritativeExperience = assistantWrite.message.structuredResponse?.experience;
     return {
-      plan: response,
+      plan: authoritativeExperience ? { ...response, experience: authoritativeExperience } : response,
       assistantMessageId: assistantWrite.message.messageId,
     };
   }
@@ -809,18 +881,139 @@ export class ConversationController {
     return updated;
   }
 
+  private async resolveIntelligenceChoice(
+    conversation: Conversation,
+    sourceMessage: ConversationMessage,
+    persistedChoice: AuraExperienceChoice,
+    confirmation: Extract<AuraExperienceChoice["confirmation"], { kind: "intelligence-action" }>,
+  ): Promise<ConversationTurnResult> {
+    const previousReceipt = conversation.messages.find((message) =>
+      message.verifiedActionReceiptReferences?.includes(sourceMessage.messageId));
+    if (previousReceipt) {
+      const duplicatePlan: AuraAssistantPlan = {
+        content: previousReceipt.content,
+        actions: [], memoryUpdates: [],
+        experience: { kind: "decision", title: "Intelligence receipt", summary: previousReceipt.content, phases: [], choices: [], recommendedSurface: "intelligence" },
+      };
+      return { plan: duplicatePlan, assistantMessageId: previousReceipt.messageId };
+    }
+
+    let authoritativeConversation = conversation;
+    const confirmationExpectedRevision = this.conversations.getRevision();
+    let confirmationMessage: ConversationMessage;
+    try {
+      confirmationMessage = await this.persistUserMessage(conversation, persistedChoice.prompt);
+    } catch (error) {
+      if (!(error instanceof AuthenticatedConversationPersistenceError) || error.code !== "IAURA_STATE_STALE_WRITE") throw error;
+      const refreshed = this.conversations.getConversation(conversation.conversationId);
+      const refreshedSource = refreshed?.messages.find((message) =>
+        message.messageId === sourceMessage.messageId && message.role === "assistant");
+      const exactChoiceStillAuthoritative = refreshedSource?.structuredResponse?.experience?.choices.some(
+        (candidate) => sameChoice(candidate, persistedChoice),
+      );
+      if (!refreshed || !refreshedSource || !exactChoiceStillAuthoritative) {
+        console.warn("Intelligence confirmation rejected after conversation CAS conflict.", {
+          code: "IAURA_STATE_STALE_WRITE",
+          conversationId: conversation.conversationId,
+          sourceMessageId: sourceMessage.messageId,
+          expectedRevision: confirmationExpectedRevision,
+          currentRevision: this.conversations.getRevision(),
+        });
+        throw new ConversationTurnError(
+          "IAURA_CONVERSATION_STALE_CONFIRMATION", "conversation", conversation.conversationId,
+        );
+      }
+      authoritativeConversation = refreshed;
+      confirmationMessage = await this.persistUserMessage(refreshed, persistedChoice.prompt);
+    }
+    const resultReceipt: IntelligenceActionReceipt = confirmation.decision === "cancel"
+      ? {
+          receiptId: `intelligence-${crypto.randomUUID()}`,
+          sourceMessageId: sourceMessage.messageId,
+          operation: confirmation.proposal.operation,
+          scopeType: confirmation.proposal.scopeType,
+          projectId: confirmation.proposal.projectId,
+          status: "cancelled",
+          summary: "Intelligence proposal cancelled. No change was applied.",
+        }
+      : await this.intelligenceMutationExecutor.execute(
+          confirmation.proposal,
+          sourceMessage.messageId,
+          this.projects.getActiveProject(),
+        );
+    const receiptContent = [
+      "INTELLIGENCE ACTION RECEIPT",
+      `Status: ${resultReceipt.status}`,
+      `Scope: ${resultReceipt.scopeType === "global" ? "Global" : `Project — ${confirmation.proposal.projectName ?? resultReceipt.projectId}`}`,
+      resultReceipt.summary,
+    ].join("\n");
+    const receiptPlan: AuraAssistantPlan = {
+      content: receiptContent,
+      actions: [], memoryUpdates: [],
+      experience: { kind: "decision", title: "Intelligence receipt", summary: resultReceipt.summary, phases: [], choices: [], recommendedSurface: "intelligence" },
+    };
+    const write = this.conversations.appendMessage(authoritativeConversation.conversationId, {
+      role: "assistant",
+      content: receiptContent,
+      structuredResponse: assistantMessageMetadata(receiptPlan, confirmationMessage.messageId),
+      verifiedActionReceiptReferences: [sourceMessage.messageId, resultReceipt.receiptId],
+    });
+    if (!write.ok || !write.message) {
+      console.error(
+        "Intelligence receipt local persistence failed after deterministic execution.",
+        { conversationId: authoritativeConversation.conversationId, sourceMessageId: sourceMessage.messageId, receiptId: resultReceipt.receiptId },
+      );
+      return { plan: receiptPlan, assistantMessageId: resultReceipt.receiptId };
+    }
+    try {
+      await this.flushConversationPersistence("assistant_message", authoritativeConversation.conversationId, confirmationMessage.messageId);
+    } catch (error) {
+      console.error("Intelligence receipt remote persistence failed after deterministic execution.", error);
+    }
+    return { plan: receiptPlan, assistantMessageId: write.message.messageId };
+  }
+
   async sendChoice(
     choice: AuraExperienceChoice,
     sourceMessageId: string,
     userContext: string,
   ): Promise<ConversationTurnResult> {
-    const conversation = this.resolveConversation();
+    const intelligenceSourceConversation = choice.confirmation?.kind === "intelligence-action"
+      ? this.conversations.listConversations().find((candidate) =>
+          candidate.messages.some((message) =>
+            message.messageId === sourceMessageId && message.role === "assistant"))
+      : undefined;
+    const conversation = intelligenceSourceConversation ?? this.resolveConversation();
     const sourceMessage = conversation.messages.find(
       (message) => message.messageId === sourceMessageId && message.role === "assistant",
     );
     const persistedChoice = sourceMessage?.structuredResponse?.experience?.choices.find(
       (candidate) => sameChoice(candidate, choice),
     );
+
+    if (process.env.NODE_ENV !== "production") {
+      const persistedIntelligenceChoices = sourceMessage?.structuredResponse?.experience?.choices.filter(
+        (candidate) => candidate.confirmation?.kind === "intelligence-action",
+      ) ?? [];
+      const requestedConfirmation = choice.confirmation?.kind === "intelligence-action" ? choice.confirmation : null;
+      const executionIds = persistedIntelligenceChoices.flatMap((candidate) =>
+        candidate.confirmation?.kind === "intelligence-action" && candidate.confirmation.proposal.executionId
+          ? [candidate.confirmation.proposal.executionId] : []);
+      console.debug("Intelligence confirmation authority check.", {
+        conversationId: conversation.conversationId,
+        repositoryRevision: this.conversations.getRevision(),
+        remoteRevision: "not-fetched",
+        sourceMessageId,
+        sourceMessageExists: Boolean(sourceMessage),
+        sourceRole: sourceMessage?.role ?? null,
+        persistedChoiceCount: sourceMessage?.structuredResponse?.experience?.choices.length ?? 0,
+        exactChoiceMatched: Boolean(persistedChoice),
+        confirmationKind: requestedConfirmation?.kind ?? choice.confirmation?.kind ?? null,
+        operation: requestedConfirmation?.proposal.operation ?? null,
+        executionId: requestedConfirmation?.proposal.executionId ?? null,
+        pairedExecutionIdMatches: executionIds.length === 2 && new Set(executionIds).size === 1,
+      });
+    }
 
     if (!sourceMessage || !persistedChoice) {
       throw new ConversationTurnError(
@@ -831,6 +1024,27 @@ export class ConversationController {
     }
 
     const confirmation = persistedChoice.confirmation;
+
+    if (confirmation?.kind === "intelligence-action") {
+      const confirmationKey = `${conversation.conversationId}:${sourceMessage.messageId}`;
+      const pendingConfirmation = this.pendingIntelligenceConfirmations.get(confirmationKey);
+      if (pendingConfirmation) return pendingConfirmation;
+
+      const execution = this.resolveIntelligenceChoice(
+        conversation,
+        sourceMessage,
+        persistedChoice,
+        confirmation,
+      );
+      this.pendingIntelligenceConfirmations.set(confirmationKey, execution);
+      try {
+        return await execution;
+      } finally {
+        if (this.pendingIntelligenceConfirmations.get(confirmationKey) === execution) {
+          this.pendingIntelligenceConfirmations.delete(confirmationKey);
+        }
+      }
+    }
 
     if (
       conversation.betaWorkflow?.status === "closed" &&

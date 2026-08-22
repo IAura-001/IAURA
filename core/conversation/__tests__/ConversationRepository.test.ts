@@ -650,6 +650,48 @@ describe("LocalConversationRepository", () => {
     expect(repository().getActiveConversation("nova")).toBeNull();
   });
 
+  it("persists and reloads the complete typed Intelligence proposal without normalization loss", () => {
+    const first = repository();
+    const conversation = createConversation(first, { conversationId: "intelligence-proposal", projectId: "project-a" });
+    const proposal = {
+      executionId: "70000000-0000-4000-8000-000000000001",
+      operation: "intelligence_reorder_priorities" as const,
+      scopeType: "project" as const,
+      projectId: "project-a",
+      expectedActiveProjectId: "project-a",
+      projectName: "VAEORA",
+      currentSummary: "One, Two",
+      proposedSummary: "Two, One",
+      orderedPriorityIds: ["00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000001"],
+      expectedPriorities: [
+        { recordId: "00000000-0000-4000-8000-000000000001", position: 1, updatedAt: "2026-08-21T00:00:00.000Z", label: "One" },
+        { recordId: "00000000-0000-4000-8000-000000000002", position: 2, updatedAt: "2026-08-21T00:01:00.000Z", label: "Two" },
+      ],
+    };
+    first.appendMessage(conversation.conversationId, {
+      role: "assistant",
+      content: "Review the reorder.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "intelligence",
+        experience: {
+          kind: "decision", title: "Reorder", summary: "Review", phases: [],
+          choices: [
+            { label: "Confirm", description: "Apply", prompt: "Confirm", confirmation: { kind: "intelligence-action", decision: "confirm", proposal } },
+            { label: "Cancel", description: "Keep", prompt: "Cancel", confirmation: { kind: "intelligence-action", decision: "cancel", proposal } },
+          ],
+          recommendedSurface: "intelligence",
+        },
+      },
+    });
+
+    const reloaded = repository().getActiveConversation("project-a")?.messages[0]
+      .structuredResponse?.experience?.choices;
+    expect(reloaded?.[0].confirmation).toEqual({ kind: "intelligence-action", decision: "confirm", proposal });
+    expect(reloaded?.[1].confirmation).toEqual({ kind: "intelligence-action", decision: "cancel", proposal });
+    expect((reloaded?.[0].confirmation as { proposal: typeof proposal }).proposal.orderedPriorityIds)
+      .toEqual(["00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000001"]);
+  });
+
   it("keeps two conversations and two project associations isolated", () => {
     const repo = repository();
     const first = createConversation(repo, {

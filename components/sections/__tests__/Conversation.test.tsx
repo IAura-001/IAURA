@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -572,6 +572,60 @@ describe("Conversation windowing controls", () => {
     expect(card).toHaveTextContent("Objetivo de la sesión satisfecho");
     expect(card).toHaveTextContent("Outcome satisfied");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("renders a persisted reorder as the specialized Intelligence card", async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn().mockResolvedValue(undefined);
+    const firstId = "00000000-0000-4000-8000-000000000001";
+    const secondId = "00000000-0000-4000-8000-000000000002";
+    const reorder = {
+      operation: "intelligence_reorder_priorities" as const,
+      executionId: "70000000-0000-4000-8000-000000000001",
+      scopeType: "global" as const,
+      projectId: null,
+      expectedActiveProjectId: null,
+      projectName: null,
+      currentSummary: "Current priorities",
+      proposedSummary: "Proposed priorities",
+      orderedPriorityIds: [secondId, firstId],
+      expectedPriorities: [
+        { recordId: firstId, position: 1, updatedAt: "2026-08-21T00:00:00Z", label: "Finish Intelligence v2" },
+        { recordId: secondId, position: 2, updatedAt: "2026-08-21T00:00:01Z", label: "Train consistently" },
+      ],
+    };
+    const choices = ["confirm", "cancel"].map((decision) => ({
+      label: decision === "confirm" ? "Confirm" : "Cancel",
+      description: decision,
+      prompt: decision,
+      confirmation: {
+        kind: "intelligence-action" as const,
+        decision: decision as "confirm" | "cancel",
+        proposal: reorder,
+      },
+    }));
+
+    render(<I18nProvider locale="es-419"><Conversation onChoose={onChoose} messages={[{
+      id: "reorder-source",
+      role: "assistant",
+      content: "Reorder global priorities",
+      experience: {
+        kind: "decision",
+        title: "Reorder global priorities",
+        summary: "Confirm the exact change",
+        phases: [],
+        choices,
+        recommendedSurface: "presence",
+      },
+    }]} /></I18nProvider>);
+
+    const card = screen.getByText("REORDER PRIORITIES").closest("section");
+    expect(card).not.toBeNull();
+    expect(within(card!).getByText("Current").parentElement).toHaveTextContent(/1\. Finish Intelligence v2\s+2\. Train consistently/);
+    expect(within(card!).getByText("Proposed").parentElement).toHaveTextContent(/1\. Train consistently\s+2\. Finish Intelligence v2/);
+    expect(within(card!).getAllByRole("button")).toHaveLength(2);
+    await user.click(within(card!).getByRole("button", { name: "Cancel" }));
+    expect(onChoose).toHaveBeenCalledWith(choices[1], "reorder-source");
   });
 
   it("offers one post-closure handoff and displays the selected disposition", async () => {

@@ -214,6 +214,34 @@ describe("project conversation hydration", () => {
     });
   });
 
+  it("hydrates a resolved Intelligence proposal as non-actionable after its receipt", () => {
+    const conversations = new LocalConversationRepository();
+    const created = conversations.createConversation({ projectId: "project-a" }).conversation!;
+    const proposal = {
+      operation: "intelligence_create_goal" as const, scopeType: "project" as const,
+      projectId: "project-a", expectedActiveProjectId: "project-a", projectName: "A",
+      currentSummary: "None", proposedSummary: "Goal: Ship", title: "Ship",
+    };
+    conversations.appendMessage(created.conversationId, {
+      messageId: "proposal-source", role: "assistant", content: "Review.",
+      structuredResponse: {
+        actionTypes: [], experienceKind: "decision", recommendedSurface: "intelligence",
+        experience: {
+          kind: "decision", title: "Goal", summary: "Review", phases: [],
+          choices: [{ label: "Confirm", description: "Create", prompt: "Confirm", confirmation: { kind: "intelligence-action", decision: "confirm", proposal } }],
+          recommendedSurface: "intelligence",
+        },
+      },
+    });
+    conversations.appendMessage(created.conversationId, {
+      messageId: "receipt", role: "assistant", content: "Status: executed",
+      verifiedActionReceiptReferences: ["proposal-source", "receipt-id"],
+    });
+
+    expect(loadVisibleConversation(new LocalConversationRepository(), "project-a")[0])
+      .toMatchObject({ id: "proposal-source", intelligenceActionResolved: true });
+  });
+
   it("hydrates a project-isolated next-step card from its assistant message", () => {
     const conversations = new LocalConversationRepository();
     const iaura = conversations.createConversation({ projectId: "iaura" }).conversation!;

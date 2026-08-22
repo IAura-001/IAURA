@@ -12,6 +12,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   experience?: AuraExperience;
+  intelligenceActionResolved?: boolean;
   betaNextStep?: BetaNextStepRecommendation;
   betaNextStepConfirmed?: boolean;
   betaSessionDecision?: "start-now" | "continue-later";

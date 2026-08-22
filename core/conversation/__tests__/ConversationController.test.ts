@@ -52,6 +52,8 @@ import type { IAuraProject } from "@/types/project";
 import { parseAuraAssistantPlan } from "@/core/actions";
 import { DEFAULT_MEMORY } from "@/constants/memory";
 import { buildUserContext } from "@/utils/context";
+import type { IntelligenceActionReceipt } from "@/core/intelligence";
+import { AuthenticatedConversationPersistenceError, AuthenticatedConversationRepository } from "../AuthenticatedConversationRepository";
 
 const cognitiveRequest = {
   originalUserMessage: "Plan the next step.",
@@ -2298,8 +2300,8 @@ describe("ConversationController", () => {
     const intelligenceContextSource = {
       loadContextProjection: vi.fn(async () => ({
         global: {
-          direction: { content: "Build a disciplined life" },
-          priorities: [{ position: 1, label: "Build VAEORA", source: "title" as const }],
+          direction: { recordId: "direction-a", updatedAt: "2026-08-21T00:00:00Z", content: "Build a disciplined life" },
+          priorities: [{ recordId: "priority-a", updatedAt: "2026-08-21T00:00:00Z", goalId: null, position: 1, label: "Build VAEORA", source: "title" as const }],
           goals: [],
           recurringCommitments: [],
         },
@@ -2308,7 +2310,7 @@ describe("ConversationController", () => {
           projectGoal: "Ship the primary objective",
           direction: null,
           priorities: [],
-          goals: [{ title: "Project A additional goal", targetDate: null }],
+          goals: [{ recordId: "goal-a", updatedAt: "2026-08-21T00:00:00Z", title: "Project A additional goal", targetDate: null }],
           recurringCommitments: [],
         },
       })),
@@ -2366,5 +2368,262 @@ describe("ConversationController", () => {
       expect.stringContaining("continuing without canonical Intelligence"),
       "read unavailable",
     );
+  });
+
+  it("executes an exact persisted Intelligence confirmation once and persists its receipt", async () => {
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const proposal = {
+      operation: "intelligence_create_goal" as const, scopeType: "global" as const,
+      projectId: null, expectedActiveProjectId: null, projectName: null,
+      currentSummary: "None", proposedSummary: "Goal: Finish Intelligence v2", title: "Finish Intelligence v2",
+    };
+    const confirm = { label: "Confirm", description: "Create it", prompt: "Confirm", confirmation: { kind: "intelligence-action" as const, decision: "confirm" as const, proposal } };
+    const cancel = { ...confirm, label: "Cancel", prompt: "Cancel", confirmation: { ...confirm.confirmation, decision: "cancel" as const } };
+    const plan = parseAuraAssistantPlan({ content: "Proposed", actions: [], memoryUpdates: [], experience: {
+      kind: "decision", title: "Create goal", summary: "Review", phases: [], choices: [confirm, cancel], recommendedSurface: "intelligence",
+    } });
+    const executor = { execute: vi.fn().mockResolvedValue({
+      receiptId: "receipt-a", sourceMessageId: "source", operation: proposal.operation,
+      scopeType: "global", projectId: null, status: "executed", summary: "Verified goal creation",
+    }) };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(plan);
+    const controller = new ConversationController({ conversations, contextRetriever: createContextRetriever(), intelligenceActionExecutor: executor });
+    const proposed = await controller.send("Create it", "Context");
+    const persistedChoice = conversations.getConversation(conversations.getSnapshot().activeConversationId!)!
+      .messages.find((message) => message.messageId === proposed.assistantMessageId)!.structuredResponse!.experience!.choices[0];
+
+    expect(persistedChoice.confirmation?.kind === "intelligence-action" && persistedChoice.confirmation.proposal.executionId)
+      .toMatch(/^[0-9a-f-]{36}$/i);
+    const immediatelyRenderedChoice = proposed.plan.experience.choices[0];
+    expect(immediatelyRenderedChoice).toEqual(persistedChoice);
+
+    const confirmed = await controller.sendChoice(immediatelyRenderedChoice, proposed.assistantMessageId, "Context");
+    const duplicate = await controller.sendChoice(immediatelyRenderedChoice, proposed.assistantMessageId, "Context");
+
+    expect(executor.execute).toHaveBeenCalledTimes(1);
+    expect(confirmed.plan.content).toContain("Status: executed");
+    expect(duplicate.assistantMessageId).toBe(confirmed.assistantMessageId);
+    expect(mocks.executeMemoryUpdates).toHaveBeenLastCalledWith([], undefined);
+  });
+
+  it("does not return an executable Intelligence proposal until its authoritative assistant snapshot is persisted", async () => {
+    const conversations = new AuthenticatedConversationRepository();
+    conversations.configure("user-a", null);
+    let remoteSnapshot: ReturnType<typeof conversations.getSnapshot> | null = null;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { snapshot: ReturnType<typeof conversations.getSnapshot> };
+      remoteSnapshot = body.snapshot;
+      return { ok: true };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const proposal = {
+      operation: "intelligence_create_priority" as const, scopeType: "global" as const,
+      projectId: null, expectedActiveProjectId: null, projectName: null,
+      currentSummary: "None", proposedSummary: "Add Finish Intelligence v2 as a global priority.",
+      title: "Finish Intelligence v2", goalId: null,
+    };
+    const confirm = { label: "Confirm", description: "Create", prompt: "Confirm", confirmation: { kind: "intelligence-action" as const, decision: "confirm" as const, proposal } };
+    const cancel = { ...confirm, label: "Cancel", prompt: "Cancel", confirmation: { ...confirm.confirmation, decision: "cancel" as const } };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(parseAuraAssistantPlan({ content: "Proposed", actions: [], memoryUpdates: [], experience: {
+      kind: "decision", title: "Priority", summary: "Review", phases: [], choices: [confirm, cancel], recommendedSurface: "intelligence",
+    } }));
+    const controller = new ConversationController({ conversations, contextRetriever: createContextRetriever() });
+
+    const proposed = await controller.send("Make it a priority", "Context");
+    const persistedSource = remoteSnapshot!.conversations.flatMap((conversation) => conversation.messages)
+      .find((message) => message.messageId === proposed.assistantMessageId);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(persistedSource?.structuredResponse?.experience?.choices).toEqual(proposed.plan.experience.choices);
+    expect(proposed.plan.experience.choices[0].confirmation?.kind === "intelligence-action" &&
+      proposed.plan.experience.choices[0].confirmation.proposal.executionId).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  it("coalesces concurrent confirmations for the same persisted Intelligence proposal", async () => {
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const proposal = {
+      operation: "intelligence_create_goal" as const, scopeType: "global" as const,
+      projectId: null, expectedActiveProjectId: null, projectName: null,
+      currentSummary: "None", proposedSummary: "Goal: Finish Intelligence v2", title: "Finish Intelligence v2",
+    };
+    const confirm = { label: "Confirm", description: "Create it", prompt: "Confirm", confirmation: { kind: "intelligence-action" as const, decision: "confirm" as const, proposal } };
+    const cancel = { ...confirm, label: "Cancel", prompt: "Cancel", confirmation: { ...confirm.confirmation, decision: "cancel" as const } };
+    const plan = parseAuraAssistantPlan({ content: "Proposed", actions: [], memoryUpdates: [], experience: {
+      kind: "decision", title: "Create goal", summary: "Review", phases: [], choices: [confirm, cancel], recommendedSurface: "intelligence",
+    } });
+    let finishExecution!: (value: IntelligenceActionReceipt) => void;
+    const executor = { execute: vi.fn(() => new Promise<IntelligenceActionReceipt>((resolve) => { finishExecution = resolve; })) };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(plan);
+    const controller = new ConversationController({ conversations, contextRetriever: createContextRetriever(), intelligenceActionExecutor: executor });
+    const proposed = await controller.send("Create it", "Context");
+    const persistedChoice = conversations.getConversation(conversations.getSnapshot().activeConversationId!)!
+      .messages.find((message) => message.messageId === proposed.assistantMessageId)!.structuredResponse!.experience!.choices[0];
+
+    const first = controller.sendChoice(persistedChoice, proposed.assistantMessageId, "Context");
+    const second = controller.sendChoice(persistedChoice, proposed.assistantMessageId, "Context");
+    await vi.waitFor(() => expect(executor.execute).toHaveBeenCalledTimes(1));
+    finishExecution({
+      receiptId: "receipt-concurrent", sourceMessageId: proposed.assistantMessageId,
+      operation: proposal.operation, scopeType: "global", projectId: null,
+      status: "executed", summary: "Verified goal creation",
+    });
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult.assistantMessageId).toBe(secondResult.assistantMessageId);
+    expect(executor.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles a stale-tab CAS conflict only when the exact persisted Intelligence proposal remains authoritative", async () => {
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const proposal = {
+      operation: "intelligence_create_priority" as const, scopeType: "global" as const,
+      projectId: null, expectedActiveProjectId: null, projectName: null,
+      currentSummary: "None", proposedSummary: "Finish Intelligence v2 is a global priority.",
+      title: "Finish Intelligence v2", goalId: null,
+    };
+    const confirm = { label: "Confirm", description: "Create", prompt: "Confirm", confirmation: { kind: "intelligence-action" as const, decision: "confirm" as const, proposal } };
+    const cancel = { ...confirm, label: "Cancel", prompt: "Cancel", confirmation: { ...confirm.confirmation, decision: "cancel" as const } };
+    const plan = parseAuraAssistantPlan({ content: "Proposed", actions: [], memoryUpdates: [], experience: {
+      kind: "decision", title: "Create priority", summary: "Review", phases: [], choices: [confirm, cancel], recommendedSurface: "intelligence",
+    } });
+    const executor = { execute: vi.fn().mockResolvedValue({
+      receiptId: "receipt-safe-retry", sourceMessageId: "source", operation: proposal.operation,
+      scopeType: "global", projectId: null, status: "executed", summary: "Verified priority creation",
+    }) };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(plan);
+    const controller = new ConversationController({ conversations, contextRetriever: createContextRetriever(), intelligenceActionExecutor: executor });
+    const proposed = await controller.send("Make it a priority", "Context");
+    const authoritativeSnapshot = conversations.getSnapshot();
+    const persistedChoice = conversations.getConversation(authoritativeSnapshot.activeConversationId!)!
+      .messages.find((message) => message.messageId === proposed.assistantMessageId)!.structuredResponse!.experience!.choices[0];
+    const flush = vi.fn()
+      .mockImplementationOnce(async () => {
+        conversations.replaceSnapshotResult(authoritativeSnapshot);
+        throw new AuthenticatedConversationPersistenceError("IAURA_STATE_STALE_WRITE");
+      })
+      .mockResolvedValue(undefined);
+    Object.assign(conversations, { flush });
+
+    const result = await controller.sendChoice(persistedChoice, proposed.assistantMessageId, "Context");
+
+    expect(result.plan.content).toContain("Status: executed");
+    expect(executor.execute).toHaveBeenCalledTimes(1);
+    expect(flush).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects a stale-tab Intelligence confirmation with zero writes when remote authority lost the source proposal", async () => {
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const proposal = {
+      operation: "intelligence_create_goal" as const, scopeType: "global" as const,
+      projectId: null, expectedActiveProjectId: null, projectName: null,
+      currentSummary: "None", proposedSummary: "Goal", title: "Goal",
+    };
+    const confirm = { label: "Confirm", description: "Create", prompt: "Confirm", confirmation: { kind: "intelligence-action" as const, decision: "confirm" as const, proposal } };
+    const cancel = { ...confirm, label: "Cancel", prompt: "Cancel", confirmation: { ...confirm.confirmation, decision: "cancel" as const } };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(parseAuraAssistantPlan({ content: "Proposed", actions: [], memoryUpdates: [], experience: {
+      kind: "decision", title: "Goal", summary: "Review", phases: [], choices: [confirm, cancel], recommendedSurface: "intelligence",
+    } }));
+    const executor = { execute: vi.fn() };
+    const controller = new ConversationController({ conversations, contextRetriever: createContextRetriever(), intelligenceActionExecutor: executor });
+    const proposed = await controller.send("Create goal", "Context");
+    const persistedChoice = conversations.getConversation(conversations.getSnapshot().activeConversationId!)!
+      .messages.find((message) => message.messageId === proposed.assistantMessageId)!.structuredResponse!.experience!.choices[0];
+    const remote = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    remote.createConversation({ conversationId: conversations.getSnapshot().activeConversationId! });
+    Object.assign(conversations, { flush: vi.fn(async () => {
+      conversations.replaceSnapshotResult(remote.getSnapshot());
+      throw new AuthenticatedConversationPersistenceError("IAURA_STATE_STALE_WRITE");
+    }) });
+
+    await expect(controller.sendChoice(persistedChoice, proposed.assistantMessageId, "Context"))
+      .rejects.toMatchObject({ code: "IAURA_CONVERSATION_STALE_CONFIRMATION" });
+    expect(executor.execute).not.toHaveBeenCalled();
+  });
+
+  it("binds a project proposal to its conversation ID and rejects provider retargeting", async () => {
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const projectA = { id: "project-a", name: "Project A", goal: "A" } as IAuraProject;
+    const projects = { getActiveProject: vi.fn(() => projectA) } as unknown as ProjectRepository;
+    const proposal = {
+      operation: "intelligence_create_goal" as const, scopeType: "project" as const,
+      projectId: "project-b", expectedActiveProjectId: "project-b", projectName: "Project A",
+      currentSummary: "None", proposedSummary: "Goal A", title: "Goal A",
+    };
+    const confirm = { label: "Confirm", description: "Create", prompt: "Confirm", confirmation: { kind: "intelligence-action" as const, decision: "confirm" as const, proposal } };
+    const cancel = { ...confirm, label: "Cancel", confirmation: { ...confirm.confirmation, decision: "cancel" as const } };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(parseAuraAssistantPlan({ content: "Proposed", experience: {
+      kind: "decision", title: "Goal", summary: "Review", phases: [], choices: [confirm, cancel], recommendedSurface: "intelligence",
+    } }));
+    const controller = new ConversationController({ conversations, projects, contextRetriever: createContextRetriever() });
+
+    await expect(controller.send("Create Goal A", "Context"))
+      .rejects.toMatchObject({ code: "IAURA_CONVERSATION_PROVIDER_FAILED" });
+  });
+
+  it("keeps a stale Project A source bound to A after Project B becomes active", async () => {
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const projectA = { id: "project-a", name: "Project A", goal: "A" } as IAuraProject;
+    const projectB = { id: "project-b", name: "Project B", goal: "B" } as IAuraProject;
+    let activeProject = projectA;
+    const projects = { getActiveProject: vi.fn(() => activeProject) } as unknown as ProjectRepository;
+    const proposal = {
+      operation: "intelligence_create_goal" as const, scopeType: "project" as const,
+      projectId: "project-a", expectedActiveProjectId: "project-a", projectName: "Project A",
+      currentSummary: "None", proposedSummary: "Goal A", title: "Goal A",
+    };
+    const confirm = { label: "Confirm", description: "Create", prompt: "Confirm", confirmation: { kind: "intelligence-action" as const, decision: "confirm" as const, proposal } };
+    const cancel = { ...confirm, label: "Cancel", confirmation: { ...confirm.confirmation, decision: "cancel" as const } };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(parseAuraAssistantPlan({ content: "Proposed", experience: {
+      kind: "decision", title: "Goal", summary: "Review", phases: [], choices: [confirm, cancel], recommendedSurface: "intelligence",
+    } }));
+    const executor = { execute: vi.fn().mockImplementation(async (capturedProposal: typeof proposal, sourceMessageId: string) => ({
+      receiptId: "receipt-stale-project", sourceMessageId, operation: capturedProposal.operation,
+      scopeType: capturedProposal.scopeType, projectId: capturedProposal.projectId, status: "stale" as const,
+      summary: "The active project changed after this proposal was created. No Intelligence change was applied.",
+    })) };
+    const controller = new ConversationController({ conversations, projects, contextRetriever: createContextRetriever(), intelligenceActionExecutor: executor });
+    const proposed = await controller.send("Create Goal A", "Context");
+    const persistedChoice = conversations.listConversations()[0].messages
+      .find((message) => message.messageId === proposed.assistantMessageId)!.structuredResponse!.experience!.choices[0];
+    activeProject = projectB;
+
+    const result = await controller.sendChoice(persistedChoice, proposed.assistantMessageId, "Context");
+
+    expect(result.plan.content).toContain("Status: stale");
+    expect(result.plan.content).toContain("No Intelligence change was applied");
+    expect(executor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: "project-a", expectedActiveProjectId: "project-a" }),
+      proposed.assistantMessageId,
+      projectB,
+    );
+  });
+
+  it("cancels a persisted Intelligence proposal with zero mutation writes", async () => {
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const proposal = {
+      operation: "intelligence_create_goal" as const, scopeType: "global" as const,
+      projectId: null, expectedActiveProjectId: null, projectName: null,
+      currentSummary: "None", proposedSummary: "Goal", title: "Goal",
+    };
+    const cancel = { label: "Cancel", description: "No change", prompt: "Cancel", confirmation: { kind: "intelligence-action" as const, decision: "cancel" as const, proposal } };
+    const confirm = { ...cancel, label: "Confirm", prompt: "Confirm", confirmation: { ...cancel.confirmation, decision: "confirm" as const } };
+    const plan = parseAuraAssistantPlan({ content: "Proposed", actions: [], memoryUpdates: [], experience: {
+      kind: "decision", title: "Goal", summary: "Review", phases: [], choices: [confirm, cancel], recommendedSurface: "intelligence",
+    } });
+    const executor = { execute: vi.fn() };
+    mocks.analyze.mockReturnValue(cognitiveRequest); mocks.generateCognitiveResponse.mockResolvedValue(plan);
+    const controller = new ConversationController({ conversations, contextRetriever: createContextRetriever(), intelligenceActionExecutor: executor });
+    const proposed = await controller.send("Maybe", "Context");
+    const persistedChoice = conversations.getConversation(conversations.getSnapshot().activeConversationId!)!
+      .messages.find((message) => message.messageId === proposed.assistantMessageId)!.structuredResponse!.experience!.choices[1];
+    await controller.sendChoice(persistedChoice, proposed.assistantMessageId, "Context");
+    expect(executor.execute).not.toHaveBeenCalled();
   });
 });

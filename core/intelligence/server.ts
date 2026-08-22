@@ -8,6 +8,7 @@ import type {
   IntelligenceUpdateInput,
 } from "./domain";
 import { normalizeIntelligenceRecord, validScope } from "./domain";
+import type { IntelligenceActionProposal } from "./actionTypes";
 
 type SupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
@@ -149,6 +150,8 @@ export async function loadIntelligenceProjection(
 export async function createIntelligenceRecord(
   userId: string,
   input: IntelligenceCreateInput,
+  executionId?: string,
+  operation?: IntelligenceActionProposal["operation"],
 ): Promise<IntelligenceRecord> {
   const client = await createServerSupabaseClient();
   await requireOwnedProject(client, userId, input.scopeType, input.projectId);
@@ -194,15 +197,60 @@ export async function createIntelligenceRecord(
     values = { ...base, title, cadence: input.cadence, cadence_detail: cadenceDetail, status: "active" };
   }
 
+  if (executionId || operation) {
+    if (!executionId || !operation || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(executionId))
+      throw new Error("IAURA_INTELLIGENCE_INVALID_EXECUTION_ID");
+    const payload = {
+      type: input.type, scopeType: input.scopeType, projectId: input.projectId,
+      title: values.title ?? null, content: values.content ?? null,
+      targetDate: values.target_date ?? null, goalId: values.goal_id ?? null,
+      cadence: values.cadence ?? null, cadenceDetail: values.cadence_detail ?? null,
+    };
+    const { data, error } = await client.rpc("create_intelligence_record_idempotent", {
+      requested_execution_id: executionId,
+      requested_operation: operation,
+      requested_payload: payload,
+    });
+    if (error) throw new Error(error.message.includes("IAURA_INTELLIGENCE_")
+      ? error.message.match(/IAURA_INTELLIGENCE_[A-Z_]+/)?.[0] ?? error.message : error.message);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("IAURA_INTELLIGENCE_FAILED");
+    return rowToRecord(row as IntelligenceRow);
+  }
   const { data, error } = await client.from("intelligence_records").insert(values).select(SELECT_COLUMNS).single();
   if (error) throw error;
   return rowToRecord(data as IntelligenceRow);
+}
+
+export async function requireCurrentIntelligenceScope(
+  userId: string,
+  scopeType: IntelligenceScopeType,
+  projectId: string | null,
+  expectedActiveProjectId: string | null,
+): Promise<void> {
+  if (scopeType === "global") {
+    if (projectId !== null || expectedActiveProjectId !== null)
+      throw new Error("IAURA_INTELLIGENCE_STALE");
+    return;
+  }
+  if (!projectId || expectedActiveProjectId !== projectId)
+    throw new Error("IAURA_INTELLIGENCE_STALE");
+  const client = await createServerSupabaseClient();
+  const { data, error } = await client
+    .from("project_state")
+    .select("active_project_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data?.active_project_id !== expectedActiveProjectId)
+    throw new Error("IAURA_INTELLIGENCE_STALE");
 }
 
 export async function updateIntelligenceRecord(
   userId: string,
   id: string,
   updates: IntelligenceUpdateInput,
+  expectedUpdatedAt?: string,
 ): Promise<IntelligenceRecord> {
   const client = await createServerSupabaseClient();
   const { data: existing, error: readError } = await client
@@ -249,10 +297,12 @@ export async function updateIntelligenceRecord(
   }
   if (Object.keys(values).length === 0) throw new Error("IAURA_INTELLIGENCE_INVALID_INPUT");
 
-  const { data, error } = await client.from("intelligence_records").update(values)
-    .eq("user_id", userId).eq("id", id).select(SELECT_COLUMNS).maybeSingle();
+  let updateQuery = client.from("intelligence_records").update(values)
+    .eq("user_id", userId).eq("id", id);
+  if (expectedUpdatedAt) updateQuery = updateQuery.eq("updated_at", expectedUpdatedAt);
+  const { data, error } = await updateQuery.select(SELECT_COLUMNS).maybeSingle();
   if (error) throw error;
-  if (!data) throw new Error("IAURA_INTELLIGENCE_NOT_FOUND");
+  if (!data) throw new Error(expectedUpdatedAt ? "IAURA_INTELLIGENCE_STALE" : "IAURA_INTELLIGENCE_NOT_FOUND");
   return rowToRecord(data as IntelligenceRow);
 }
 
@@ -265,15 +315,19 @@ export async function reorderIntelligencePriorities(
   scopeType: IntelligenceScopeType,
   projectId: string | null,
   orderedPriorityIds: string[],
+  expectedPriorities?: Array<{ recordId: string; position: number; updatedAt: string }>,
 ): Promise<IntelligenceRecord[]> {
   if (!validScope(scopeType, projectId) || orderedPriorityIds.length > 3 || new Set(orderedPriorityIds).size !== orderedPriorityIds.length) throw new Error("IAURA_INTELLIGENCE_INVALID_PRIORITY_ORDER");
   const client = await createServerSupabaseClient();
   await requireOwnedProject(client, userId, scopeType, projectId);
-  const { data, error } = await client.rpc("reorder_intelligence_priorities", {
+  if (!expectedPriorities) throw new Error("IAURA_INTELLIGENCE_STALE");
+  const { data, error } = await client.rpc("reorder_intelligence_priorities_guarded", {
     ordered_ids: orderedPriorityIds,
     requested_scope_type: scopeType,
     requested_project_id: projectId,
+    expected_priorities: expectedPriorities,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message.includes("IAURA_INTELLIGENCE_STALE")
+    ? "IAURA_INTELLIGENCE_STALE" : error.message);
   return (data ?? []).map((row: IntelligenceRow) => rowToRecord(row));
 }
