@@ -232,7 +232,7 @@ ID: ${compactText(input.conversationIdentity.conversationId, 240)}
       }`
     : "";
 
-  const projectContext = buildActiveProjectMemoryContext();
+  const projectContext = buildProjectMemoryContext(input.activeProject ?? null);
 
   const combinedContext = [
     explicitUserContext

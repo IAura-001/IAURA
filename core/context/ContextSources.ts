@@ -6,6 +6,7 @@ import {
   retrieveRelevantMemories,
 } from "../memory/MemoryRetriever";
 import type { MemoryEntry } from "../memory/MemoryTypes";
+import { getProjectScope } from "../memory/ProjectMemoryScope";
 
 import type {
   ConversationContextSource,
@@ -33,6 +34,7 @@ function memoryToContextItem(
     metadata: {
       type: memory.type,
       tags: [...memory.tags],
+      projectId: getProjectScope(memory.tags),
     },
   };
 }
@@ -69,6 +71,7 @@ implements ConversationContextSource {
         maxMessages: input.limit,
       },
     );
+    const projectId = this.conversations.getConversation(input.conversationId)?.projectId ?? null;
 
     return messages.map((message, index) => ({
       id: message.messageId,
@@ -79,6 +82,7 @@ implements ConversationContextSource {
       metadata: {
         role: message.role,
         sequence: index,
+        projectId,
       },
     }));
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildBrainContext,
   buildActiveProjectMemoryContext,
   buildProjectMemoryContext,
 } from "@/core/context/ContextBuilder";
@@ -41,6 +42,34 @@ function asset(
 }
 
 describe("Creative Studio project context", () => {
+  it("uses only the explicitly authorized project instead of the process-wide active project", () => {
+    const repository = new LocalProjectRepository();
+    const mita = {
+      id: "project-mita", name: "Mita", description: "Recipes and health",
+      goal: "Improve people's health", status: "building", studios: {},
+    } as IAuraProject;
+    const proyectoA = {
+      id: "project-a", name: "Proyecto A", description: "Visual verification",
+      goal: "Verify the Intelligence bridge", status: "planning", studios: {},
+    } as IAuraProject;
+    repository.createProject(mita);
+    repository.setActiveProjectId(mita.id);
+
+    const context = buildBrainContext({
+      message: "Choose priorities",
+      userContext: "GLOBAL\nShared global preference",
+      activeProject: proyectoA,
+      conversationIdentity: { conversationId: "conversation-a", projectId: proyectoA.id },
+    }).userContext;
+
+    expect(repository.getActiveProject()?.id).toBe("project-mita");
+    expect(context).toContain("Nombre: Proyecto A");
+    expect(context).toContain("Verify the Intelligence bridge");
+    expect(context).toContain("Shared global preference");
+    expect(context).not.toContain("Mita");
+    expect(context).not.toContain("Improve people's health");
+    expect(context).not.toContain("Recipes and health");
+  });
   it("separates user project status from established product continuity", () => {
     const project: IAuraProject = {
       id: "iaura-project",

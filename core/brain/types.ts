@@ -1,4 +1,5 @@
 import type { ConversationMessage } from "../conversation/ConversationMemory";
+import type { IAuraProject } from "@/types/project";
 import type { AutonomyAssessment } from "../autonomy";
 import type {
   ReasoningAnalysis,
@@ -18,6 +19,7 @@ export interface BrainInput {
   message: string;
   userContext?: string;
   history?: ConversationMessage[];
+  activeProject?: IAuraProject | null;
   conversationIdentity?: {
     conversationId: string;
     projectId?: string;

@@ -633,6 +633,31 @@ export class ConversationController {
     }
   }
 
+  private assertIntelligenceBridgeGenerationContext(
+    authority: IntelligenceBridgeAuthority,
+    conversation: Conversation,
+    activeProject: IAuraProject | null,
+    intelligenceContext: IntelligenceContextProjection,
+    contextPackage: ContextPackage,
+  ): void {
+    if (authority.scopeType === "global") return;
+    const projectId = authority.projectId;
+    const repositoryActiveProjectId = this.projects.getSnapshot().activeProjectId;
+    const retrievedProjectIds = contextPackage.items.flatMap((item) =>
+      typeof item.metadata?.projectId === "string" ? [item.metadata.projectId] : []);
+    const valid = Boolean(projectId) &&
+      repositoryActiveProjectId === projectId &&
+      activeProject?.id === projectId &&
+      conversation.projectId === projectId &&
+      intelligenceContext.project?.projectId === projectId &&
+      retrievedProjectIds.every((retrievedProjectId) => retrievedProjectId === projectId);
+    if (!valid) {
+      throw new ConversationTurnError(
+        "IAURA_INTELLIGENCE_BRIDGE_STALE", "context", conversation.conversationId,
+      );
+    }
+  }
+
   private async sendInConversation(
     conversation: Conversation,
     message: string,
@@ -675,6 +700,15 @@ export class ConversationController {
     const intelligenceContext = await this.loadIntelligenceContext(
       activeProject?.id === conversation.projectId ? activeProject : null,
     );
+    if (options.intelligenceBridgeAuthority) {
+      this.assertIntelligenceBridgeGenerationContext(
+        options.intelligenceBridgeAuthority,
+        conversation,
+        activeProject,
+        intelligenceContext,
+        contextPackage,
+      );
+    }
     const serializedIntelligence = serializeIntelligenceContext(intelligenceContext);
     const serializedBridgeAuthority = options.intelligenceBridgeAuthority
       ? [
@@ -706,6 +740,7 @@ export class ConversationController {
         message,
         userContext: enrichedUserContext,
         history,
+        activeProject: activeProject?.id === conversation.projectId ? activeProject : null,
         conversationIdentity: {
           conversationId:
             conversation.conversationId,

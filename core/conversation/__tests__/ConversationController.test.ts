@@ -18,7 +18,8 @@ const mocks = vi.hoisted(() => ({
   executeMemoryUpdates: vi.fn(),
 }));
 
-vi.mock("@/core/brain", () => ({
+vi.mock("@/core/brain", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/core/brain")>(),
   iauraBrain: {
     analyze: mocks.analyze,
   },
@@ -49,6 +50,7 @@ import {
 import { selectBetaContinuity } from "../BetaContinuity";
 import type { ProjectRepository } from "@/core/project/ProjectRepository";
 import type { IAuraProject } from "@/types/project";
+import { Brain } from "@/core/brain";
 import { parseAuraAssistantPlan } from "@/core/actions";
 import { DEFAULT_MEMORY } from "@/constants/memory";
 import { buildUserContext } from "@/utils/context";
@@ -2350,6 +2352,7 @@ describe("ConversationController", () => {
       getActiveProject: vi.fn(() => activeProject),
       getProject: vi.fn((id: string) => [projectA, projectB].find((project) => project.id === id) ?? null),
       getProjects: vi.fn(() => [projectA, projectB]),
+      getSnapshot: vi.fn(() => ({ activeProjectId: activeProject.id })),
     } as unknown as ProjectRepository;
     const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
     const controller = new ConversationController({ conversations, projects, contextRetriever: createContextRetriever() });
@@ -2604,6 +2607,7 @@ describe("ConversationController", () => {
       getActiveProject: vi.fn(() => projectA),
       getProject: vi.fn((id: string) => id === projectA.id ? projectA : null),
       getProjects: vi.fn(() => [projectA]),
+      getSnapshot: vi.fn(() => ({ activeProjectId: projectA.id })),
     } as unknown as ProjectRepository;
     const proposal = {
       operation: "intelligence_create_goal" as const, scopeType: "project" as const,
@@ -2637,6 +2641,7 @@ describe("ConversationController", () => {
       getActiveProject: vi.fn(() => projectA),
       getProject: vi.fn((id: string) => id === projectA.id ? projectA : null),
       getProjects: vi.fn(() => [projectA]),
+      getSnapshot: vi.fn(() => ({ activeProjectId: projectA.id })),
     } as unknown as ProjectRepository;
     const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
     const remoteConversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
@@ -2724,6 +2729,85 @@ describe("ConversationController", () => {
     expect(hydrated.content).toContain("Proyecto A");
     expect(JSON.stringify(hydrated)).not.toContain("Build a product idea");
     expect(hydrated.experience?.choices).toHaveLength(2);
+  });
+
+  it("sends only Proyecto A project context to the provider when Mita also exists", async () => {
+    const projectA = {
+      id: "project-a", name: "Proyecto A", description: "Visual verification",
+      goal: "Verify the Intelligence bridge", status: "planning", studios: {},
+    } as IAuraProject;
+    const mita = {
+      id: "project-mita", name: "Mita", description: "Recipes and premium health brand",
+      goal: "Improve people's health", status: "building", studios: {},
+    } as IAuraProject;
+    const projects = {
+      getActiveProject: vi.fn(() => projectA),
+      getProject: vi.fn((id: string) => [projectA, mita].find((project) => project.id === id) ?? null),
+      getProjects: vi.fn(() => [projectA, mita]),
+      getSnapshot: vi.fn(() => ({ activeProjectId: projectA.id })),
+    } as unknown as ProjectRepository;
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const intelligenceContextSource = {
+      loadContextProjection: vi.fn(async (project: IAuraProject | null) => ({
+        global: {
+          direction: { recordId: "global-direction", updatedAt: "2026-08-22T00:00:00Z", content: "Global founder direction" },
+          priorities: [], goals: [], recurringCommitments: [],
+        },
+        project: project ? {
+          projectId: project.id, projectGoal: project.goal,
+          direction: { recordId: "a-direction", updatedAt: "2026-08-22T00:00:00Z", content: "Proyecto A visual direction" },
+          priorities: [{ position: 1, label: "Final Bridge Verification", source: "title" as const, recordId: "a-priority", updatedAt: "2026-08-22T00:00:00Z", goalId: null }],
+          goals: [], recurringCommitments: [],
+        } : null,
+      })),
+    };
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Proyecto A priorities", []));
+    const controller = new ConversationController({
+      conversations, projects, brain: new Brain(), contextRetriever: createContextRetriever([
+        { id: "a-memory", source: "memory", content: "Proyecto A scoped note", relevanceScore: 1, metadata: { projectId: projectA.id } },
+      ]), intelligenceContextSource,
+    });
+
+    await controller.send("Choose Proyecto A priorities", "GLOBAL USER CONTEXT", {
+      scopeType: "project", projectId: projectA.id,
+    });
+
+    const request = mocks.generateCognitiveResponse.mock.calls.at(-1)?.[0];
+    const completeProviderInput = JSON.stringify(request);
+    expect(completeProviderInput).toContain("project-a");
+    expect(completeProviderInput).toContain("Verify the Intelligence bridge");
+    expect(completeProviderInput).toContain("Proyecto A visual direction");
+    expect(completeProviderInput).toContain("Final Bridge Verification");
+    expect(completeProviderInput).toContain("Global founder direction");
+    expect(completeProviderInput).not.toContain("project-mita");
+    expect(completeProviderInput).not.toContain("Improve people's health");
+    expect(completeProviderInput).not.toContain("Recipes and premium health brand");
+  });
+
+  it("fails closed before provider generation when an Intelligence projection belongs to Mita", async () => {
+    const projectA = { id: "project-a", name: "Proyecto A", goal: "A" } as IAuraProject;
+    const projects = {
+      getActiveProject: vi.fn(() => projectA), getProject: vi.fn(() => projectA),
+      getProjects: vi.fn(() => [projectA]), getSnapshot: vi.fn(() => ({ activeProjectId: projectA.id })),
+    } as unknown as ProjectRepository;
+    const controller = new ConversationController({
+      conversations: new LocalConversationRepository({ synchronize: false, persistLocally: false }),
+      projects,
+      contextRetriever: createContextRetriever(),
+      intelligenceContextSource: {
+        loadContextProjection: vi.fn(async () => ({
+          global: { direction: null, priorities: [], goals: [], recurringCommitments: [] },
+          project: { projectId: "project-mita", projectGoal: "Improve people's health", direction: null, priorities: [], goals: [], recurringCommitments: [] },
+        })),
+      },
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+
+    await expect(controller.send("Choose priorities", "Context", {
+      scopeType: "project", projectId: projectA.id,
+    })).rejects.toMatchObject({ code: "IAURA_INTELLIGENCE_BRIDGE_STALE", stage: "context" });
+    expect(mocks.generateCognitiveResponse).not.toHaveBeenCalled();
   });
 
   it("keeps a stale Project A source bound to A after Project B becomes active", async () => {
