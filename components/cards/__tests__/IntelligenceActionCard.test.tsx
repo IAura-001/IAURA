@@ -82,7 +82,7 @@ describe("IntelligenceActionCard", () => {
     };
     const choice = { label: "Cancel", description: "Keep", prompt: "Cancel", confirmation: { kind: "intelligence-action" as const, decision: "cancel" as const, proposal: reorder } };
     const onChoose = vi.fn();
-    render(<IntelligenceActionCard choices={[choice]} sourceMessageId="source" resolved onChoose={onChoose} />);
+    render(<IntelligenceActionCard choices={[choice]} sourceMessageId="source" resolved onChoose={onChoose} projectNameById={() => "VAEORA"} />);
     expect(screen.getByText(/Project .* VAEORA/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button"));
     expect(onChoose).not.toHaveBeenCalled();
@@ -97,7 +97,7 @@ describe("IntelligenceActionCard", () => {
       prompt: decision,
       confirmation: { kind: "intelligence-action" as const, decision: decision as "confirm" | "cancel", proposal },
     }));
-    render(<IntelligenceActionCard choices={choices} sourceMessageId="source-a" onChoose={onChoose} />);
+    render(<IntelligenceActionCard choices={choices} sourceMessageId="source-a" onChoose={onChoose} projectNameById={(id) => id === "project-a" ? "VAEORA" : null} />);
 
     expect(screen.getByText("Project — VAEORA")).toBeInTheDocument();
     expect(screen.getByText(proposal.currentSummary)).toBeInTheDocument();
@@ -122,6 +122,16 @@ describe("IntelligenceActionCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("persistence unavailable");
     expect(screen.getByRole("button", { name: "Confirm" })).not.toBeDisabled();
+  });
+
+  it("resolves project display from the stable proposal ID, never provider projectName", () => {
+    const choices = [{
+      label: "Confirm", description: "confirm", prompt: "confirm",
+      confirmation: { kind: "intelligence-action" as const, decision: "confirm" as const, proposal: { ...proposal, projectName: "Build a product idea" } },
+    }];
+    render(<IntelligenceActionCard choices={choices} sourceMessageId="stable-display" projectNameById={(id) => id === "project-a" ? "Proyecto A" : null} />);
+    expect(screen.getByText("Project — Proyecto A")).toBeVisible();
+    expect(screen.queryByText(/Build a product idea/)).not.toBeInTheDocument();
   });
 
   it("prevents a hydrated resolved proposal from becoming actionable again", () => {

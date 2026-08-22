@@ -11,8 +11,7 @@ import { getAuthenticatedProfile } from "@/core/profile/server";
 import { isProfileComplete } from "@/core/profile/types";
 import AuthenticatedIdentityBoundary from "@/components/profile/AuthenticatedIdentityBoundary";
 import BetaUsageEntryTracker from "@/components/betaUsage/BetaUsageEntryTracker";
-
-import styles from "./layout.module.css";
+import WorkspaceLogoutControl from "@/components/vaeora/WorkspaceLogoutControl";
 
 export default async function IauraLayout({
   children,
@@ -41,13 +40,7 @@ export default async function IauraLayout({
     : null;
   return (
     <VoiceProvider>
-      <form action="/api/auth/logout" method="post" className={styles.logoutForm}>
-        <button type="submit" className={styles.logoutControl}>
-          <span className={styles.statusDot} aria-hidden="true" />
-          <span>Cerrar sesiÃ³n</span>
-          <span className={styles.exitMark} aria-hidden="true">â†—</span>
-        </button>
-      </form>
+      <WorkspaceLogoutControl />
       <AuthenticatedIdentityBoundary profile={profile}>
         {user ? <BetaUsageEntryTracker userId={user.id} /> : null}
         <AuthenticatedProjectBoundary

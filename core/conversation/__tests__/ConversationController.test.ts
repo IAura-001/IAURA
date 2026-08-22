@@ -54,6 +54,7 @@ import { DEFAULT_MEMORY } from "@/constants/memory";
 import { buildUserContext } from "@/utils/context";
 import type { IntelligenceActionReceipt } from "@/core/intelligence";
 import { AuthenticatedConversationPersistenceError, AuthenticatedConversationRepository } from "../AuthenticatedConversationRepository";
+import { loadVisibleConversation } from "@/components/pages/conversationHydration";
 
 const cognitiveRequest = {
   originalUserMessage: "Plan the next step.",
@@ -2341,6 +2342,57 @@ describe("ConversationController", () => {
     expect(mocks.executeMemoryUpdates).toHaveBeenCalledWith([], "project-a");
   });
 
+  it("binds Intelligence bridges to stable project IDs across A to B to A switching", async () => {
+    const projectA = { id: "stable-a", name: "Same display name", goal: "A" } as IAuraProject;
+    const projectB = { id: "stable-b", name: "Same display name", goal: "B" } as IAuraProject;
+    let activeProject = projectA;
+    const projects = {
+      getActiveProject: vi.fn(() => activeProject),
+      getProject: vi.fn((id: string) => [projectA, projectB].find((project) => project.id === id) ?? null),
+      getProjects: vi.fn(() => [projectA, projectB]),
+    } as unknown as ProjectRepository;
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const controller = new ConversationController({ conversations, projects, contextRetriever: createContextRetriever() });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Scoped", []));
+
+    await controller.send("Manage A", "Context", { scopeType: "project", projectId: "stable-a" });
+    activeProject = projectB;
+    await controller.send("Manage B", "Context", { scopeType: "project", projectId: "stable-b" });
+    activeProject = projectA;
+    await controller.send("Manage A again", "Context", { scopeType: "project", projectId: "stable-a" });
+
+    expect(conversations.listConversations().map((item) => item.projectId).sort()).toEqual(["stable-a", "stable-b"]);
+    const submitted = mocks.analyze.mock.calls.slice(-3).map((call) => call[0].userContext as string);
+    expect(submitted[0]).toContain("Captured project id: stable-a");
+    expect(submitted[1]).toContain("Captured project id: stable-b");
+    expect(submitted[2]).toContain("Captured project id: stable-a");
+  });
+
+  it("rejects stale cross-project bridge authority before generation and keeps global bridges global", async () => {
+    const activeProject = { id: "project-b", name: "Proyecto A" } as IAuraProject;
+    const projects = { getActiveProject: vi.fn(() => activeProject) } as unknown as ProjectRepository;
+    const controller = new ConversationController({
+      conversations: new LocalConversationRepository({ synchronize: false, persistLocally: false }),
+      projects,
+      contextRetriever: createContextRetriever(),
+    });
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse.mockResolvedValue(createAssistantPlan("Scoped", []));
+    const callsBefore = mocks.analyze.mock.calls.length;
+
+    await expect(controller.send("Scope: project Proyecto A", "Context", {
+      scopeType: "project", projectId: "project-a",
+    })).rejects.toMatchObject({ code: "IAURA_INTELLIGENCE_BRIDGE_STALE" });
+    expect(mocks.analyze.mock.calls.length).toBe(callsBefore);
+
+    const globalResult = await controller.send("Manage global priorities", "Context", { scopeType: "global", projectId: null });
+    const submitted = mocks.analyze.mock.calls.at(-1)?.[0].userContext as string;
+    expect(submitted).toContain("Requested scope: GLOBAL");
+    expect(submitted).toContain("Captured project id: none");
+    expect(globalResult.plan.content).toBe("Scoped");
+  });
+
   it("continues safely with no stale Intelligence when canonical retrieval fails", async () => {
     const project = { id: "project-a", name: "VAEORA", goal: "Primary survives" } as IAuraProject;
     const projects = { getActiveProject: vi.fn(() => project) } as unknown as ProjectRepository;
@@ -2545,10 +2597,14 @@ describe("ConversationController", () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
-  it("binds a project proposal to its conversation ID and rejects provider retargeting", async () => {
+  it("application-binds a provider-retargeted project proposal to its exact conversation authority", async () => {
     const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
     const projectA = { id: "project-a", name: "Project A", goal: "A" } as IAuraProject;
-    const projects = { getActiveProject: vi.fn(() => projectA) } as unknown as ProjectRepository;
+    const projects = {
+      getActiveProject: vi.fn(() => projectA),
+      getProject: vi.fn((id: string) => id === projectA.id ? projectA : null),
+      getProjects: vi.fn(() => [projectA]),
+    } as unknown as ProjectRepository;
     const proposal = {
       operation: "intelligence_create_goal" as const, scopeType: "project" as const,
       projectId: "project-b", expectedActiveProjectId: "project-b", projectName: "Project A",
@@ -2562,8 +2618,112 @@ describe("ConversationController", () => {
     } }));
     const controller = new ConversationController({ conversations, projects, contextRetriever: createContextRetriever() });
 
-    await expect(controller.send("Create Goal A", "Context"))
-      .rejects.toMatchObject({ code: "IAURA_CONVERSATION_PROVIDER_FAILED" });
+    const result = await controller.send("Create Goal A", "Context", {
+      scopeType: "project", projectId: "project-a",
+    });
+    const persisted = conversations.listConversations()[0].messages
+      .find((message) => message.messageId === result.assistantMessageId)!
+      .structuredResponse!.experience!.choices[0].confirmation;
+    expect(persisted?.kind === "intelligence-action" ? persisted.proposal : null).toMatchObject({
+      projectId: "project-a",
+      expectedActiveProjectId: "project-a",
+      projectName: "Project A",
+    });
+  });
+
+  it("retains bridge authority for a focused Presencia follow-up until a proposal is produced", async () => {
+    const projectA = { id: "project-a", name: "Proyecto A", goal: "A" } as IAuraProject;
+    const projects = {
+      getActiveProject: vi.fn(() => projectA),
+      getProject: vi.fn((id: string) => id === projectA.id ? projectA : null),
+      getProjects: vi.fn(() => [projectA]),
+    } as unknown as ProjectRepository;
+    const conversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    const remoteConversations = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    Object.assign(conversations, { flush: vi.fn(async () => {
+      expect(remoteConversations.replaceSnapshotResult(conversations.getSnapshot()).ok).toBe(true);
+    }) });
+    const wrongProposal = {
+      operation: "intelligence_create_priority" as const, scopeType: "project" as const,
+      projectId: "build-product", expectedActiveProjectId: "build-product", projectName: "Proyecto A",
+      currentSummary: "None", proposedSummary: "Add verification", title: "Visual Intelligence Verification", goalId: null,
+    };
+    const choices = ["confirm", "cancel"].map((decision) => ({
+      label: decision, description: decision, prompt: decision,
+      confirmation: {
+        kind: "intelligence-action" as const,
+        decision: decision as "confirm" | "cancel",
+        proposal: decision === "cancel"
+          ? { ...wrongProposal, expectedActiveProjectId: "parser-discarded-mismatch" }
+          : wrongProposal,
+      },
+    }));
+    const rawProviderProse = "I’ll prepare a project-scoped Intelligence change for ‘Build a product idea.’";
+    const providerPlan = parseAuraAssistantPlan({ content: rawProviderProse, experience: {
+      kind: "decision",
+      title: "Project-scoped Intelligence change for “Build a product idea”",
+      summary: "Prepare a project-scoped Intelligence change for “Build a product idea”",
+      phases: [{ title: "Project-scoped Intelligence change for “Build a product idea”", description: "Review the project-scoped Intelligence change for “Build a product idea”" }],
+      choices: choices.map((choice) => ({
+        ...choice,
+        label: "Review project-scoped Intelligence change for “Build a product idea”",
+        description: "Apply project-scoped Intelligence change for “Build a product idea”",
+        prompt: "Confirm project-scoped Intelligence change for “Build a product idea”",
+      })),
+      recommendedSurface: "intelligence",
+    } });
+    expect(choices).toHaveLength(2);
+    expect(choices.map((choice) => choice.confirmation.decision)).toEqual(["confirm", "cancel"]);
+    expect(providerPlan.experience.choices.filter((choice) =>
+      choice.confirmation?.kind === "intelligence-action").map((choice) =>
+      choice.confirmation?.kind === "intelligence-action" ? choice.confirmation.decision : null)).toEqual(["confirm"]);
+    expect(providerPlan.content).toContain("Build a product idea");
+    mocks.analyze.mockReturnValue(cognitiveRequest);
+    mocks.generateCognitiveResponse
+      .mockResolvedValueOnce(createAssistantPlan("What priority?", []))
+      .mockResolvedValueOnce(providerPlan);
+    const controller = new ConversationController({ conversations, projects, contextRetriever: createContextRetriever() });
+
+    await controller.send("Help shape priorities", "Context", { scopeType: "project", projectId: "project-a" });
+    const result = await controller.send("Add Visual Intelligence Verification for this project", "Context");
+    expect(result.plan.content).toContain("Proyecto A");
+    expect(result.plan.content).not.toContain("Build a product idea");
+    const persisted = conversations.listConversations()[0].messages
+      .find((message) => message.messageId === result.assistantMessageId)!
+      .structuredResponse!.experience!.choices[0].confirmation;
+    const persistedChoices = conversations.listConversations()[0].messages
+      .find((message) => message.messageId === result.assistantMessageId)!
+      .structuredResponse!.experience!.choices;
+    expect(persistedChoices).toHaveLength(2);
+    expect(persistedChoices.map((choice) => choice.confirmation?.kind === "intelligence-action"
+      ? choice.confirmation.decision : null)).toEqual(["confirm", "cancel"]);
+    expect(persistedChoices[0].confirmation?.kind === "intelligence-action" &&
+      persistedChoices[1].confirmation?.kind === "intelligence-action"
+      ? persistedChoices[0].confirmation.proposal.executionId === persistedChoices[1].confirmation.proposal.executionId
+      : false).toBe(true);
+    expect(persisted?.kind === "intelligence-action" ? persisted.proposal : null).toMatchObject({
+      projectId: "project-a", expectedActiveProjectId: "project-a", projectName: "Proyecto A",
+    });
+    expect(JSON.stringify(persisted)).not.toContain("Build a product idea");
+    const persistedMessage = conversations.listConversations()[0].messages
+      .find((message) => message.messageId === result.assistantMessageId)!;
+    expect(persistedMessage.content).toContain("Proyecto A");
+    expect(persistedMessage.structuredResponse?.experience?.choices[0].prompt).toContain("Proyecto A");
+    expect(JSON.stringify(persistedMessage.structuredResponse)).not.toContain("Build a product idea");
+
+    const authoritativeSnapshot = remoteConversations.getSnapshot();
+    const authoritativeMessage = authoritativeSnapshot.conversations[0].messages
+      .find((message) => message.messageId === result.assistantMessageId)!;
+    expect(authoritativeMessage.content).toContain("Proyecto A");
+    expect(JSON.stringify(authoritativeMessage)).not.toContain("Build a product idea");
+
+    const hydratedRepository = new LocalConversationRepository({ synchronize: false, persistLocally: false });
+    expect(hydratedRepository.replaceSnapshotResult(authoritativeSnapshot).ok).toBe(true);
+    const hydrated = loadVisibleConversation(hydratedRepository, "project-a")
+      .find((message) => message.id === result.assistantMessageId)!;
+    expect(hydrated.content).toContain("Proyecto A");
+    expect(JSON.stringify(hydrated)).not.toContain("Build a product idea");
+    expect(hydrated.experience?.choices).toHaveLength(2);
   });
 
   it("keeps a stale Project A source bound to A after Project B becomes active", async () => {

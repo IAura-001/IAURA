@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import type { AuraExperienceChoice } from "@/core/actions";
+import { authenticatedProjectRepository } from "@/core/project/AuthenticatedProjectRepository";
 
 export default function IntelligenceActionCard({
   choices, sourceMessageId, disabled = false, resolved: externallyResolved = false, onChoose,
+  projectNameById = (projectId) => authenticatedProjectRepository.getProject(projectId)?.name ?? null,
 }: {
   choices: AuraExperienceChoice[];
   sourceMessageId: string;
   disabled?: boolean;
   resolved?: boolean;
   onChoose?: (choice: AuraExperienceChoice, sourceMessageId: string) => void | Promise<void>;
+  projectNameById?: (projectId: string) => string | null;
 }) {
   const intelligenceChoices = choices.filter((choice) => choice.confirmation?.kind === "intelligence-action");
   const proposal = intelligenceChoices[0]?.confirmation?.kind === "intelligence-action"
@@ -20,6 +23,9 @@ export default function IntelligenceActionCard({
   const resolved = externallyResolved || locallyResolved;
   const [error, setError] = useState("");
   if (!proposal) return null;
+  const projectDisplayName = proposal.scopeType === "project" && proposal.projectId
+    ? projectNameById(proposal.projectId) ?? "Active project"
+    : null;
   const reorderCurrent = proposal.operation === "intelligence_reorder_priorities"
     ? proposal.expectedPriorities.slice().sort((left, right) => left.position - right.position)
     : null;
@@ -48,7 +54,7 @@ export default function IntelligenceActionCard({
       <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-violet-200/65">Intelligence change proposed</p>
       <h3 className="mt-3 text-lg font-medium text-zinc-50">{proposal.operation.replace(/^intelligence_/, "").replaceAll("_", " ").toUpperCase()}</h3>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <div><dt className="text-zinc-500">Scope</dt><dd className="mt-1 text-zinc-200">{proposal.scopeType === "global" ? "Global" : `Project — ${proposal.projectName ?? "Active project"}`}</dd></div>
+        <div><dt className="text-zinc-500">Scope</dt><dd className="mt-1 text-zinc-200">{proposal.scopeType === "global" ? "Global" : `Project — ${projectDisplayName}`}</dd></div>
         {proposal.currentSummary ? <div><dt className="text-zinc-500">Current</dt><dd className="mt-1 whitespace-pre-wrap text-zinc-200">{reorderCurrent ? reorderCurrent.map((priority, index) => `${index + 1}. ${priority.label}`).join("\n") : proposal.currentSummary}</dd></div> : null}
         <div><dt className="text-zinc-500">Proposed</dt><dd className="mt-1 whitespace-pre-wrap text-zinc-100">{reorderLabels && proposal.operation === "intelligence_reorder_priorities" ? proposal.orderedPriorityIds.map((id, index) => `${index + 1}. ${reorderLabels.get(id)}`).join("\n") : proposal.proposedSummary}</dd></div>
       </dl>

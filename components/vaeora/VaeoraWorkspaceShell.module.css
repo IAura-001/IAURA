@@ -3,7 +3,6 @@
   isolation: isolate;
   min-height: 100vh;
   min-height: 100svh;
-  overflow-x: clip;
   color: var(--vaeora-text);
   color-scheme: dark;
   background:
@@ -38,6 +37,7 @@
   align-items: center;
   gap: 2rem;
   width: min(100%, 1440px);
+  max-width: 100%;
   min-height: 76px;
   margin: 0 auto;
   padding: 0 clamp(1.25rem, 3vw, 3rem);
@@ -87,6 +87,7 @@
 
 .navigation {
   min-width: 0;
+  max-width: 100%;
 }
 
 .tabList {
@@ -94,6 +95,8 @@
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.025);
@@ -106,6 +109,7 @@
   justify-content: center;
   gap: 0.55rem;
   min-height: 44px;
+  min-width: 0;
   padding: 0.65rem 1rem;
   border: 0;
   border-radius: 999px;
@@ -309,6 +313,7 @@
 
 @media (max-width: 700px) {
   .chromeInner {
+    grid-template-columns: minmax(0, 1fr) auto;
     min-height: auto;
     padding-right: max(1rem, env(safe-area-inset-right));
     padding-left: max(1rem, env(safe-area-inset-left));
@@ -330,6 +335,11 @@
     padding-left: 0;
     border-left: 0;
     font-size: 0.64rem;
+  }
+
+  .brand {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .tab {
@@ -384,6 +394,35 @@
   .panelHeading p {
     margin-top: 0.85rem;
     font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .chromeInner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.7rem;
+    padding-top: 0.8rem;
+  }
+
+  .identityStatus {
+    display: none;
+  }
+
+  .navigation {
+    grid-column: 1;
+    width: 100%;
+  }
+
+  .tabList {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .tab {
+    overflow: hidden;
+    padding-right: 0.35rem;
+    padding-left: 0.35rem;
+    white-space: nowrap;
   }
 }
 

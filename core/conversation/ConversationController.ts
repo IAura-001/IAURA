@@ -50,6 +50,7 @@ export type ConversationTurnErrorCode =
   | "IAURA_CONVERSATION_PERSISTENCE_FAILED"
   | "IAURA_CONVERSATION_PROVIDER_FAILED"
   | "IAURA_CONTEXT_RETRIEVAL_FAILED"
+  | "IAURA_INTELLIGENCE_BRIDGE_STALE"
   | "IAURA_CONVERSATION_STALE_CONFIRMATION"
   | "IAURA_BETA_CONFIRMATION_INVALID"
   | "IAURA_BETA_CONFIRMATION_OUT_OF_SEQUENCE";
@@ -73,6 +74,8 @@ export class ConversationTurnError extends Error {
     super(
       code === "IAURA_CONVERSATION_STALE_CONFIRMATION"
         ? "This proposal is stale because the conversation changed in another session. Refresh and ask Aura to regenerate it."
+        : code === "IAURA_INTELLIGENCE_BRIDGE_STALE"
+        ? "The active project changed before Aura could use this Intelligence request. Return to Intelligence and try again."
         : code === "IAURA_CONVERSATION_PROVIDER_FAILED"
         ? "IAURA could not generate a response. Your message was preserved for retry."
         : code === "IAURA_CONTEXT_RETRIEVAL_FAILED"
@@ -111,6 +114,11 @@ type ResponseGenerator = (
 export interface ConversationTurnResult {
   plan: AuraAssistantPlan;
   assistantMessageId: string;
+}
+
+export interface IntelligenceBridgeAuthority {
+  scopeType: "global" | "project";
+  projectId: string | null;
 }
 
 export interface DeferredContinuityResumeRequest {
@@ -201,6 +209,87 @@ function serializeBetaWorkflow(conversation: Conversation): string {
           ? "Post-closure handoff: pending explicit founder choice."
           : "Post-closure handoff: not applicable.",
   ].join("\n");
+}
+
+function replaceProjectIdentity(text: string, staleNames: string[], canonicalName: string): string {
+  const aliasesReplaced = staleNames.reduce((current, name) => {
+    if (!name || name === canonicalName) return current;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return current.replace(new RegExp(escaped, "gi"), canonicalName);
+  }, text);
+  return aliasesReplaced.replace(
+    /((?:project-scoped\s+Intelligence\s+change|cambio\s+de\s+Inteligencia\s+del\s+proyecto)[^.!?\n]{0,80}?\b(?:for|para)\s+)[“‘"'«][^”’"'»\n]+[”’"'»]/giu,
+    `$1“${canonicalName}”`,
+  );
+}
+
+function bindBridgeProseToProject(
+  response: AuraAssistantPlan,
+  canonicalName: string,
+  staleNames: string[],
+): AuraAssistantPlan {
+  const replace = (value: string) => replaceProjectIdentity(value, staleNames, canonicalName);
+  return {
+    ...response,
+    content: replace(response.content),
+    experience: {
+      ...response.experience,
+      title: replace(response.experience.title),
+      summary: replace(response.experience.summary),
+      phases: response.experience.phases.map((phase) => ({
+        ...phase,
+        title: replace(phase.title),
+        description: replace(phase.description),
+      })),
+      choices: response.experience.choices.map((choice) => ({
+        ...choice,
+        label: replace(choice.label),
+        description: replace(choice.description),
+        prompt: replace(choice.prompt),
+      })),
+    },
+  };
+}
+
+function canonicalIntelligenceChoicePair(
+  choices: AuraExperienceChoice[],
+): AuraExperienceChoice[] {
+  const typed = choices.filter((choice) => choice.confirmation?.kind === "intelligence-action");
+  if (!typed.length) return choices;
+  const proposals = new Map<string, IntelligenceActionProposal>();
+  for (const choice of typed) {
+    if (choice.confirmation?.kind === "intelligence-action") {
+      proposals.set(JSON.stringify(choice.confirmation.proposal), choice.confirmation.proposal);
+    }
+  }
+  if (proposals.size !== 1) {
+    throw new ConversationTurnError("IAURA_CONVERSATION_PROVIDER_FAILED", "generation");
+  }
+  const proposal = [...proposals.values()][0];
+  const confirm = typed.find((choice) =>
+    choice.confirmation?.kind === "intelligence-action" && choice.confirmation.decision === "confirm");
+  const cancel = typed.find((choice) =>
+    choice.confirmation?.kind === "intelligence-action" && choice.confirmation.decision === "cancel");
+  return [
+    confirm ? {
+      ...confirm,
+      confirmation: { kind: "intelligence-action", decision: "confirm", proposal },
+    } : {
+      label: "Confirmar",
+      description: "Aplicar este cambio de Inteligencia.",
+      prompt: "Confirmar cambio de Inteligencia",
+      confirmation: { kind: "intelligence-action", decision: "confirm", proposal },
+    },
+    cancel ? {
+      ...cancel,
+      confirmation: { kind: "intelligence-action", decision: "cancel", proposal },
+    } : {
+      label: "Cancelar",
+      description: "Mantener la Inteligencia actual sin cambios.",
+      prompt: "Cancelar cambio de Inteligencia",
+      confirmation: { kind: "intelligence-action", decision: "cancel", proposal },
+    },
+  ];
 }
 
 function sameChoice(
@@ -339,6 +428,7 @@ function toBrainHistory(
 }
 
 export class ConversationController {
+  private readonly intelligenceBridgeAuthorities = new Map<string, IntelligenceBridgeAuthority>();
   private readonly conversations: ConversationRepository;
   private readonly projects: ProjectRepository;
   private readonly brain: BrainAnalyzer;
@@ -452,6 +542,17 @@ export class ConversationController {
     return created.conversation;
   }
 
+  private requireIntelligenceBridgeAuthority(authority: IntelligenceBridgeAuthority): IAuraProject | null {
+    const activeProject = this.projects.getActiveProject();
+    const valid = authority.scopeType === "global"
+      ? authority.projectId === null
+      : Boolean(authority.projectId) && activeProject?.id === authority.projectId;
+    if (!valid) {
+      throw new ConversationTurnError("IAURA_INTELLIGENCE_BRIDGE_STALE", "conversation");
+    }
+    return activeProject;
+  }
+
   private async persistUserMessage(
     conversation: Conversation,
     message: string,
@@ -539,6 +640,7 @@ export class ConversationController {
     options: {
       allowBetaExecutionEvaluation?: boolean;
       allowBetaSessionEvaluation?: boolean;
+      intelligenceBridgeAuthority?: IntelligenceBridgeAuthority;
     } = {},
   ): Promise<ConversationTurnResult> {
     const userMessage =
@@ -564,11 +666,25 @@ export class ConversationController {
         message,
       );
 
-    const activeProject = this.projects.getActiveProject();
+    const activeProject = options.intelligenceBridgeAuthority
+      ? this.requireIntelligenceBridgeAuthority(options.intelligenceBridgeAuthority)
+      : this.projects.getActiveProject();
+    if (options.intelligenceBridgeAuthority && conversation.projectId !== activeProject?.id) {
+      throw new ConversationTurnError("IAURA_INTELLIGENCE_BRIDGE_STALE", "conversation", conversation.conversationId);
+    }
     const intelligenceContext = await this.loadIntelligenceContext(
       activeProject?.id === conversation.projectId ? activeProject : null,
     );
     const serializedIntelligence = serializeIntelligenceContext(intelligenceContext);
+    const serializedBridgeAuthority = options.intelligenceBridgeAuthority
+      ? [
+          '<intelligence_bridge_authority trust="application" access="read-only">',
+          `Requested scope: ${options.intelligenceBridgeAuthority.scopeType.toUpperCase()}`,
+          `Captured project id: ${options.intelligenceBridgeAuthority.projectId ?? "none"}`,
+          "A project-scoped proposal is valid only for this captured project id. A global request must remain global.",
+          "</intelligence_bridge_authority>",
+        ].join("\n")
+      : "";
 
     const retrievedContext =
       serializeContextPackage(contextPackage);
@@ -576,7 +692,10 @@ export class ConversationController {
     const enrichedUserContext =
       mergeUserContext(
         mergeUserContext(
-          mergeUserContext(userContext, serializedIntelligence),
+          mergeUserContext(
+            mergeUserContext(userContext, serializedIntelligence),
+            serializedBridgeAuthority,
+          ),
           serializeBetaWorkflow(conversation),
         ),
         retrievedContext,
@@ -611,6 +730,94 @@ export class ConversationController {
         conversation.conversationId,
         userMessage.messageId,
       );
+    }
+
+    if (options.intelligenceBridgeAuthority?.scopeType === "project") {
+      const canonicalProject = options.intelligenceBridgeAuthority.projectId
+        ? this.projects.getProject(options.intelligenceBridgeAuthority.projectId)
+        : null;
+      if (!canonicalProject) {
+        throw new ConversationTurnError(
+          "IAURA_INTELLIGENCE_BRIDGE_STALE", "generation", conversation.conversationId, userMessage.messageId,
+        );
+      }
+      const providerNames = generatedResponse.experience.choices.flatMap((choice) =>
+        choice.confirmation?.kind === "intelligence-action" && choice.confirmation.proposal.projectName
+          ? [choice.confirmation.proposal.projectName]
+          : []);
+      const persistedProposalNames = conversation.messages.flatMap((message) =>
+        message.structuredResponse?.experience?.choices.flatMap((choice) =>
+          choice.confirmation?.kind === "intelligence-action" &&
+          choice.confirmation.proposal.projectId !== canonicalProject.id &&
+          choice.confirmation.proposal.projectName
+            ? [choice.confirmation.proposal.projectName]
+            : []) ?? []);
+      const staleNames = [...new Set([
+        ...this.projects.getProjects().filter((project) => project.id !== canonicalProject.id).map((project) => project.name),
+        ...providerNames,
+        ...persistedProposalNames,
+      ])];
+      generatedResponse = bindBridgeProseToProject(generatedResponse, canonicalProject.name, staleNames);
+    }
+
+    const providerHasIntelligenceProposal = generatedResponse.experience.choices.some(
+      (choice) => choice.confirmation?.kind === "intelligence-action",
+    );
+    if (providerHasIntelligenceProposal) {
+      const liveProject = this.projects.getActiveProject();
+      const boundScope = options.intelligenceBridgeAuthority?.scopeType;
+      generatedResponse = {
+        ...generatedResponse,
+        experience: {
+          ...generatedResponse.experience,
+          choices: generatedResponse.experience.choices.map((choice) => {
+            if (choice.confirmation?.kind !== "intelligence-action") return choice;
+            const providerProposal = choice.confirmation.proposal;
+            const scopeType = boundScope ?? providerProposal.scopeType;
+            if (scopeType === "global") {
+              return {
+                ...choice,
+                confirmation: {
+                  ...choice.confirmation,
+                  proposal: {
+                    ...providerProposal,
+                    scopeType: "global" as const,
+                    projectId: null,
+                    expectedActiveProjectId: null,
+                    projectName: null,
+                  },
+                },
+              };
+            }
+            const projectId = options.intelligenceBridgeAuthority?.projectId ?? conversation.projectId;
+            if (!projectId || liveProject?.id !== projectId || conversation.projectId !== projectId) {
+              throw new ConversationTurnError(
+                "IAURA_INTELLIGENCE_BRIDGE_STALE", "generation", conversation.conversationId, userMessage.messageId,
+              );
+            }
+            return {
+              ...choice,
+              confirmation: {
+                ...choice.confirmation,
+                proposal: {
+                  ...providerProposal,
+                  scopeType: "project" as const,
+                  projectId,
+                  expectedActiveProjectId: projectId,
+                  projectName: liveProject.name,
+                },
+              },
+            };
+          }),
+        },
+      };
+      generatedResponse = {
+        ...generatedResponse,
+        experience: {
+          ...generatedResponse.experience,
+          choices: canonicalIntelligenceChoicePair(generatedResponse.experience.choices),
+        },
+      };
     }
 
     const intelligenceChoices = generatedResponse.experience.choices.filter(
@@ -658,6 +865,7 @@ export class ConversationController {
               : choice),
         },
       };
+      this.intelligenceBridgeAuthorities.delete(conversation.conversationId);
     }
 
     const evaluationAllowed =
@@ -769,12 +977,20 @@ export class ConversationController {
   async send(
     message: string,
     userContext: string,
+    intelligenceBridgeAuthority?: IntelligenceBridgeAuthority,
   ): Promise<ConversationTurnResult> {
+    if (intelligenceBridgeAuthority) this.requireIntelligenceBridgeAuthority(intelligenceBridgeAuthority);
     const conversation = this.resolveConversation();
+    if (intelligenceBridgeAuthority) {
+      this.intelligenceBridgeAuthorities.set(conversation.conversationId, intelligenceBridgeAuthority);
+    }
+    const effectiveBridgeAuthority = intelligenceBridgeAuthority ??
+      this.intelligenceBridgeAuthorities.get(conversation.conversationId);
     return this.sendInConversation(
       conversation,
       message,
       userContext,
+      { intelligenceBridgeAuthority: effectiveBridgeAuthority },
     );
   }
 

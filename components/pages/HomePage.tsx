@@ -59,13 +59,15 @@ import {
   loadOlderConversationStart,
   visibleConversationMessages,
 } from "@/components/pages/conversationWindowing";
+import { prepareIntelligenceBridgeAuthority } from "@/components/pages/intelligenceBridge";
 import { ActionCenter } from "@/components/sections/ActionCenter";
 import AssistantCard from "@/components/sections/AssistantCard";
 import AuraStartingPoints from "@/components/sections/AuraStartingPoints";
 import { ChatInput } from "@/components/sections/ChatInput";
 import { Conversation } from "@/components/sections/Conversation";
 import Hero from "@/components/sections/Hero";
-import PersonalIntelligenceCenter from "@/components/sections/PersonalIntelligenceCenter";
+import PersonalIntelligenceCenter, { type IntelligenceAuraBridgeRequest } from "@/components/sections/PersonalIntelligenceCenter";
+import type { IntelligenceBridgeAuthority } from "@/core/conversation/ConversationController";
 import VaeoraWorkspaceShell, {
   type WorkspaceEntryIntent,
   type WorkspaceView,
@@ -101,7 +103,6 @@ export default function Home({
     memory,
     isLoaded,
     updateMemory,
-    resetMemory,
     replaceMemory,
   } = useMemory();
 
@@ -144,6 +145,7 @@ export default function Home({
     useState(false);
   const [isAuraLive, setIsAuraLive] =
     useState(false);
+  const [intelligenceRefreshKey, setIntelligenceRefreshKey] = useState(0);
 
   const auraLiveRef = useRef(false);
   const auraLiveRestartTimerRef =
@@ -433,6 +435,7 @@ export default function Home({
     async (
       missionOverride?: string | AuraExperienceChoice,
       sourceMessageId?: string,
+      intelligenceBridgeAuthority?: IntelligenceBridgeAuthority,
     ) => {
       const trimmedInput =
         (typeof missionOverride === "string"
@@ -460,7 +463,9 @@ export default function Home({
         content: trimmedInput,
       };
 
-      const requestedProjectId = activeProjectId;
+      const requestedProjectId = intelligenceBridgeAuthority?.scopeType === "project"
+        ? intelligenceBridgeAuthority.projectId
+        : activeProjectId;
       messageGenerationRef.current += 1;
       const requestedMessageGeneration = messageGenerationRef.current;
       setMessagesProjectId(requestedProjectId);
@@ -488,8 +493,18 @@ export default function Home({
             : await conversationController.send(
                 trimmedInput,
                 userContext,
+                intelligenceBridgeAuthority,
               );
         const response = turn.plan;
+
+        if (
+          typeof missionOverride === "object" &&
+          missionOverride.confirmation?.kind === "intelligence-action" &&
+          missionOverride.confirmation.decision === "confirm" &&
+          /Status:\s*executed/i.test(response.content)
+        ) {
+          setIntelligenceRefreshKey((current) => current + 1);
+        }
 
         void trackBetaUsage({ type: "message_sent", projectId: requestedProjectId });
         if (requestedProjectId) {
@@ -938,7 +953,12 @@ export default function Home({
           intelligence={
             <PersonalIntelligenceCenter
               requestedProjectId={activeProjectId}
-              onResetMemory={resetMemory}
+              refreshKey={intelligenceRefreshKey}
+              onShapeWithAura={async (request: IntelligenceAuraBridgeRequest) => {
+                if (!await prepareIntelligenceBridgeAuthority(request, authenticatedProjectRepository)) return;
+                setActiveWorkspaceView("presence");
+                await handleSend(request.prompt, undefined, request);
+              }}
             />
           }
         />

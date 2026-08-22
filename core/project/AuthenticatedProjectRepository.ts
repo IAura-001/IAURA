@@ -130,6 +130,14 @@ export class AuthenticatedProjectRepository implements ProjectRepository {
   updateProject(project: IAuraProject): ProjectWriteResult { return this.write(project, false); }
   setActiveProject(project: IAuraProject): ProjectWriteResult { const exists = this.projects.some((p) => p.id === project.id); return this.write(project, !exists); }
   setActiveProjectId(id: string): boolean { return this.setActiveProjectIdResult(id).ok; }
+  async ensureActiveProjectId(id: string): Promise<StateOperationResult> {
+    const wasActive = this.activeProjectId === id;
+    const result = this.setActiveProjectIdResult(id);
+    if (!result.ok) return result;
+    if (wasActive) this.queueActiveProjectId(id);
+    await this.flush();
+    return this.getLastOperationResult();
+  }
   setActiveProjectIdResult(id: string): StateOperationResult {
     if (!this.projects.some((p) => p.id === id)) {
       return this.result(false, "failed");

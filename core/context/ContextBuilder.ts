@@ -223,9 +223,9 @@ export function buildBrainContext(
     input.userContext?.trim() ?? "";
 
   const conversationIdentity = input.conversationIdentity
-    ? `ConversaciÃ³n activa
+    ? `Conversación activa
 ID: ${compactText(input.conversationIdentity.conversationId, 240)}
-Ãmbito: ${
+Ámbito: ${
         input.conversationIdentity.projectId
           ? `proyecto ${compactText(input.conversationIdentity.projectId, 240)}`
           : "general"

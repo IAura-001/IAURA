@@ -48,6 +48,23 @@ describe("AuthenticatedProjectRepository ownership scoping", () => {
     expect(projectWrites).toHaveLength(0);
   });
 
+  it("reasserts the exact active project in project_state before a scoped bridge", async () => {
+    const repository = new AuthenticatedProjectRepository();
+    const projectA = project("project-a", "Same display name");
+    const projectB = project("project-b", "Same display name");
+    repository.configure("user-a", [projectA, projectB], projectA.id);
+
+    await expect(repository.ensureActiveProjectId(projectA.id)).resolves.toMatchObject({ ok: true });
+    await expect(repository.ensureActiveProjectId(projectB.id)).resolves.toMatchObject({ ok: true });
+    await expect(repository.ensureActiveProjectId(projectA.id)).resolves.toMatchObject({ ok: true });
+
+    const stateWrites = vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/project-state");
+    expect(stateWrites.map(([, init]) => JSON.parse(String(init?.body)).activeProjectId)).toEqual([
+      "project-a", "project-b", "project-a",
+    ]);
+    expect(repository.getActiveProject()?.id).toBe("project-a");
+  });
+
   it("issues one PUT for one real mutation and does not recurse", async () => {
     const repository = new AuthenticatedProjectRepository();
     const initial = project("existing", "Existing");
