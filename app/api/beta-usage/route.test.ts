@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   createClient: vi.fn(),
+  getFounderUsage: vi.fn(),
 }));
 
 vi.mock("@/core/auth/session", async () => {
@@ -10,8 +11,14 @@ vi.mock("@/core/auth/session", async () => {
   return { ...actual, getAuthenticatedUser: mocks.getUser };
 });
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: mocks.createClient }));
+vi.mock("@/core/betaUsage/server", async () => {
+  const founder = await import("@/core/betaUsage/founder");
+  return { FounderUsageAccessError: founder.FounderUsageAccessError,
+    getFounderBetaUsage: mocks.getFounderUsage };
+});
 
-import { POST } from "./route";
+import { GET, POST } from "./route";
+import { FounderUsageAccessError } from "@/core/betaUsage/founder";
 
 function client(insertError: unknown = null, projectOwner = true) {
   const insert = vi.fn().mockResolvedValue({ error: insertError });
@@ -30,6 +37,27 @@ describe("POST /api/beta-usage", () => {
   beforeEach(() => {
     mocks.getUser.mockReset().mockResolvedValue({ id: "user-a" });
     mocks.createClient.mockReset();
+    mocks.getFounderUsage.mockReset();
+  });
+
+  it("returns founder operations for an authenticated founder", async () => {
+    mocks.getFounderUsage.mockResolvedValue({ summary: { totalRegistered: 1 }, users: [] });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ summary: { totalRegistered: 1 } });
+  });
+
+  it("denies a normal authenticated user even if client state claims founder", async () => {
+    mocks.getFounderUsage.mockRejectedValue(new FounderUsageAccessError());
+    const response = await GET();
+    expect(response.status).toBe(403);
+  });
+
+  it("denies an unauthenticated user without querying founder data", async () => {
+    mocks.getUser.mockResolvedValue(null);
+    const response = await GET();
+    expect(response.status).toBe(401);
+    expect(mocks.getFounderUsage).not.toHaveBeenCalled();
   });
 
   it("binds the event to the authenticated user and stores no message content", async () => {

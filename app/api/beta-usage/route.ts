@@ -3,12 +3,32 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser, authenticationRequiredResponse } from "@/core/auth/session";
 import { BETA_USAGE_EVENT_TYPES, type BetaUsageEventType } from "@/core/betaUsage/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { FounderUsageAccessError, getFounderBetaUsage } from "@/core/betaUsage/server";
 
 const MILESTONES = new Set([
   "beta-context", "beta-outcome", "beta-next-step", "beta-session-decision",
   "beta-execution-evaluation", "beta-session-evaluation", "beta-session-closure",
   "beta-post-closure-handoff", "beta-incomplete-execution-recovery",
 ]);
+
+export async function GET() {
+  const user = await getAuthenticatedUser();
+  if (!user) return authenticationRequiredResponse();
+  try {
+    return NextResponse.json(await getFounderBetaUsage(), {
+      headers: { "Cache-Control": "no-store" },
+    });
+  } catch (error) {
+    if (error instanceof FounderUsageAccessError) {
+      return NextResponse.json({ error: "Founder access required." }, {
+        status: 403, headers: { "Cache-Control": "no-store" },
+      });
+    }
+    return NextResponse.json({ error: "Beta operations data is unavailable." }, {
+      status: 503, headers: { "Cache-Control": "no-store" },
+    });
+  }
+}
 
 export async function POST(request: Request) {
   const user = await getAuthenticatedUser();
