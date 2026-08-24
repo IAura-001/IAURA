@@ -13,9 +13,9 @@ export function validateCredentials(emailValue: unknown, passwordValue: unknown)
   return validEmail && validPassword ? { email, password } : null;
 }
 
-export async function getAuthenticatedUser(): Promise<User | null> {
+export async function getAuthenticatedUser(request?: Request): Promise<User | null> {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient(request);
     const { data, error } = await supabase.auth.getUser();
     return error ? null : data.user;
   } catch {

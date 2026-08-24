@@ -9,6 +9,9 @@ import {
   getLanguageDefinition,
   normalizeLocale,
 } from "@/core/i18n/languages";
+import { AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
+import { unknownProviderUsage } from "@/core/aiUsage/provider";
 
 export const runtime = "nodejs";
 
@@ -33,7 +36,7 @@ export async function POST(
     );
   }
 
-  if (!(await getAuthenticatedUser())) return authenticationRequiredResponse();
+  if (!(await getAuthenticatedUser(request))) return authenticationRequiredResponse();
 
   try {
     const formData =
@@ -80,18 +83,30 @@ export async function POST(
 
     const openai = new OpenAI({
       apiKey,
+      maxRetries: 0,
     });
     const languageDefinition =
       getLanguageDefinition(language);
-    const transcription =
-      await openai.audio.transcriptions.create({
+    let reservation;
+    try { reservation = await reserveAiUsage(request, "transcription"); }
+    catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error); throw error; }
+    let transcription;
+    try { transcription = await openai.audio.transcriptions.create({
         file: audio,
         model: "gpt-4o-mini-transcribe",
         language: languageDefinition.code,
         response_format: "json",
         prompt:
           "IAURA, Aura, personal goals, habits, projects and missions.",
-      });
+      }); } catch (error) { await reservation.fail("openai", "gpt-4o-mini-transcribe"); throw error; }
+    const providerUsage = unknownProviderUsage("openai", "gpt-4o-mini-transcribe");
+    if (transcription.usage?.type === "tokens") {
+      providerUsage.inputTokens = transcription.usage.input_tokens;
+      providerUsage.outputTokens = transcription.usage.output_tokens;
+      providerUsage.totalTokens = transcription.usage.total_tokens;
+      providerUsage.providerUsageAvailable = true;
+    }
+    await reservation.complete(providerUsage);
     const text = transcription.text.trim();
 
     if (!text) {

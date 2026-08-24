@@ -14,6 +14,8 @@ import {
   BrainValidationError,
 } from "@/core/validator/ResponseValidator";
 import { createOpenAIProvider } from "@/services/providers";
+import { AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
 
 export const runtime = "nodejs";
 
@@ -120,7 +122,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!(await getAuthenticatedUser())) return authenticationRequiredResponse();
+  if (!(await getAuthenticatedUser(request))) return authenticationRequiredResponse();
 
   let body: ChatRequestBody;
 
@@ -187,14 +189,24 @@ export async function POST(request: Request) {
     );
   }
 
+  let usageReservation;
   try {
-    const provider = createOpenAIProvider();
+    usageReservation = await reserveAiUsage(request, "chat");
+  } catch (error) {
+    if (error instanceof AiSafetyLimitError) return aiLimitResponse(error);
+    return NextResponse.json({ error: "AI usage controls are temporarily unavailable.", code: "VAEORA_AI_GUARD_UNAVAILABLE" },
+      { status: 503, headers: noStoreHeaders() });
+  }
+
+  try {
+    const provider = createOpenAIProvider({ onUsage: (usage) => usageReservation.complete(usage) });
     const result = await provider.generate(cognitiveRequest);
 
     return NextResponse.json(result, {
       headers: noStoreHeaders(),
     });
     } catch (error: unknown) {
+    await usageReservation.fail("openai", process.env.OPENAI_MODEL ?? "unknown");
     const details =
       typeof error === "object" && error !== null
         ? error as Record<string, unknown>

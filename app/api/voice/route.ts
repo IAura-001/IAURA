@@ -15,6 +15,9 @@ import {
   normalizeAuraVoiceMode,
   type AuraVoiceMode,
 } from "@/core/voice/providers/voiceModes";
+import { AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
+import { unknownProviderUsage } from "@/core/aiUsage/provider";
 
 export const runtime = "nodejs";
 
@@ -84,6 +87,7 @@ async function generateOpenAIFallback(
 
   const openai = new OpenAI({
     apiKey,
+    maxRetries: 0,
   });
   const languageDefinition =
     getLanguageDefinition(language);
@@ -121,7 +125,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!(await getAuthenticatedUser())) return authenticationRequiredResponse();
+  if (!(await getAuthenticatedUser(request))) return authenticationRequiredResponse();
 
   try {
     const {
@@ -171,14 +175,20 @@ export async function POST(request: Request) {
     let audioBuffer: ArrayBuffer;
     let provider = "elevenlabs";
 
+    let voiceReservation;
+    try { voiceReservation = await reserveAiUsage(request, "speech"); }
+    catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error); throw error; }
     try {
-      audioBuffer =
-        await generateElevenLabsVoice(
+      audioBuffer = await generateElevenLabsVoice(
           safeText,
           normalizedPreviousText,
           normalizedNextText
         );
+      await voiceReservation.complete(unknownProviderUsage(
+        "elevenlabs", process.env.ELEVENLABS_MODEL_ID ?? "eleven_flash_v2_5",
+      ));
     } catch (error) {
+      await voiceReservation.fail("elevenlabs", process.env.ELEVENLABS_MODEL_ID ?? "eleven_flash_v2_5");
       console.error(
         "ElevenLabs voice failed; using fallback:",
         error instanceof Error
@@ -187,12 +197,19 @@ export async function POST(request: Request) {
       );
 
       provider = "openai";
-      audioBuffer =
-        await generateOpenAIFallback(
+      let fallbackReservation;
+      try { fallbackReservation = await reserveAiUsage(request, "speech"); }
+      catch (limitError) { if (limitError instanceof AiSafetyLimitError) return aiLimitResponse(limitError); throw limitError; }
+      try { audioBuffer = await generateOpenAIFallback(
           safeText,
           normalizedLanguage,
           normalizedMode
         );
+        await fallbackReservation.complete(unknownProviderUsage("openai", "gpt-4o-mini-tts-2025-12-15"));
+      } catch (fallbackError) {
+        await fallbackReservation.fail("openai", "gpt-4o-mini-tts-2025-12-15");
+        throw fallbackError;
+      }
     }
 
     return new Response(audioBuffer, {

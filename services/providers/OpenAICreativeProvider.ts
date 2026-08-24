@@ -42,6 +42,8 @@ import {
   validateCreativeCopyContent,
 } from "@/core/creative/validation";
 import { isAbortError } from "@/utils/abort";
+import { parseOpenAIResponseUsage, unknownProviderUsage } from "@/core/aiUsage/provider";
+import type { ProviderUsage } from "@/core/aiUsage/types";
 
 export const DEFAULT_CREATIVE_MODEL = "gpt-5.6-terra";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
@@ -58,7 +60,7 @@ export interface OpenAICreativeTransport {
   createResponse(
     body: ResponseCreateParamsNonStreaming,
     options: CreativeProviderRequestOptions,
-  ): Promise<Pick<OpenAIResponse, "output_text">>;
+  ): Promise<Pick<OpenAIResponse, "id" | "model" | "output_text" | "usage">>;
   generateImage(
     body: ImageGenerateParamsNonStreaming,
     options: CreativeProviderRequestOptions,
@@ -69,6 +71,7 @@ export interface OpenAICreativeProviderConfig {
   transport: OpenAICreativeTransport;
   creativeModel: string;
   imageModel: string;
+  onUsage?: (usage: ProviderUsage) => void | Promise<void>;
 }
 
 function providerRequestId(error: unknown): string | undefined {
@@ -148,11 +151,13 @@ export class OpenAICreativeProvider {
   private readonly transport: OpenAICreativeTransport;
   private readonly creativeModel: string;
   private readonly imageModel: string;
+  private readonly onUsage?: OpenAICreativeProviderConfig["onUsage"];
 
   constructor({
     transport,
     creativeModel,
     imageModel,
+    onUsage,
   }: OpenAICreativeProviderConfig) {
     if (!creativeModel.trim() || !imageModel.trim()) {
       throw new CreativeProviderError("configuration");
@@ -161,6 +166,7 @@ export class OpenAICreativeProvider {
     this.transport = transport;
     this.creativeModel = creativeModel.trim();
     this.imageModel = imageModel.trim();
+    this.onUsage = onUsage;
   }
 
   async generateCopy<
@@ -197,6 +203,9 @@ export class OpenAICreativeProvider {
           maxRetries: 0,
         },
       );
+      if (this.onUsage) await Promise.resolve(this.onUsage(
+        parseOpenAIResponseUsage(response, this.creativeModel),
+      )).catch(() => undefined);
       const outputText = response.output_text.trim();
 
       if (!outputText) {
@@ -267,6 +276,17 @@ export class OpenAICreativeProvider {
         },
       );
       const generated = response.data;
+      if (this.onUsage) {
+        const imageUsage = "usage" in response && response.usage
+          ? { provider: "openai" as const, model: this.imageModel, providerRequestId: null,
+              inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens,
+              totalTokens: response.usage.total_tokens,
+              cachedInputTokens: null,
+              cacheWriteTokens: null,
+              reasoningTokens: null, providerUsageAvailable: true }
+          : unknownProviderUsage("openai", this.imageModel);
+        await Promise.resolve(this.onUsage(imageUsage)).catch(() => undefined);
+      }
 
       if (
         !generated ||
@@ -304,7 +324,9 @@ export class OpenAICreativeProvider {
   }
 }
 
-export function createOpenAICreativeProvider(): OpenAICreativeProvider {
+export function createOpenAICreativeProvider(options: {
+  onUsage?: OpenAICreativeProviderConfig["onUsage"];
+} = {}): OpenAICreativeProvider {
   if (typeof window !== "undefined") {
     throw new CreativeProviderError("configuration");
   }
@@ -330,6 +352,7 @@ export function createOpenAICreativeProvider(): OpenAICreativeProvider {
   return new OpenAICreativeProvider({
     creativeModel,
     imageModel,
+    onUsage: options.onUsage,
     transport: {
       createResponse: (body, options) =>
         client.responses.create(body, options),

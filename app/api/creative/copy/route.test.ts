@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getAuthenticatedUser: vi.fn(),
   generateCopy: vi.fn(),
   createProvider: vi.fn(),
+  reserveUsage: vi.fn(),
 }));
 vi.mock("@/core/auth/session", async () => {
   const { NextResponse } = await import("next/server");
@@ -43,6 +44,8 @@ vi.mock(
     createOpenAICreativeProvider: mocks.createProvider,
   }),
 );
+vi.mock("@/core/aiUsage/server", () => ({ reserveAiUsage: mocks.reserveUsage,
+  aiLimitResponse: () => new Response(null, { status: 429 }) }));
 
 import { POST } from "./route";
 
@@ -103,6 +106,7 @@ describe("POST /api/creative/copy", () => {
     mocks.isRequestAuthorized.mockReset();
     mocks.generateCopy.mockReset();
     mocks.createProvider.mockReset();
+    mocks.reserveUsage.mockReset().mockResolvedValue({ complete: vi.fn(), fail: vi.fn() });
     mocks.hasValidAccessConfiguration.mockReturnValue(true);
     mocks.isRequestAuthorized.mockReturnValue(true);
     mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-a" });

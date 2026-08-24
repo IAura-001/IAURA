@@ -13,10 +13,13 @@ import type {
 import {
   assertValidCognitiveRequest,
 } from "@/core/validator/ResponseValidator";
+import { parseOpenAIResponseUsage } from "@/core/aiUsage/provider";
+import type { ProviderUsage } from "@/core/aiUsage/types";
 
 interface OpenAIProviderConfig {
   apiKey: string;
   model: string;
+  onUsage?: (usage: ProviderUsage) => void | Promise<void>;
 }
 
 function cleanErrorField(
@@ -82,10 +85,12 @@ export class OpenAIProvider implements AIProvider {
 
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly onUsage?: OpenAIProviderConfig["onUsage"];
 
   constructor({
     apiKey,
     model,
+    onUsage,
   }: OpenAIProviderConfig) {
     if (!apiKey.trim()) {
       throw new Error("OPENAI_API_KEY is required.");
@@ -97,9 +102,11 @@ export class OpenAIProvider implements AIProvider {
 
     this.client = new OpenAI({
       apiKey,
+      maxRetries: 0,
     });
 
     this.model = model;
+    this.onUsage = onUsage;
   }
 
   async generate(
@@ -125,6 +132,11 @@ export class OpenAIProvider implements AIProvider {
         },
       });
 
+      if (this.onUsage) {
+        await Promise.resolve(this.onUsage(parseOpenAIResponseUsage(response, this.model)))
+          .catch((error) => console.error("AI usage accounting failed:", error instanceof Error ? error.message : "unknown"));
+      }
+
       const plan = parseAuraAssistantPlan(
         response.output_text,
       );
@@ -145,7 +157,7 @@ export class OpenAIProvider implements AIProvider {
   }
 }
 
-export function createOpenAIProvider(): OpenAIProvider {
+export function createOpenAIProvider(options: { onUsage?: OpenAIProviderConfig["onUsage"] } = {}): OpenAIProvider {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL;
 
@@ -160,5 +172,6 @@ export function createOpenAIProvider(): OpenAIProvider {
   return new OpenAIProvider({
     apiKey,
     model,
+    onUsage: options.onUsage,
   });
 }

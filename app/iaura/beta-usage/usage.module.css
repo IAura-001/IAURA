@@ -16,6 +16,8 @@
 .identity>span[data-status="ACTIVE"] { color:#9ed8be; border-color:rgba(95,190,146,.22); }
 .identity>span[data-status="AT_RISK"],.issues { color:#e7c37c; }
 .identity>span[data-status="DORMANT"] { color:#a19ba9; }
+.identity>span[data-status="ELEVATED"] { color:#e7c37c; }
+.identity>span[data-status="HIGH"],.identity>span[data-status="REVIEW"] { color:#ed9a8c; border-color:rgba(237,154,140,.3); }
 .user dl { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.65rem; margin:1.2rem 0 0; }
 .user dl div { min-width:0; padding-top:.8rem; border-top:1px solid rgba(255,255,255,.055); }
 .user dt { color:#66616e; font-size:.62rem; text-transform:uppercase; letter-spacing:.08em; }

@@ -35,6 +35,8 @@ import {
 import {
   createOpenAICreativeProvider,
 } from "@/services/providers/OpenAICreativeProvider";
+import { AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!(await getAuthenticatedUser())) return authenticationRequiredResponse();
+  if (!(await getAuthenticatedUser(request))) return authenticationRequiredResponse();
 
   try {
     assertCreativeSameOrigin(request);
@@ -107,11 +109,17 @@ export async function POST(request: Request) {
     });
 
     try {
-      const provider = createOpenAICreativeProvider();
-      const result = await provider.generateCopy(
-        validated.data,
-        request.signal,
-      );
+      let reservation;
+      try { reservation = await reserveAiUsage(request, "creative_copy", requestId); }
+      catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error); throw error; }
+      let result;
+      try {
+        const provider = createOpenAICreativeProvider({ onUsage: (usage) => reservation.complete(usage) });
+        result = await provider.generateCopy(validated.data, request.signal);
+      } catch (error) {
+        await reservation.fail("openai", process.env.OPENAI_CREATIVE_MODEL ?? "gpt-5.6-terra");
+        throw error;
+      }
 
       return NextResponse.json<CreativeCopyApiResponse>(
         {

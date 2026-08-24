@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   brainAnalyze: vi.fn(),
   providerGenerate: vi.fn(),
   createProvider: vi.fn(),
+  reserveUsage: vi.fn(),
 }));
 
 vi.mock("@/core/auth/access", () => ({
@@ -42,8 +43,13 @@ vi.mock("@/core/brain", () => ({
 vi.mock("@/services/providers", () => ({
   createOpenAIProvider: mocks.createProvider,
 }));
+vi.mock("@/core/aiUsage/server", () => ({
+  reserveAiUsage: mocks.reserveUsage,
+  aiLimitResponse: () => new Response(null, { status: 429 }),
+}));
 
 import { POST } from "./route";
+import { AiSafetyLimitError } from "@/core/aiUsage/types";
 
 const cognitiveRequest = {
   originalUserMessage: "Help me plan the launch.",
@@ -139,6 +145,7 @@ describe("POST /api/chat", () => {
     mocks.brainAnalyze.mockReset();
     mocks.providerGenerate.mockReset();
     mocks.createProvider.mockReset();
+    mocks.reserveUsage.mockReset().mockResolvedValue({ complete: vi.fn(), fail: vi.fn() });
     mocks.isRequestAuthorized.mockReturnValue(true);
     mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-a" });
     mocks.providerGenerate.mockResolvedValue(providerResult);
@@ -161,6 +168,14 @@ describe("POST /api/chat", () => {
     expect(mocks.createProvider).not.toHaveBeenCalled();
   });
 
+  it("does not call OpenAI when the durable safety limit is reached", async () => {
+    mocks.reserveUsage.mockRejectedValue(new AiSafetyLimitError(3600));
+    const response = await POST(jsonRequest(JSON.stringify(cognitiveRequest)));
+    expect(response.status).toBe(429);
+    expect(mocks.createProvider).not.toHaveBeenCalled();
+    expect(mocks.providerGenerate).not.toHaveBeenCalled();
+  });
+
   it("requires a verified Supabase user after private access passes", async () => {
     mocks.getAuthenticatedUser.mockResolvedValue(null);
 
@@ -175,15 +190,16 @@ describe("POST /api/chat", () => {
   });
 
   it("forwards the separated cognitive request without reasoning again", async () => {
-    const response = await POST(
-      jsonRequest(JSON.stringify(cognitiveRequest)),
-    );
+    const request = jsonRequest(JSON.stringify(cognitiveRequest));
+    const response = await POST(request);
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe(
       "no-store",
     );
     expect(mocks.brainAnalyze).not.toHaveBeenCalled();
+    expect(mocks.getAuthenticatedUser).toHaveBeenCalledWith(request);
+    expect(mocks.reserveUsage).toHaveBeenCalledWith(request, "chat");
     expect(mocks.providerGenerate).toHaveBeenCalledWith(
       cognitiveRequest,
     );

@@ -37,6 +37,8 @@ import {
 import {
   createOpenAICreativeProvider,
 } from "@/services/providers/OpenAICreativeProvider";
+import { AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!(await getAuthenticatedUser())) return authenticationRequiredResponse();
+  if (!(await getAuthenticatedUser(request))) return authenticationRequiredResponse();
 
   try {
     assertCreativeSameOrigin(request);
@@ -113,11 +115,17 @@ export async function POST(request: Request) {
     );
 
     try {
-      const provider = createOpenAICreativeProvider();
-      const result = await provider.generateImage(
-        validated.data,
-        request.signal,
-      );
+      let reservation;
+      try { reservation = await reserveAiUsage(request, "creative_image", requestId); }
+      catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error); throw error; }
+      let result;
+      try {
+        const provider = createOpenAICreativeProvider({ onUsage: (usage) => reservation.complete(usage) });
+        result = await provider.generateImage(validated.data, request.signal);
+      } catch (error) {
+        await reservation.fail("openai", process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2");
+        throw error;
+      }
       const assetId = createCreativeAssetId();
 
       return new Response(result.data, {

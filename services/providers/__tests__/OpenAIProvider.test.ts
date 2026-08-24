@@ -171,6 +171,18 @@ describe("OpenAIProvider", () => {
     });
   });
 
+  it("captures provider usage without retrying when accounting fails", async () => {
+    const onUsage = vi.fn().mockRejectedValue(new Error("database unavailable"));
+    mocks.createResponse.mockResolvedValue({ id: "resp_1", model: "gpt-5.6-luna",
+      output_text: JSON.stringify(assistantPlan), usage: { input_tokens: 10, output_tokens: 5,
+        total_tokens: 15, input_tokens_details: { cached_tokens: 2 },
+        output_tokens_details: { reasoning_tokens: 1 } } });
+    const provider = new OpenAIProvider({ apiKey: "test-key", model: "fallback", onUsage });
+    await expect(provider.generate(cognitiveRequest)).resolves.toMatchObject({ provider: "openai" });
+    expect(mocks.createResponse).toHaveBeenCalledTimes(1);
+    expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({ providerRequestId: "resp_1", totalTokens: 15 }));
+  });
+
   it("stops an invalid cognitive request before calling OpenAI", async () => {
     const provider = new OpenAIProvider({
       apiKey: "test-key",
