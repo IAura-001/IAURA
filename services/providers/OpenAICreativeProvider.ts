@@ -92,7 +92,6 @@ function mapOpenAIError(error: unknown): CreativeProviderError {
   if (error instanceof Error) {
   console.error("[VAEORA_OPENAI_PROVIDER_ERROR]", {
     name: error.name,
-    message: error.message,
     requestId,
     status:
       "status" in error && typeof error.status === "number"

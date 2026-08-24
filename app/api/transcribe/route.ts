@@ -137,10 +137,8 @@ export async function POST(
 
   if (error instanceof Error) {
     console.error("Name:", error.name);
-    console.error("Message:", error.message);
-    console.error("Stack:", error.stack);
   } else {
-    console.error("Unknown error:", error);
+    console.error("Name: NonErrorProviderFailure");
   }
 
   return NextResponse.json(

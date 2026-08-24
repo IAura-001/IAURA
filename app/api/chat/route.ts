@@ -217,12 +217,6 @@ export async function POST(request: Request) {
         typeof details.name === "string"
           ? details.name.slice(0, 200)
           : undefined,
-      message:
-        typeof details.message === "string"
-          ? details.message.slice(0, 500)
-          : error instanceof Error
-            ? error.message.slice(0, 500)
-            : "Unknown provider failure.",
       status:
         typeof details.status === "number"
           ? details.status

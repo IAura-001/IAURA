@@ -41,7 +41,7 @@ function providerErrorSummary(
 ): Record<string, string | number | undefined> {
   if (typeof error !== "object" || error === null) {
     return {
-      message: cleanErrorField(error),
+      name: "NonErrorProviderFailure",
     };
   }
 
@@ -49,7 +49,6 @@ function providerErrorSummary(
 
   return {
     name: cleanErrorField(candidate.name),
-    message: cleanErrorField(candidate.message),
     status: cleanErrorField(candidate.status),
     code: cleanErrorField(candidate.code),
     type: cleanErrorField(candidate.type),
@@ -134,7 +133,7 @@ export class OpenAIProvider implements AIProvider {
 
       if (this.onUsage) {
         await Promise.resolve(this.onUsage(parseOpenAIResponseUsage(response, this.model)))
-          .catch((error) => console.error("AI usage accounting failed:", error instanceof Error ? error.message : "unknown"));
+          .catch((error) => console.error("AI usage accounting failed:", error instanceof Error ? error.name : "unknown"));
       }
 
       const plan = parseAuraAssistantPlan(

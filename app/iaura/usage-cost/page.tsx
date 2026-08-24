@@ -3,11 +3,6 @@ import { FounderAiCostAccessError, getFounderAiCostOperations } from "@/core/aiU
 import styles from "../beta-usage/usage.module.css";
 const money = (value: number | string | null) => value === null ? "Unavailable" : `$${Number(value).toFixed(4)}`;
 const number = (value: number | string | null) => new Intl.NumberFormat("en").format(Number(value ?? 0));
-const averagePricedCost = (row: { operations: number; failed_operations: number;
-  unpriced_operations: number; estimated_cost_usd: number }) => {
-  const priced = Number(row.operations) - Number(row.failed_operations) - Number(row.unpriced_operations);
-  return priced > 0 ? money(Number(row.estimated_cost_usd) / priced) : "Unavailable";
-};
 export default async function UsageCostPage() {
   let data;
   try { data = await getFounderAiCostOperations(); }
@@ -33,7 +28,6 @@ export default async function UsageCostPage() {
           <div><dt>Total tokens</dt><dd>{number(user.total_tokens)}</dd></div>
           <div><dt>Input</dt><dd>{number(user.input_tokens)}</dd></div>
           <div><dt>Output</dt><dd>{number(user.output_tokens)}</dd></div>
-          <div><dt>Average priced cost</dt><dd>{averagePricedCost(user)}</dd></div>
           <div><dt>Unpriced</dt><dd>{number(user.unpriced_operations)}</dd></div>
           <div><dt>Last AI operation</dt><dd>{user.last_operation_at ? new Date(user.last_operation_at).toLocaleString("en") : "—"}</dd></div>
           <div><dt>24h guardrail</dt><dd>{number(user.limit_operations_24h)} / {user.limit_max_operations_24h}</dd></div></dl>

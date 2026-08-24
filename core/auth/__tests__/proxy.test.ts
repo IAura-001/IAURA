@@ -126,6 +126,7 @@ describe("IAURA authorization behavior", () => {
     "/api/transcribe",
     "/api/creative/copy",
     "/api/creative/image",
+    "/api/ai-usage",
   ])("returns JSON 401 for unauthorized %s", async (path) => {
     authMock.isRequestAuthorized.mockReturnValue(false);
 
