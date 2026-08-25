@@ -14,6 +14,10 @@ export interface AiUsageReservation {
 
 export async function reserveAiUsage(request: Request, operationType: AiOperationType,
   requestId: string = randomUUID()): Promise<AiUsageReservation> {
+  // Validate privileged accounting configuration before creating a reservation.
+  // This prevents a stale or missing server secret from leaving an operation
+  // reserved even though finalization can never run.
+  const admin = createAdminSupabaseClient();
   const authenticated = await createServerSupabaseClient(request);
   const { data, error } = await authenticated.rpc("reserve_ai_usage_operation", {
     requested_operation_type: operationType, requested_request_id: requestId,
@@ -22,7 +26,6 @@ export async function reserveAiUsage(request: Request, operationType: AiOperatio
     if (error.code === "P0001") throw new AiSafetyLimitError(3600);
     throw new Error("AI usage guardrail is unavailable.");
   }
-  const admin = createAdminSupabaseClient();
   const id = String(data);
   const update = async (values: Record<string, unknown>) => {
     try {
