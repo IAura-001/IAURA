@@ -143,6 +143,7 @@ export default function Home({
     useState<ReadonlySet<string>>(() => new Set());
   const [isSending, setIsSending] =
     useState(false);
+  const sendInFlightRef = useRef(false);
   const [isAuraLive, setIsAuraLive] =
     useState(false);
   const [intelligenceRefreshKey, setIntelligenceRefreshKey] = useState(0);
@@ -380,6 +381,12 @@ export default function Home({
       stopSpeaking,
     ]);
 
+  useEffect(() => {
+    if (auraLiveRef.current) {
+      stopAuraLive();
+    }
+  }, [activeProjectId, stopAuraLive]);
+
   const scheduleAuraLiveListening =
     useCallback(() => {
       if (!auraLiveRef.current) {
@@ -445,10 +452,12 @@ export default function Home({
 
       if (
         !trimmedInput ||
-        isSending
+        sendInFlightRef.current
       ) {
         return;
       }
+
+      sendInFlightRef.current = true;
 
       const requestFromAuraLive =
         auraLiveRef.current;
@@ -759,6 +768,7 @@ export default function Home({
           throw error;
         }
       } finally {
+        sendInFlightRef.current = false;
         performanceMonitor.recordResponse(
           performance.now() -
             responseStartedAt,
@@ -771,7 +781,6 @@ export default function Home({
     [
       executeActions,
       activeProjectId,
-      isSending,
       memory.preferredLocale,
       messagesProjectId,
       scheduleAuraLiveListening,

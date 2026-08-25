@@ -310,6 +310,47 @@ describe("useVoice safe stop", () => {
     );
     expect(result.current.state).toBe("idle");
   });
+
+  it("aborts an in-flight transcription when Voice is turned off", async () => {
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_url, init: RequestInit) => {
+      requestSignal = init.signal as AbortSignal;
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal?.addEventListener("abort", () => {
+          reject(new DOMException("cancelled", "AbortError"));
+        });
+      });
+    }));
+    const { result } = renderHook(() => useVoice());
+
+    let transcription!: Promise<void>;
+    act(() => {
+      transcription = result.current.transcribeAudioFile(
+        new File(["audio"], "voice.webm", { type: "audio/webm" }),
+      );
+    });
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    act(() => result.current.setVoiceMode(false));
+    await act(async () => { await transcription; });
+
+    expect(requestSignal?.aborted).toBe(true);
+    expect(result.current.transcript).toBe("");
+    expect(result.current.voiceError).toBeNull();
+    expect(result.current.state).toBe("idle");
+  });
+
+  it("stops active speech when the voice provider unmounts", async () => {
+    const pendingSpeech = deferred<void>();
+    voiceEngineMock.speak.mockReturnValueOnce(pendingSpeech.promise);
+    const hook = renderHook(() => useVoice());
+
+    act(() => { void hook.result.current.speak("Hasta luego"); });
+    expect(hook.result.current.state).toBe("speaking");
+    hook.unmount();
+
+    expect(voiceEngineMock.stop).toHaveBeenCalledOnce();
+    pendingSpeech.resolve();
+  });
 });
 
 describe("useVoice hands-free end of utterance", () => {
@@ -430,13 +471,16 @@ describe("useVoice hands-free end of utterance", () => {
     expect(recognition.onend).toBeNull();
   });
 
-  it("does not submit after natural pauses of one or two seconds", async () => {
+  it.each([500, 1_000, 1_500, 2_000])(
+    "does not submit after a %dms natural pause",
+    async (pauseMs) => {
     const { result } = await startHandsFree();
     act(() => emitRecognitionResult("Quiero crear una aplicaciÃ³n", true));
-    act(() => vi.advanceTimersByTime(2_000));
+    act(() => vi.advanceTimersByTime(pauseMs));
     expect(result.current.transcript).toBe("");
     expect(result.current.state).toBe("listening");
-  });
+    },
+  );
 
   it("submits exactly once after the 2.6 second grace period", async () => {
     const { result } = await startHandsFree();

@@ -18,26 +18,63 @@ import {
 import { AiSafetyLimitError } from "@/core/aiUsage/types";
 import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
 import { unknownProviderUsage } from "@/core/aiUsage/provider";
+import { isAbortError } from "@/utils/abort";
 
 export const runtime = "nodejs";
+const ELEVENLABS_TIMEOUT_MS = 15_000;
+
+type ElevenLabsFailureClass =
+  | "configuration"
+  | "authentication"
+  | "voice_not_found"
+  | "invalid_request"
+  | "rate_limit"
+  | "provider"
+  | "timeout"
+  | "network";
+
+class ElevenLabsRequestError extends Error {
+  constructor(
+    public readonly classification: ElevenLabsFailureClass,
+    public readonly status: number | null = null,
+  ) {
+    super(`ElevenLabs request failed (${classification}).`);
+    this.name = "ElevenLabsRequestError";
+  }
+}
+
+function classifyElevenLabsStatus(status: number): ElevenLabsFailureClass {
+  if (status === 401 || status === 403) return "authentication";
+  if (status === 404) return "voice_not_found";
+  if (status === 400 || status === 422) return "invalid_request";
+  if (status === 429) return "rate_limit";
+  return "provider";
+}
 
 async function generateElevenLabsVoice(
   text: string,
   previousText: string,
-  nextText: string
+  nextText: string,
+  requestSignal: AbortSignal,
 ): Promise<ArrayBuffer> {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
+  const voiceId = process.env.ELEVENLABS_VOICE_ID?.trim();
 
   if (!apiKey || !voiceId) {
-    throw new Error(
-      "ElevenLabs configuration is missing."
-    );
+    throw new ElevenLabsRequestError("configuration");
   }
 
-  const response = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=mp3_44100_128`,
-    {
+  const controller = new AbortController();
+  const abortFromRequest = () => controller.abort(requestSignal.reason);
+  requestSignal.addEventListener("abort", abortFromRequest, { once: true });
+  const timeout = setTimeout(() => {
+    controller.abort(new DOMException("ElevenLabs timed out.", "TimeoutError"));
+  }, ELEVENLABS_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream?output_format=mp3_44100_128`,
+      {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -60,22 +97,37 @@ async function generateElevenLabsVoice(
         },
       }),
       cache: "no-store",
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `ElevenLabs failed with status ${response.status}.`
+      signal: controller.signal,
+      },
     );
-  }
 
-  return response.arrayBuffer();
+    if (!response.ok) {
+      throw new ElevenLabsRequestError(
+        classifyElevenLabsStatus(response.status),
+        response.status,
+      );
+    }
+
+    return response.arrayBuffer();
+  } catch (error) {
+    if (requestSignal.aborted) throw requestSignal.reason ?? error;
+    if (controller.signal.reason instanceof DOMException &&
+        controller.signal.reason.name === "TimeoutError") {
+      throw new ElevenLabsRequestError("timeout");
+    }
+    if (error instanceof ElevenLabsRequestError) throw error;
+    throw new ElevenLabsRequestError("network");
+  } finally {
+    clearTimeout(timeout);
+    requestSignal.removeEventListener("abort", abortFromRequest);
+  }
 }
 
 async function generateOpenAIFallback(
   text: string,
   language: SupportedLocale,
-  mode: AuraVoiceMode
+  mode: AuraVoiceMode,
+  signal: AbortSignal,
 ): Promise<ArrayBuffer> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -104,7 +156,7 @@ async function generateOpenAIFallback(
       "Avoid robotic cadence, exaggerated narration and artificial pauses.",
     ].join(" "),
     response_format: "mp3",
-  });
+  }, { signal });
 
   return speech.arrayBuffer();
 }
@@ -182,18 +234,21 @@ export async function POST(request: Request) {
       audioBuffer = await generateElevenLabsVoice(
           safeText,
           normalizedPreviousText,
-          normalizedNextText
+          normalizedNextText,
+          request.signal,
         );
       await voiceReservation.complete(unknownProviderUsage(
         "elevenlabs", process.env.ELEVENLABS_MODEL_ID ?? "eleven_flash_v2_5",
       ));
     } catch (error) {
       await voiceReservation.fail("elevenlabs", process.env.ELEVENLABS_MODEL_ID ?? "eleven_flash_v2_5");
+      if (request.signal.aborted || isAbortError(error)) throw error;
+      const diagnostic = error instanceof ElevenLabsRequestError
+        ? { classification: error.classification, status: error.status }
+        : { classification: "unknown", status: null };
       console.error(
         "ElevenLabs voice failed; using fallback:",
-        error instanceof Error
-          ? error.name
-          : "UnknownError"
+        diagnostic,
       );
 
       provider = "openai";
@@ -203,7 +258,8 @@ export async function POST(request: Request) {
       try { audioBuffer = await generateOpenAIFallback(
           safeText,
           normalizedLanguage,
-          normalizedMode
+          normalizedMode,
+          request.signal,
         );
         await fallbackReservation.complete(unknownProviderUsage("openai", "gpt-4o-mini-tts-2025-12-15"));
       } catch (fallbackError) {
@@ -222,6 +278,9 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (request.signal.aborted || isAbortError(error)) {
+      return new Response(null, { status: 499 });
+    }
     console.error(
       "IAURA voice generation failed:",
       error instanceof Error

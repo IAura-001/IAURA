@@ -17,6 +17,7 @@ import {
   detectVoiceCaptureMode,
   type VoiceCaptureMode,
 } from "@/core/voice/captureMode";
+import { isAbortError } from "@/utils/abort";
 
 export type { VoiceCaptureMode } from "@/core/voice/captureMode";
 
@@ -250,6 +251,8 @@ export function useVoice() {
     );
   const speechOperationRef = useRef(0);
   const listeningOperationRef = useRef(0);
+  const transcriptionOperationRef = useRef(0);
+  const transcriptionControllerRef = useRef<AbortController | null>(null);
   const recognitionActiveRef = useRef(false);
   const handsFreeFinalTranscriptRef = useRef("");
   const handsFreeInterimTranscriptRef = useRef("");
@@ -327,6 +330,9 @@ export function useVoice() {
   }, [releaseVoiceActivity]);
 
   const cancelListeningResources = useCallback(() => {
+    transcriptionOperationRef.current += 1;
+    transcriptionControllerRef.current?.abort();
+    transcriptionControllerRef.current = null;
     continuousListeningRef.current = false;
     handsFreeProcessingRef.current = false;
     resetHandsFreeUtterance();
@@ -528,6 +534,11 @@ export function useVoice() {
         return;
       }
 
+      const operation = ++transcriptionOperationRef.current;
+      transcriptionControllerRef.current?.abort();
+      const controller = new AbortController();
+      transcriptionControllerRef.current = controller;
+
       setVoiceError(null);
       setState("processing");
       setVoiceMode(true);
@@ -558,6 +569,7 @@ console.info(
             method: "POST",
             body: formData,
             cache: "no-store",
+            signal: controller.signal,
           }
         );
 
@@ -605,12 +617,15 @@ console.info(
           );
         }
 
+        if (transcriptionOperationRef.current !== operation) return;
         setTranscript("");
         window.setTimeout(() => {
+          if (transcriptionOperationRef.current !== operation) return;
           setTranscript(text);
           setState("idle");
         }, 0);
       } catch (error) {
+        if (controller.signal.aborted || isAbortError(error)) return;
         console.error(
           "IAURA transcription failed:",
           error
@@ -619,6 +634,10 @@ console.info(
           "transcription-failed"
         );
         setState("idle");
+      } finally {
+        if (transcriptionControllerRef.current === controller) {
+          transcriptionControllerRef.current = null;
+        }
       }
     },
     [language, setVoiceMode]
@@ -912,6 +931,11 @@ console.info(
 
   useEffect(() => {
     return () => {
+      transcriptionOperationRef.current += 1;
+      transcriptionControllerRef.current?.abort();
+      transcriptionControllerRef.current = null;
+      speechOperationRef.current += 1;
+      voiceEngine.stop();
       releaseRecording();
     };
   }, [releaseRecording]);
@@ -1171,6 +1195,9 @@ console.info(
       return;
     }
 
+    transcriptionOperationRef.current += 1;
+    transcriptionControllerRef.current?.abort();
+    transcriptionControllerRef.current = null;
     recognitionRef.current?.stop();
   }, []);
 
@@ -1182,6 +1209,9 @@ console.info(
 
   const stopContinuousListening =
     useCallback(() => {
+      transcriptionOperationRef.current += 1;
+      transcriptionControllerRef.current?.abort();
+      transcriptionControllerRef.current = null;
       continuousListeningRef.current = false;
       handsFreeProcessingRef.current = false;
       resetHandsFreeUtterance();
@@ -1201,6 +1231,9 @@ console.info(
     }, [releaseRecording, resetHandsFreeUtterance]);
 
   const cancelListening = useCallback(() => {
+    transcriptionOperationRef.current += 1;
+    transcriptionControllerRef.current?.abort();
+    transcriptionControllerRef.current = null;
     continuousListeningRef.current = false;
     handsFreeProcessingRef.current = false;
     resetHandsFreeUtterance();
