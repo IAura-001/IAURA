@@ -34,6 +34,15 @@ describe("ProjectContinuityCard", () => {
     conversationRepository.clearAllConversations();
   });
 
+  it("uses project surface text roles without fading the continuity action", () => {
+    render(<ProjectContinuityCard projectId="wellness" onOpenConversation={vi.fn()} />);
+    const card = screen.getByRole("region", { name: "Continuidad del proyecto" });
+    expect(card.className).toContain("--project-surface-elevated");
+    expect(card.innerHTML).toContain("--project-text-secondary");
+    expect(card.innerHTML).toContain("--project-metadata");
+    expect(within(card).getByRole("button").className).not.toContain("disabled:opacity-50");
+  });
+
   it("renders exactly one context action when there is no active cycle", async () => {
     const onOpenConversation = vi.fn();
     render(

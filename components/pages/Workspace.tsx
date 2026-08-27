@@ -5,6 +5,7 @@ import type { WorkspaceEntryIntent } from "@/components/vaeora/VaeoraWorkspaceSh
 import type { IAuraProject } from "@/types/project";
 import type { CreativeStudioRequest } from "@/types/creative-studio";
 import type { SupportedLocale } from "@/core/i18n/languages";
+import type { ProjectThemeDNA } from "@/core/projectTheme/types";
 
 interface WorkspaceProps {
   entryIntent?: WorkspaceEntryIntent;
@@ -14,6 +15,8 @@ interface WorkspaceProps {
   onProjectSelected?: (project: IAuraProject | null) => void;
   onContinueWithAura?: (targetMessageId?: string) => void;
   onOpenIntelligence?: () => void;
+  environmentThemeDNA?: ProjectThemeDNA;
+  onThemePreviewChange?: (theme: ProjectThemeDNA | null) => void;
 }
 
 export default function Workspace({
@@ -24,6 +27,8 @@ export default function Workspace({
   onProjectSelected,
   onContinueWithAura,
   onOpenIntelligence,
+  environmentThemeDNA,
+  onThemePreviewChange,
 }: WorkspaceProps) {
   return (
     <ProjectWorkspace
@@ -34,6 +39,8 @@ export default function Workspace({
       onProjectSelected={onProjectSelected}
       onContinueWithAura={onContinueWithAura}
       onOpenIntelligence={onOpenIntelligence}
+      environmentThemeDNA={environmentThemeDNA}
+      onThemePreviewChange={onThemePreviewChange}
     />
   );
 }

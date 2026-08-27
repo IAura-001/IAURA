@@ -136,23 +136,23 @@ export default function AuraExperienceCard({
   }
 
   return (
-    <section className="mt-5 overflow-hidden rounded-[24px] border border-violet-300/15 bg-[linear-gradient(145deg,rgba(34,20,66,0.72),rgba(4,4,10,0.92))] shadow-[0_24px_70px_rgba(20,5,45,0.22)]">
+    <section data-nested-surface="dark" className="mt-5 overflow-hidden rounded-[24px] border border-[var(--iaura-rich-dark-border,rgba(196,181,253,.2))] bg-[var(--iaura-rich-dark-surface,#090811)] text-[var(--iaura-rich-dark-text,#f7f5fa)] shadow-[0_24px_70px_rgba(20,5,45,0.22)]">
       <div className="border-b border-white/[0.07] p-5 sm:p-6">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-violet-200/65">
+          <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[rgb(var(--iaura-accent-rgb,216,180,254))]">
             {text.route}
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.14em] text-zinc-500">
+          <span className="rounded-full border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-elevated)] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--iaura-rich-dark-muted)]">
             {experience.kind.replace("-", " ")}
           </span>
         </div>
         {experience.title ? (
-          <h3 className="mt-3 text-xl font-medium text-zinc-50">
+          <h3 className="mt-3 text-xl font-medium text-[var(--iaura-rich-dark-text)]">
             {experience.title}
           </h3>
         ) : null}
         {experience.summary ? (
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--iaura-rich-dark-secondary)]">
             {experience.summary}
           </p>
         ) : null}
@@ -161,17 +161,17 @@ export default function AuraExperienceCard({
       {experience.phases.length ? (
         <ol className="grid gap-px bg-white/[0.06] sm:grid-cols-2 xl:grid-cols-3">
           {experience.phases.map((phase, index) => (
-            <li key={`${phase.title}-${index}`} className="bg-[#090811] p-4 sm:p-5">
+            <li key={`${phase.title}-${index}`} className="bg-[var(--iaura-rich-dark-elevated,#0e0d16)] p-4 sm:p-5">
               <div className="flex gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-violet-300/20 bg-violet-400/[0.07] font-mono text-[9px] text-violet-200">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <div>
-                  <p className="text-sm font-medium text-zinc-100">
+                  <p className="text-sm font-medium text-[var(--iaura-rich-dark-text)]">
                     {phase.title}
                   </p>
                   {phase.description ? (
-                    <p className="mt-1 text-xs leading-5 text-zinc-500">
+                    <p className="mt-1 text-xs leading-5 text-[var(--iaura-rich-dark-muted)]">
                       {phase.description}
                     </p>
                   ) : null}
@@ -183,7 +183,7 @@ export default function AuraExperienceCard({
       ) : null}
 
       {confirmedRecoveryDecision ? (
-        <p className="border-t border-white/[0.07] px-5 py-4 text-sm text-zinc-300 sm:px-6">
+        <p className="border-t border-[var(--iaura-rich-dark-border)] px-5 py-4 text-sm text-[var(--iaura-rich-dark-secondary)] sm:px-6">
           {confirmedRecoveryDecision === "retry-now"
             ? "Reintento listo para el mismo paso confirmado. La evidencia anterior permanece registrada."
             : "Continuación aplazada para el mismo paso confirmado. La evidencia anterior permanece registrada."}
@@ -194,7 +194,7 @@ export default function AuraExperienceCard({
         experience.recommendedSurface !== "none") ? (
         <div className="space-y-3 p-5 sm:p-6">
           {showChoices && !confirmedRecoveryDecision && experience.choices.length ? (
-            <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-500">
+            <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--iaura-rich-dark-muted)]">
               {text.next}
             </p>
           ) : null}
@@ -213,15 +213,15 @@ export default function AuraExperienceCard({
                   aria-pressed={isChosen}
                   aria-busy={isPending}
                   data-state={isPending ? "loading" : isChosen ? "selected" : "ready"}
-                  className="min-h-[4.75rem] touch-manipulation rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3.5 text-left transition hover:border-violet-300/25 hover:bg-violet-400/[0.06] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none"
+                  className="min-h-[4.75rem] touch-manipulation rounded-2xl border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-elevated)] p-3.5 text-left transition hover:border-[rgb(var(--iaura-accent-rgb))] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus,var(--vaeora-focus))] disabled:cursor-not-allowed disabled:saturate-50 motion-reduce:transform-none motion-reduce:transition-none"
                 >
-                  <span className="flex items-center justify-between gap-3 text-sm font-medium text-zinc-100">
+                  <span className="flex items-center justify-between gap-3 text-sm font-medium text-[var(--iaura-rich-dark-text)]">
                     <span>{choice.label}</span>
                     <span aria-hidden="true" className="text-violet-300/70">
                       {isPending ? "···" : isChosen ? "✓" : "→"}
                     </span>
                   </span>
-                  <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                  <span className="mt-1 block text-xs leading-5 text-[var(--iaura-rich-dark-muted)]">
                     {isChosen ? text.chosen : choice.description}
                   </span>
                 </button>
@@ -236,7 +236,7 @@ export default function AuraExperienceCard({
               disabled={disabled || !onOpenSurface}
               aria-pressed={surfaceOpened}
               data-state={surfaceOpened ? "selected" : "ready"}
-              className="flex min-h-12 w-full touch-manipulation items-center justify-between rounded-2xl border border-violet-300/20 bg-violet-500/[0.1] px-4 py-3 text-sm font-medium text-violet-100 transition hover:bg-violet-500/[0.16] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none"
+              className="flex min-h-12 w-full touch-manipulation items-center justify-between rounded-2xl border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-action)] px-4 py-3 text-sm font-medium text-[var(--iaura-rich-action-text)] transition hover:brightness-110 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus,var(--vaeora-focus))] disabled:cursor-not-allowed disabled:saturate-50 motion-reduce:transform-none motion-reduce:transition-none"
             >
               <span>
                 {surfaceOpened ? "✓ " : ""}

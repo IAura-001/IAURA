@@ -19,6 +19,7 @@ import type {
   ProjectStatus,
   ProjectStudios,
 } from "./types";
+import { normalizeThemeDNA } from "@/core/projectTheme/themeDNA";
 
 export const PROJECT_STATE_STORAGE_KEY = "iaura.project-state";
 export const LEGACY_PROJECTS_STORAGE_KEY = "iaura.projects";
@@ -170,6 +171,7 @@ export function normalizeProject(value: unknown): IAuraProject | null {
     status,
     kind: kind ?? "general",
     studios: normalizeStudios(value.studios),
+    ...(value.themeDNA ? { themeDNA: normalizeThemeDNA(value.themeDNA) } : {}),
   } as IAuraProject);
 }
 

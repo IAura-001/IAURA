@@ -15,6 +15,7 @@ import type {
   ProjectStudios,
 } from "./types";
 import type { CreativeStudioMemory } from "@/types/creative-studio";
+import type { ProjectThemeDNA } from "@/core/projectTheme/types";
 
 export interface CreateProjectInput {
   name: string;
@@ -35,6 +36,7 @@ export interface UpdateProjectInput {
   brandingStudio?: BrandingStudioMemory;
   launchStudio?: LaunchStudioMemory;
   creativeStudio?: CreativeStudioMemory;
+  themeDNA?: ProjectThemeDNA;
 }
 
 const DEFAULT_STUDIOS: ProjectStudios = {

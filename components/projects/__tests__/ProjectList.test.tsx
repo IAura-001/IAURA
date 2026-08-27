@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IAuraProject } from "@/types/project";
@@ -143,5 +143,39 @@ describe("ProjectList fallback synchronization", () => {
     fireEvent.click(screen.getByRole("button", { name: /Project B/i }));
     expect(projectEngineMock.setCurrentProject).toHaveBeenLastCalledWith(projectB);
     expect(screen.getByRole("button", { name: /Project B/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("emits null when repository authority clears and does not leave stale rendered identity", async () => {
+    const projectA = project("project-a", "Project A");
+    const onProjectSelected = vi.fn();
+    engineState.projects.set(projectA.id, projectA);
+    engineState.current = projectA;
+    render(<ProjectList refreshKey={0} onProjectSelected={onProjectSelected} />);
+    await waitFor(() => expect(onProjectSelected).toHaveBeenCalledWith(projectA));
+
+    engineState.current = null;
+    act(() => { for (const listener of engineState.listeners) listener(); });
+
+    expect(onProjectSelected).toHaveBeenLastCalledWith(null);
+    expect(screen.getByRole("button", { name: /Project A/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("emits one selection callback when repository notification is synchronous", async () => {
+    const projectA = project("project-a", "Project A");
+    const projectB = project("project-b", "Project B");
+    const onProjectSelected = vi.fn();
+    projectEngineMock.setCurrentProject.mockImplementation((selected) => {
+      engineState.projects.set(selected.id, selected);
+      engineState.current = selected;
+      for (const listener of engineState.listeners) listener();
+    });
+    engineState.projects.set(projectA.id, projectA); engineState.projects.set(projectB.id, projectB); engineState.current = projectA;
+    render(<ProjectList refreshKey={0} onProjectSelected={onProjectSelected} />);
+    await waitFor(() => expect(onProjectSelected).toHaveBeenCalledWith(projectA));
+    onProjectSelected.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: /Project B/i }));
+    expect(onProjectSelected).toHaveBeenCalledTimes(1);
+    expect(onProjectSelected).toHaveBeenCalledWith(projectB);
   });
 });

@@ -1,4 +1,5 @@
 .landing {
+  view-transition-name: vaeora-environment;
   position: relative;
   min-height: 100vh;
   min-height: 100svh;

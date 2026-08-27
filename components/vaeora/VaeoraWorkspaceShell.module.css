@@ -1,13 +1,19 @@
 .shell {
+  view-transition-name: vaeora-environment;
   position: relative;
   isolation: isolate;
   min-height: 100vh;
   min-height: 100svh;
-  color: var(--vaeora-text);
+  color: var(--project-text, var(--vaeora-text));
   color-scheme: dark;
   background:
-    radial-gradient(ellipse 46% 34% at 72% 8%, rgba(75, 61, 164, 0.11), transparent 74%),
-    linear-gradient(150deg, #020205 0%, var(--vaeora-background) 50%, #05050a 100%);
+    radial-gradient(ellipse 54% 42% at var(--project-ambient-x, 72%) var(--project-ambient-y, 8%), var(--project-glow, rgba(75, 61, 164, 0.11)), transparent 74%),
+    linear-gradient(150deg, var(--project-bg-subtle, #020205) 0%, var(--project-bg, var(--vaeora-background)) 50%, var(--project-surface, #05050a) 100%);
+  transition: background var(--project-context-duration, 360ms) var(--project-easing, cubic-bezier(0.2, 0.72, 0.2, 1)), color var(--project-normal-duration, 260ms) ease;
+}
+
+.shell[data-project-surface="light"] {
+  color-scheme: light;
 }
 
 .ambient {
@@ -17,8 +23,9 @@
   pointer-events: none;
   opacity: 0.58;
   background:
-    radial-gradient(ellipse 28% 30% at 18% 82%, rgba(54, 43, 122, 0.08), transparent 76%),
-    radial-gradient(ellipse 24% 22% at 82% 34%, rgba(48, 73, 160, 0.07), transparent 78%);
+    radial-gradient(ellipse 28% 30% at 18% 82%, var(--project-primary-soft, rgba(54, 43, 122, 0.08)), transparent 76%),
+    radial-gradient(ellipse 24% 22% at 82% 34%, var(--project-secondary-soft, rgba(48, 73, 160, 0.07)), transparent 78%);
+  transition: background var(--project-context-duration, 360ms) var(--project-easing, ease), opacity var(--project-normal-duration, 260ms) ease;
 }
 
 .chrome {
@@ -26,8 +33,8 @@
   top: 0;
   z-index: 50;
   padding-top: env(safe-area-inset-top);
-  border-bottom: 1px solid var(--vaeora-line);
-  background: rgba(3, 3, 7, 0.82);
+  border-bottom: 1px solid var(--project-border, var(--vaeora-line));
+  background: color-mix(in srgb, var(--project-bg, #030307) 86%, transparent);
   backdrop-filter: blur(22px) saturate(1.08);
 }
 
@@ -66,7 +73,7 @@
 
 .brand:focus-visible,
 .tab:focus-visible {
-  outline: 1px solid var(--vaeora-focus);
+  outline: 1px solid var(--project-focus, var(--vaeora-focus));
   outline-offset: 5px;
 }
 
@@ -78,7 +85,7 @@
 
 .workspaceLabel {
   margin-top: 0.35rem;
-  color: var(--vaeora-muted);
+  color: var(--project-text-muted, var(--vaeora-muted));
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.55rem;
   letter-spacing: 0.16em;
@@ -97,9 +104,9 @@
   padding: 0.25rem;
   min-width: 0;
   max-width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.055);
+  border: 1px solid var(--project-border, rgba(255, 255, 255, 0.055));
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--project-surface, rgba(255, 255, 255, 0.025));
 }
 
 .tab {
@@ -113,7 +120,7 @@
   padding: 0.65rem 1rem;
   border: 0;
   border-radius: 999px;
-  color: #777382;
+  color: var(--project-text-muted, #777382);
   font-size: 0.72rem;
   font-weight: 460;
   letter-spacing: 0.035em;
@@ -128,12 +135,12 @@
 }
 
 .tab:hover {
-  color: #c5c0ce;
+  color: var(--project-text, #c5c0ce);
 }
 
 .tab[data-active="true"] {
-  color: #f2eff7;
-  background: rgba(255, 255, 255, 0.07);
+  color: var(--project-text, #f2eff7);
+  background: var(--project-active, var(--project-primary-soft, rgba(255, 255, 255, 0.07)));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
 }
 
@@ -157,7 +164,7 @@
 }
 
 .tabIndex {
-  color: #6f66b7;
+  color: var(--project-accent, #6f66b7);
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.52rem;
   letter-spacing: 0.08em;
@@ -169,16 +176,16 @@
   justify-content: flex-end;
   gap: 0.55rem;
   min-width: 0;
-  color: #908b99;
+  color: var(--project-text-muted, #908b99);
   font-size: 0.68rem;
 }
 
 .supportLink {
   margin-right: 0.35rem;
   padding-right: 0.9rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--project-border, rgba(255, 255, 255, 0.08));
   border-radius: 0.2rem;
-  color: #777382;
+  color: var(--project-link, #777382);
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.56rem;
   letter-spacing: 0.12em;
@@ -187,16 +194,16 @@
   transition: color 180ms ease;
 }
 
-.supportLink:hover { color: #c5c0ce; }
-.supportLink:focus-visible { outline: 1px solid var(--vaeora-focus); outline-offset: 4px; }
+.supportLink:hover { color: var(--project-link-hover, #c5c0ce); }
+.supportLink:focus-visible { outline: 2px solid var(--project-focus, var(--vaeora-focus)); outline-offset: 4px; }
 
 .statusDot {
   width: 5px;
   height: 5px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #9d94f1;
-  box-shadow: 0 0 12px rgba(157, 148, 241, 0.72);
+  background: var(--project-accent, #9d94f1);
+  box-shadow: 0 0 12px var(--project-glow, rgba(157, 148, 241, 0.72));
 }
 
 .statusText {
@@ -207,8 +214,8 @@
   max-width: 9rem;
   overflow: hidden;
   padding-left: 0.55rem;
-  border-left: 1px solid var(--vaeora-line);
-  color: #d0ccd6;
+  border-left: 1px solid var(--project-border, var(--vaeora-line));
+  color: var(--project-text, #d0ccd6);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -236,12 +243,12 @@
   gap: 2rem;
   margin-bottom: clamp(2rem, 4vw, 3.5rem);
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--vaeora-line);
+  border-bottom: 1px solid var(--project-border, var(--vaeora-line));
 }
 
 .eyebrow {
   margin: 0;
-  color: #625d6b;
+  color: var(--project-accent, #625d6b);
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.57rem;
   letter-spacing: 0.23em;
@@ -266,13 +273,46 @@
 .panelHeading p {
   max-width: 30rem;
   margin: 0;
-  color: var(--vaeora-muted);
+  color: var(--project-text-muted, var(--vaeora-muted));
   font-size: 0.85rem;
   line-height: 1.7;
 }
 
 .panelBody {
   min-width: 0;
+}
+
+.shell[data-project-environment="custom"] .panelBody :where(input, textarea)::placeholder {
+  color: var(--project-placeholder) !important;
+  opacity: 1;
+}
+
+.shell[data-project-environment="custom"] .panelBody :where(section, article) {
+  border-color: var(--project-border) !important;
+}
+
+.shell[data-project-environment="custom"] .panelBody > :where(section, div) > section,
+.shell[data-project-environment="custom"] .panelBody > section {
+  background-color: var(--project-surface) !important;
+  background-image: radial-gradient(circle at 88% 4%, var(--project-highlight), transparent 34%);
+  color: var(--project-text);
+  transition: background-color var(--project-normal-duration) var(--project-easing), border-color var(--project-normal-duration) ease, color var(--project-normal-duration) ease;
+}
+
+.shell[data-project-environment="custom"] .panelBody :where(input, textarea, select) {
+  border-color: var(--project-border) !important;
+  background-color: var(--project-surface-elevated) !important;
+  color: var(--project-text) !important;
+  caret-color: var(--project-accent);
+}
+
+.shell[data-project-environment="custom"] .panelBody :where(button, a):focus-visible {
+  outline-color: var(--project-focus) !important;
+}
+
+.shell[data-project-environment="custom"] ::selection {
+  background: var(--project-selection);
+  color: var(--project-text);
 }
 
 @keyframes panel-in {
@@ -427,6 +467,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shell,
+  .ambient {
+    transition: none;
+  }
+
+  .shell[data-project-environment="custom"] .panelBody > :where(section, div) > section,
+  .shell[data-project-environment="custom"] .panelBody > section {
+    transition: none;
+  }
   .panel:not([hidden]) {
     animation: none;
   }

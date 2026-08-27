@@ -22,6 +22,17 @@ const renderCenter = (props: Partial<React.ComponentProps<typeof PersonalIntelli
 describe("PersonalIntelligenceCenter", () => {
   beforeEach(() => { state.projects = []; state.records = []; state.listeners.clear(); state.load.mockReset(); state.load.mockImplementation(async () => structuredClone(state.records)); });
 
+  it("uses contextual project surfaces and readable semantic roles", async () => {
+    const { container } = renderCenter();
+    await screen.findByText("Lo que importa ahora.");
+    const surface = container.querySelector('[data-intelligence-surface="contextual"]');
+    expect(surface).toBeInTheDocument();
+    expect(surface?.className).toContain("--project-surface");
+    expect(screen.getByText("Lo que importa ahora.").className).toContain("--project-text");
+    expect(screen.getByText(/Una visión clara/).className).toContain("--project-text-secondary");
+    expect(screen.getByRole("button", { name: "Dale forma con Aura" }).className).toContain("--project-action");
+  });
+
   it("renders canonical global direction, goals, ordered priorities capped at three, and cadence", async () => {
     state.records = [direction("dir", "Build a disciplined life."), goal("goal", "Launch Intelligence"), priority("p3", "Third", 3), priority("p1", "First", 1), priority("p2", "Second", 2), priority("p4", "Never visible", 4), commitment("c1", "Cybersecurity study")];
     renderCenter();

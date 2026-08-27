@@ -29,7 +29,7 @@ function renderCard(
   onChoose = vi.fn(),
   onOpenSurface = vi.fn(),
 ) {
-  render(
+  const rendered = render(
     <I18nProvider locale="es-419">
       <AuraExperienceCard
         experience={experience}
@@ -40,10 +40,18 @@ function renderCard(
     </I18nProvider>,
   );
 
-  return { onChoose, onOpenSurface };
+  return { onChoose, onOpenSurface, ...rendered };
 }
 
 describe("AuraExperienceCard", () => {
+  it("declares a dark nested surface with semantic text roles and no parent disabled opacity", () => {
+    const { container } = renderCard();
+    const surface = container.querySelector('[data-nested-surface="dark"]');
+    expect(surface).toBeInTheDocument();
+    expect(surface?.className).toContain("--iaura-rich-dark-surface");
+    expect(container.innerHTML).toContain("--iaura-rich-dark-muted");
+    expect(container.innerHTML).not.toContain("disabled:opacity-50");
+  });
   it("shows an adaptive phase route without depending on branding", () => {
     renderCard();
 

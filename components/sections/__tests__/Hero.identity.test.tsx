@@ -11,4 +11,10 @@ describe("Hero authenticated identity", () => {
     expect(screen.getByText("Hola.")).toBeVisible();
     expect(screen.queryByText(/Diego/)).not.toBeInTheDocument();
   });
+
+  it("uses project primary and secondary text roles with canonical fallbacks", () => {
+    render(<I18nProvider locale="es-419"><Hero name="Diego" /></I18nProvider>);
+    expect(screen.getByText("Hola, Diego.").closest("h2")?.className).toContain("--project-text");
+    expect(screen.getByText(/No estoy aquí para pensar por ti/i).className).toContain("--project-text-secondary");
+  });
 });

@@ -245,8 +245,8 @@ function ChatInputComponent({
             "group inline-flex min-h-11 touch-manipulation items-center gap-2 rounded-full border px-3 py-2",
             "text-xs font-medium transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transform-none motion-reduce:transition-none",
             voiceMode
-              ? "border-purple-400/30 bg-purple-500/10 text-purple-100"
-              : "border-white/10 bg-white/[0.03] text-zinc-400",
+              ? "border-[var(--project-border-strong)] bg-[var(--project-active)] text-[var(--project-text)]"
+              : "border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface)] text-[var(--project-text-secondary,var(--vaeora-muted))]",
           ].join(" ")}
         >
           <span
@@ -306,7 +306,7 @@ function ChatInputComponent({
           autoComplete="off"
           enterKeyHint="send"
           disabled={isSubmissionBusy}
-          className="min-h-12 min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none transition focus-visible:border-purple-400/70 focus-visible:ring-2 focus-visible:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none"
+          className="min-h-12 min-w-0 flex-1 rounded-xl border border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface-elevated,var(--vaeora-raised))] px-4 py-3 text-[var(--project-text,var(--vaeora-text))] outline-none transition placeholder:text-[var(--project-placeholder,var(--vaeora-muted))] focus-visible:border-[var(--project-focus,var(--vaeora-focus))] focus-visible:ring-2 focus-visible:ring-[var(--project-accent-soft,rgba(119,100,232,.2))] disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none"
         />
 
         <input
@@ -344,7 +344,7 @@ function ChatInputComponent({
           }
           aria-busy={isSubmissionBusy}
           data-state={submissionFeedback}
-          className="inline-flex min-h-12 min-w-[6.75rem] touch-manipulation items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 font-semibold transition hover:bg-purple-500 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/80 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none"
+          className="inline-flex min-h-12 min-w-[6.75rem] touch-manipulation items-center justify-center gap-2 rounded-xl bg-[var(--project-action,#9333ea)] px-4 py-3 font-semibold text-[var(--project-action-text,#fff)] transition hover:bg-[var(--project-action-hover,#a855f7)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus,var(--vaeora-focus))] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none"
         >
           {isSubmissionBusy ? (
             <>

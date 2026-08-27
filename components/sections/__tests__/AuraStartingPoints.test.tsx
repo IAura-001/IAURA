@@ -6,6 +6,13 @@ import AuraStartingPoints from "@/components/sections/AuraStartingPoints";
 import { I18nProvider } from "@/core/i18n/I18nContext";
 
 describe("AuraStartingPoints", () => {
+  it("uses semantic project roles for functional option text", () => {
+    render(<I18nProvider locale="es-419"><AuraStartingPoints onSelect={vi.fn()} /></I18nProvider>);
+    expect(screen.getByText("Empieza con tu voz.").className).toContain("--project-text");
+    const option = screen.getByRole("button", { name: /Meta personal/ });
+    expect(option.className).toContain("--project-surface-elevated");
+    expect(option.innerHTML).toContain("--project-text-secondary");
+  });
   it("offers personal, project, creative and wellbeing entry paths", () => {
     render(
       <I18nProvider locale="es-419">

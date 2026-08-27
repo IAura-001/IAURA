@@ -108,8 +108,8 @@ const AnimatedMessage = memo(
           "aura-message relative overflow-hidden rounded-2xl border p-5",
           animate ? "animate-[message-enter_500ms_ease-out]" : "",
           isAssistant
-            ? "border-purple-400/20 bg-purple-500/[0.04]"
-            : "border-white/10 bg-white/[0.03]",
+            ? "border-[var(--project-border,var(--vaeora-line))] bg-[var(--iaura-message-assistant,rgba(168,85,247,.04))]"
+            : "border-[var(--project-border,var(--vaeora-line))] bg-[var(--iaura-message-user,rgba(255,255,255,.03))]",
         ].join(" ")}
       >
         {isAssistant && (
@@ -136,8 +136,8 @@ const AnimatedMessage = memo(
               className={[
                 "text-sm font-medium",
                 isAssistant
-                  ? "text-purple-200"
-                  : "text-zinc-200",
+                ? "text-[rgb(var(--iaura-accent-rgb,216,180,254))]"
+                  : "text-[var(--project-text,var(--vaeora-text))]",
               ].join(" ")}
             >
               {isAssistant
@@ -145,7 +145,7 @@ const AnimatedMessage = memo(
                 : t("conversation.you")}
             </p>
 
-            <p className="text-xs text-zinc-600">
+            <p className="text-xs text-[var(--project-metadata,var(--vaeora-muted))]">
               {isAssistant
                 ? t(
                     "conversation.assistantSubtitle"
@@ -157,7 +157,7 @@ const AnimatedMessage = memo(
           </div>
         </div>
 
-        <p className="mt-4 whitespace-pre-wrap leading-7 text-zinc-200">
+        <p className="mt-4 whitespace-pre-wrap leading-7 text-[var(--project-text-secondary,var(--vaeora-text))]">
           {visibleContent}
 
           {isAssistant &&
@@ -174,7 +174,7 @@ const AnimatedMessage = memo(
           visibleContent.length ===
             message.content.length && (
             <>
-              <div className="mt-4 flex items-center gap-2 text-xs text-zinc-600">
+              <div className="mt-4 flex items-center gap-2 text-xs text-[var(--project-metadata,var(--vaeora-muted))]">
                 <span className="h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]" />
                 {t("conversation.completed")}
               </div>
@@ -255,7 +255,7 @@ function AuraThinking() {
   return (
     <div
       aria-live="polite"
-      className="relative overflow-hidden rounded-2xl border border-purple-400/20 bg-purple-500/[0.04] p-5"
+      className="relative overflow-hidden rounded-2xl border border-[var(--project-border,var(--vaeora-line))] bg-[var(--iaura-message-assistant,rgba(168,85,247,.04))] p-5"
     >
       <div className="aura-thinking-line absolute left-0 top-0 h-px w-full" />
 
@@ -269,11 +269,11 @@ function AuraThinking() {
         </div>
 
         <div>
-          <p className="text-sm font-medium text-purple-200">
+          <p className="text-sm font-medium text-[rgb(var(--iaura-accent-rgb,216,180,254))]">
             {t("conversation.thinking")}
           </p>
 
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-[var(--project-text-muted,var(--vaeora-muted))]">
             {t(
               "conversation.thinkingSubtitle"
             )}

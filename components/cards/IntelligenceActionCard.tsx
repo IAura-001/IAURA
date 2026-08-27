@@ -50,19 +50,19 @@ export default function IntelligenceActionCard({
   }
 
   return (
-    <section className="mt-5 overflow-hidden rounded-[24px] border border-violet-300/15 bg-[linear-gradient(145deg,rgba(34,20,66,0.72),rgba(4,4,10,0.92))] p-5 sm:p-6">
-      <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-violet-200/65">Intelligence change proposed</p>
-      <h3 className="mt-3 text-lg font-medium text-zinc-50">{proposal.operation.replace(/^intelligence_/, "").replaceAll("_", " ").toUpperCase()}</h3>
+    <section data-nested-surface="dark" className="mt-5 overflow-hidden rounded-[24px] border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-surface)] p-5 text-[var(--iaura-rich-dark-text)] sm:p-6">
+      <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[rgb(var(--iaura-accent-rgb,216,180,254))]">Intelligence change proposed</p>
+      <h3 className="mt-3 text-lg font-medium text-[var(--iaura-rich-dark-text)]">{proposal.operation.replace(/^intelligence_/, "").replaceAll("_", " ").toUpperCase()}</h3>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <div><dt className="text-zinc-500">Scope</dt><dd className="mt-1 text-zinc-200">{proposal.scopeType === "global" ? "Global" : `Project — ${projectDisplayName}`}</dd></div>
-        {proposal.currentSummary ? <div><dt className="text-zinc-500">Current</dt><dd className="mt-1 whitespace-pre-wrap text-zinc-200">{reorderCurrent ? reorderCurrent.map((priority, index) => `${index + 1}. ${priority.label}`).join("\n") : proposal.currentSummary}</dd></div> : null}
-        <div><dt className="text-zinc-500">Proposed</dt><dd className="mt-1 whitespace-pre-wrap text-zinc-100">{reorderLabels && proposal.operation === "intelligence_reorder_priorities" ? proposal.orderedPriorityIds.map((id, index) => `${index + 1}. ${reorderLabels.get(id)}`).join("\n") : proposal.proposedSummary}</dd></div>
+        <div><dt className="text-[var(--iaura-rich-dark-muted)]">Scope</dt><dd className="mt-1 text-[var(--iaura-rich-dark-secondary)]">{proposal.scopeType === "global" ? "Global" : `Project — ${projectDisplayName}`}</dd></div>
+        {proposal.currentSummary ? <div><dt className="text-[var(--iaura-rich-dark-muted)]">Current</dt><dd className="mt-1 whitespace-pre-wrap text-[var(--iaura-rich-dark-secondary)]">{reorderCurrent ? reorderCurrent.map((priority, index) => `${index + 1}. ${priority.label}`).join("\n") : proposal.currentSummary}</dd></div> : null}
+        <div><dt className="text-[var(--iaura-rich-dark-muted)]">Proposed</dt><dd className="mt-1 whitespace-pre-wrap text-[var(--iaura-rich-dark-text)]">{reorderLabels && proposal.operation === "intelligence_reorder_priorities" ? proposal.orderedPriorityIds.map((id, index) => `${index + 1}. ${reorderLabels.get(id)}`).join("\n") : proposal.proposedSummary}</dd></div>
       </dl>
       <div className="mt-5 grid gap-2 sm:grid-cols-2" aria-busy={pending}>
         {intelligenceChoices.map((choice) => (
           <button key={choice.label} type="button" disabled={disabled || pending || resolved || !onChoose}
             onClick={() => void choose(choice)}
-            className="min-h-12 rounded-2xl border border-violet-300/20 bg-violet-500/[0.1] px-4 py-3 text-left text-sm font-medium text-violet-100 disabled:opacity-50">
+            className="min-h-12 rounded-2xl border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-action)] px-4 py-3 text-left text-sm font-medium text-[var(--iaura-rich-action-text)] disabled:saturate-50">
             {pending ? "…" : resolved ? "✓" : choice.label}
           </button>
         ))}

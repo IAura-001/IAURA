@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { projectEngine } from "@/core/project/ProjectEngine";
+import { runProjectContextTransition } from "@/core/projectTheme/projectTransition";
 import type { IAuraProject } from "@/types/project";
 
 interface ProjectListProps {
   refreshKey: number;
-  onProjectSelected: (project: IAuraProject) => void;
+  onProjectSelected: (project: IAuraProject | null) => void;
   fallbackProject?: IAuraProject | null;
   onReady?: () => void;
 }
@@ -83,7 +84,7 @@ export default function ProjectList({
       const currentSignature = currentProject
         ? projectSnapshotSignature(currentProject)
         : null;
-      if (currentProject && currentSignature !== emittedProjectSignatureRef.current) {
+      if (currentSignature !== emittedProjectSignatureRef.current) {
         emittedProjectSignatureRef.current = currentSignature;
         onProjectSelectedRef.current(currentProject);
       }
@@ -103,9 +104,15 @@ export default function ProjectList({
   }, [refreshKey, synchronizeFromRepository]);
 
   function handleSelectProject(project: IAuraProject) {
-    projectEngine.setCurrentProject(project);
-    setActiveProjectId(project.id);
-    onProjectSelected(project);
+    const select = () => {
+      emittedProjectSignatureRef.current = projectSnapshotSignature(project);
+      projectEngine.setCurrentProject(project);
+      setActiveProjectId(project.id);
+      onProjectSelected(project);
+    };
+    const reducesMotion = typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    runProjectContextTransition(select, { reducedMotion: reducesMotion });
   }
 
   if (!isReady || projects.length === 0) return null;
@@ -122,31 +129,31 @@ export default function ProjectList({
             aria-pressed={isActive}
             data-state={isActive ? "active" : "inactive"}
             onClick={() => handleSelectProject(project)}
-            className={`w-full touch-manipulation rounded-3xl border p-6 text-left transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 motion-reduce:transform-none motion-reduce:transition-none ${
+            className={`w-full touch-manipulation rounded-3xl border p-6 text-left text-[var(--project-text,var(--vaeora-text))] transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus,var(--vaeora-focus))] motion-reduce:transform-none motion-reduce:transition-none ${
               isActive
-                ? "border-violet-400/60 bg-violet-500/10"
-                : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                ? "border-[var(--project-border-strong,var(--vaeora-focus))] bg-[var(--project-active,rgba(119,100,232,.1))]"
+                : "border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface,var(--vaeora-surface))] hover:border-[var(--project-border-strong,var(--vaeora-focus))] hover:bg-[var(--project-surface-hover,var(--vaeora-raised))]"
             }`}
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-lg font-semibold text-[var(--project-text,var(--vaeora-text))]">
                   {project.name}
                 </h3>
 
-                <p className="mt-2 text-zinc-400">
+                <p className="mt-2 text-[var(--project-text-secondary,var(--vaeora-muted))]">
                   {project.goal || "Sin objetivo"}
                 </p>
               </div>
 
               {isActive && (
-                <span className="rounded-full bg-violet-500/20 px-3 py-1 text-xs font-medium text-violet-200">
+                <span className="rounded-full border border-[var(--project-border)] bg-[var(--project-accent-soft)] px-3 py-1 text-xs font-medium text-[var(--project-text)]">
                   Proyecto activo
                 </span>
               )}
             </div>
 
-            <div className="mt-4 inline-flex rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-300">
+            <div className="mt-4 inline-flex rounded-full bg-[var(--project-surface-elevated,var(--vaeora-raised))] px-3 py-1 text-xs text-[var(--project-metadata,var(--vaeora-muted))]">
               {(project.kind ?? "general").replace("business", "negocio")} · {project.status}
             </div>
           </button>

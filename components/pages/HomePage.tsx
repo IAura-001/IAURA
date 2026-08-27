@@ -15,6 +15,7 @@ import type {
 } from "@/types/creative-studio";
 import type { ChatMessage } from "@/types/chat";
 import type { IAuraProject } from "@/types/project";
+import type { ProjectThemeDNA } from "@/core/projectTheme/types";
 
 import { theme } from "@/config/theme";
 import {
@@ -108,6 +109,15 @@ export default function Home({
 
   const activeProject = useAuthenticatedActiveProject();
   const activeProjectId = activeProject?.id ?? null;
+  const [projectThemePreview, setProjectThemePreview] = useState<{
+    projectId: string;
+    theme: ProjectThemeDNA;
+  } | null>(null);
+  const effectiveProjectTheme = activeProject
+    ? projectThemePreview?.projectId === activeProject.id
+      ? projectThemePreview.theme
+      : activeProject.themeDNA ?? null
+    : null;
 
   const {
     history: actionHistory,
@@ -292,6 +302,7 @@ export default function Home({
       (
         project: IAuraProject | null,
       ) => {
+        setProjectThemePreview(null);
         const nextProjectId = project?.id ?? null;
 
         if (project) {
@@ -831,10 +842,12 @@ export default function Home({
           onViewChange={
             setActiveWorkspaceView
           }
+          activeProjectId={activeProjectId}
+          projectThemeDNA={effectiveProjectTheme}
           presence={
             <>
               <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(420px,1.18fr)]">
-                <section className="order-2 min-w-0 rounded-[30px] border border-white/[0.07] bg-[#09090f] p-5 sm:p-7 xl:order-1">
+                <section className="order-2 min-w-0 rounded-[30px] border border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface,var(--vaeora-surface))] p-5 text-[var(--project-text,var(--vaeora-text))] sm:p-7 xl:order-1">
                   <Hero
                     name={authenticatedDisplayName}
                   />
@@ -864,7 +877,7 @@ export default function Home({
                     }
                   />
 
-                  <section className="min-w-0 space-y-5 rounded-[28px] border border-white/[0.07] bg-[#09090f] p-4 sm:p-6">
+                  <section className="min-w-0 space-y-5 rounded-[28px] border border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface,var(--vaeora-surface))] p-4 sm:p-6">
                     <Conversation
                       conversationKey={activeProjectId}
                       messages={
@@ -933,7 +946,7 @@ export default function Home({
             </>
           }
           projects={
-            <section className="min-w-0 rounded-[30px] border border-white/[0.07] bg-[#09090f] p-4 sm:p-6">
+            <section className="min-w-0 rounded-[30px] border border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface,var(--vaeora-surface))] p-4 sm:p-6">
               <Workspace
                 entryIntent={
                   entryIntent
@@ -956,6 +969,14 @@ export default function Home({
                     "intelligence",
                   )
                 }
+                environmentThemeDNA={effectiveProjectTheme ?? undefined}
+                onThemePreviewChange={(nextTheme) => {
+                  setProjectThemePreview(
+                    activeProjectId && nextTheme
+                      ? { projectId: activeProjectId, theme: nextTheme }
+                      : null,
+                  );
+                }}
               />
             </section>
           }

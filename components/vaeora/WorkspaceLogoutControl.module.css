@@ -12,12 +12,12 @@
   max-width: 100%;
   min-height: 44px;
   padding: 0.55rem 0.72rem 0.55rem 0.82rem;
-  border: 1px solid rgba(255, 255, 255, 0.075);
+  border: 1px solid var(--project-border, rgba(255, 255, 255, 0.075));
   border-radius: 999px;
   align-items: center;
   gap: 0.58rem;
-  color: rgba(213, 209, 226, 0.66);
-  background: rgba(10, 9, 15, 0.58);
+  color: var(--project-text-secondary, rgba(213, 209, 226, 0.66));
+  background: color-mix(in srgb, var(--project-surface, #0a090f) 84%, transparent);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), inset 0 1px rgba(255, 255, 255, 0.025);
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.61rem;
@@ -36,8 +36,8 @@
   height: 4px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: rgba(157, 148, 241, 0.72);
-  box-shadow: 0 0 10px rgba(157, 148, 241, 0.52);
+  background: var(--project-accent, rgba(157, 148, 241, 0.72));
+  box-shadow: 0 0 10px var(--project-glow, rgba(157, 148, 241, 0.52));
 }
 
 .logoutLabel {
@@ -51,30 +51,30 @@
   height: 1.45rem;
   flex: 0 0 1.45rem;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.065);
+  border: 1px solid var(--project-border, rgba(255, 255, 255, 0.065));
   border-radius: 50%;
-  color: rgba(192, 185, 231, 0.6);
-  background: rgba(255, 255, 255, 0.018);
+  color: var(--project-text-muted, rgba(192, 185, 231, 0.6));
+  background: var(--project-surface-elevated, rgba(255, 255, 255, 0.018));
   font-size: 0.66rem;
   letter-spacing: 0;
   transition: color 220ms ease, border-color 260ms ease, transform 220ms ease;
 }
 
 .logoutControl:hover {
-  border-color: rgba(177, 168, 238, 0.2);
-  color: rgba(240, 237, 248, 0.9);
-  background: rgba(35, 29, 61, 0.62);
+  border-color: var(--project-border-strong, rgba(177, 168, 238, 0.2));
+  color: var(--project-text, rgba(240, 237, 248, 0.9));
+  background: var(--project-surface-hover, rgba(35, 29, 61, 0.62));
   box-shadow: 0 10px 34px rgba(26, 20, 64, 0.2), inset 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .logoutControl:hover .exitMark {
-  border-color: rgba(177, 168, 238, 0.2);
-  color: rgba(221, 216, 248, 0.88);
+  border-color: var(--project-border-strong, rgba(177, 168, 238, 0.2));
+  color: var(--project-link-hover, rgba(221, 216, 248, 0.88));
   transform: translate(1px, -1px);
 }
 
 .logoutControl:focus-visible {
-  outline: 2px solid var(--vaeora-focus);
+  outline: 2px solid var(--project-focus, var(--vaeora-focus));
   outline-offset: 4px;
 }
 

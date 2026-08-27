@@ -3,13 +3,17 @@
 import Link from "next/link";
 import {
   useRef,
+  useLayoutEffect,
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type CSSProperties,
 } from "react";
 
 import type { SupportedLocale } from "@/core/i18n/languages";
 import { VAEORA_SUPPORT_URL } from "@/config/support";
+import { resolveMotionSignature, resolveProjectTheme } from "@/core/projectTheme/themeDNA";
+import type { ProjectThemeDNA } from "@/core/projectTheme/types";
 
 import styles from "./VaeoraWorkspaceShell.module.css";
 
@@ -45,6 +49,8 @@ interface VaeoraWorkspaceShellProps {
   presence: ReactNode;
   projects: ReactNode;
   intelligence: ReactNode;
+  activeProjectId?: string | null;
+  projectThemeDNA?: ProjectThemeDNA | null;
 }
 
 const VIEW_ORDER: readonly WorkspaceView[] = [
@@ -177,6 +183,8 @@ export default function VaeoraWorkspaceShell({
   presence,
   projects,
   intelligence,
+  activeProjectId = null,
+  projectThemeDNA = null,
 }: VaeoraWorkspaceShellProps) {
   const [internalActiveView, setInternalActiveView] =
     useState<WorkspaceView>(initialView);
@@ -188,6 +196,38 @@ export default function VaeoraWorkspaceShell({
     projects,
     intelligence,
   };
+  const hasProjectEnvironment = Boolean(activeProjectId && projectThemeDNA);
+  const environmentStyle = hasProjectEnvironment
+    ? (() => {
+        const { tokens } = resolveProjectTheme(projectThemeDNA);
+        const motion = resolveMotionSignature(activeProjectId!, projectThemeDNA);
+        return {
+          ...tokens,
+          "--project-context-duration": `${motion.contextDuration}ms`,
+          "--project-normal-duration": `${motion.normalDuration}ms`,
+          "--project-easing": motion.easing,
+          "--project-ambient-x": `${motion.ambientX}%`,
+          "--project-ambient-y": `${motion.ambientY}%`,
+        } as CSSProperties;
+      })()
+    : undefined;
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const propertyNames = environmentStyle ? Object.keys(environmentStyle) : [];
+    for (let index = root.style.length - 1; index >= 0; index -= 1) {
+      const name = root.style.item(index);
+      if (name.startsWith("--project-") || name.startsWith("--iaura-")) root.style.removeProperty(name);
+    }
+    if (environmentStyle) {
+      for (const [name, token] of Object.entries(environmentStyle)) root.style.setProperty(name, String(token));
+    }
+    return () => {
+      for (const name of propertyNames) {
+        if (root.style.getPropertyValue(name) === String((environmentStyle as Record<string, unknown>)[name])) root.style.removeProperty(name);
+      }
+    };
+  }, [environmentStyle]);
 
   function selectView(view: WorkspaceView, focus = false) {
     if (controlledActiveView === undefined) {
@@ -224,7 +264,12 @@ export default function VaeoraWorkspaceShell({
   }
 
   return (
-    <main className={styles.shell}>
+    <main
+      className={styles.shell}
+      data-project-environment={hasProjectEnvironment ? "custom" : "canonical"}
+      data-project-surface={hasProjectEnvironment ? projectThemeDNA?.surfaceMode : undefined}
+      style={environmentStyle}
+    >
       <div className={styles.ambient} aria-hidden="true" />
 
       <header className={styles.chrome}>

@@ -54,13 +54,14 @@ export function BetaExecutionEvaluationCard({
   return (
     <section
       aria-label={isVerified ? "Evaluación verificada" : "Evaluación provisional"}
-      className="mt-5 overflow-hidden rounded-2xl border border-blue-400/20 bg-blue-500/[0.04]"
+      data-nested-surface="dark"
+      className="mt-5 overflow-hidden rounded-2xl border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-surface)] text-[var(--iaura-rich-dark-text)]"
     >
       <header className="border-b border-white/[0.07] px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">
           {isVerified ? "Evaluación verificada" : "Evaluación provisional"}
         </p>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-[var(--iaura-rich-dark-muted)]">
           {isVerified
             ? "Evidencia confirmada por el fundador"
             : "Revisa esta interpretación antes de confirmarla"}
@@ -68,18 +69,18 @@ export function BetaExecutionEvaluationCard({
       </header>
       <dl className="divide-y divide-white/[0.07]">
         <div className="px-5 py-4">
-          <dt className="text-xs font-medium text-zinc-500">Observación</dt>
-          <dd className="mt-1.5 whitespace-pre-wrap leading-6 text-zinc-200">
+          <dt className="text-xs font-medium text-[var(--iaura-rich-dark-muted)]">Observación</dt>
+          <dd className="mt-1.5 whitespace-pre-wrap leading-6 text-[var(--iaura-rich-dark-secondary)]">
             {evaluation.observation}
           </dd>
         </div>
         <div className="px-5 py-4">
-          <dt className="text-xs font-medium text-zinc-500">Resultado</dt>
-          <dd className="mt-1.5 text-zinc-200">{resultLabels[evaluation.result]}</dd>
+          <dt className="text-xs font-medium text-[var(--iaura-rich-dark-muted)]">Resultado</dt>
+          <dd className="mt-1.5 text-[var(--iaura-rich-dark-secondary)]">{resultLabels[evaluation.result]}</dd>
         </div>
         <div className="px-5 py-4">
-          <dt className="text-xs font-medium text-zinc-500">Criterio “Terminado cuando”</dt>
-          <dd className="mt-1.5 text-zinc-200">
+          <dt className="text-xs font-medium text-[var(--iaura-rich-dark-muted)]">Criterio “Terminado cuando”</dt>
+          <dd className="mt-1.5 text-[var(--iaura-rich-dark-secondary)]">
             {evaluation.doneWhenSatisfied ? "Cumplido" : "No cumplido"}
           </dd>
         </div>
@@ -93,10 +94,10 @@ export function BetaExecutionEvaluationCard({
               disabled={disabled || !onChoose || pendingChoice !== null}
               aria-busy={pendingChoice === index}
               onClick={() => void choose(index, choice)}
-              className="min-h-[4.5rem] rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3.5 text-left transition hover:border-blue-300/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-[4.5rem] rounded-2xl border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-elevated)] p-3.5 text-left transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus)] disabled:cursor-not-allowed disabled:saturate-50"
             >
-              <span className="text-sm font-medium text-zinc-100">{choice.label}</span>
-              <span className="mt-1 block text-xs leading-5 text-zinc-500">
+              <span className="text-sm font-medium text-[var(--iaura-rich-dark-text)]">{choice.label}</span>
+              <span className="mt-1 block text-xs leading-5 text-[var(--iaura-rich-dark-muted)]">
                 {pendingChoice === index ? "Confirmando…" : choice.description}
               </span>
             </button>

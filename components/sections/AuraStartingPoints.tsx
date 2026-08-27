@@ -59,13 +59,13 @@ export default function AuraStartingPoints({
 
   return (
     <section className="mt-6" aria-labelledby="aura-starting-points-title">
-      <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-violet-200/55">
+      <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--project-metadata,#c4b5fd)]">
         {text.eyebrow}
       </p>
-      <h2 id="aura-starting-points-title" className="mt-2 text-xl font-medium text-zinc-100">
+      <h2 id="aura-starting-points-title" className="mt-2 text-xl font-medium text-[var(--project-text,#f4f4f5)]">
         {text.title}
       </h2>
-      <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
+      <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--project-text-secondary,#a1a1aa)]">
         {text.description}
       </p>
 
@@ -81,17 +81,17 @@ export default function AuraStartingPoints({
               disabled={disabled || Boolean(selectedId)}
               aria-busy={isSelected}
               data-state={isSelected ? "loading" : "ready"}
-              className="group min-h-[5.25rem] touch-manipulation rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5 text-left transition hover:border-violet-300/25 hover:bg-violet-400/[0.055] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none"
+              className="group min-h-[5.25rem] touch-manipulation rounded-2xl border border-[var(--project-border,rgba(255,255,255,.07))] bg-[var(--project-surface-elevated,rgba(255,255,255,.025))] p-3.5 text-left transition hover:border-[var(--project-border-strong,#c4b5fd)] hover:bg-[var(--project-surface-hover,rgba(139,92,246,.055))] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus,#c4b5fd)] disabled:cursor-not-allowed disabled:saturate-50 motion-reduce:transform-none motion-reduce:transition-none"
             >
               <span className="flex items-start gap-3">
-                <span className="mt-0.5 font-mono text-[9px] tracking-[0.16em] text-violet-300/65">
+                <span className="mt-0.5 font-mono text-[9px] tracking-[0.16em] text-[var(--project-metadata,#a78bfa)]">
                   {isSelected ? "···" : path.icon}
                 </span>
                 <span>
-                  <span className="block text-sm font-medium text-zinc-100">
+                  <span className="block text-sm font-medium text-[var(--project-link,#f4f4f5)]">
                     {path.label}
                   </span>
-                  <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                  <span className="mt-1 block text-xs leading-5 text-[var(--project-text-secondary,#a1a1aa)]">
                     {path.description}
                   </span>
                 </span>

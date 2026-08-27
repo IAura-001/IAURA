@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 
 import BrandSystemStudio from "@/components/sections/BrandingStudio";
@@ -17,6 +18,8 @@ import type {
 } from "@/types/creative-studio";
 import type { BrandProfile, IAuraProject } from "@/types/project";
 import type { WorkspaceEntryIntent } from "@/components/vaeora/VaeoraWorkspaceShell";
+import { normalizeThemeDNA, resolveMotionSignature, resolveProjectTheme } from "@/core/projectTheme/themeDNA";
+import type { ProjectThemeDNA } from "@/core/projectTheme/types";
 
 import CreateProjectForm from "./CreateProjectForm";
 import LegacyBrandingStudio from "./BrandingStudio";
@@ -24,6 +27,8 @@ import LaunchStudio from "./LaunchStudio";
 import ProjectList from "./ProjectList";
 import ProjectContinuityCard from "./ProjectContinuityCard";
 import FounderProjectImport from "./FounderProjectImport";
+import ProjectThemeDemoSelector from "./ProjectThemeDemoSelector";
+import environmentStyles from "./ProjectEnvironment.module.css";
 
 const CreativeStudio = dynamic(
   () => import("@/components/creative/CreativeStudio"),
@@ -51,6 +56,8 @@ interface ProjectWorkspaceProps {
   onProjectSelected?: (project: IAuraProject | null) => void;
   onContinueWithAura?: (targetMessageId?: string) => void;
   onOpenIntelligence?: () => void;
+  environmentThemeDNA?: ProjectThemeDNA;
+  onThemePreviewChange?: (theme: ProjectThemeDNA | null) => void;
 }
 
 type StudioSelection =
@@ -86,6 +93,8 @@ export default function ProjectWorkspace({
   onProjectSelected,
   onContinueWithAura,
   onOpenIntelligence,
+  environmentThemeDNA,
+  onThemePreviewChange,
 }: ProjectWorkspaceProps) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeProject, setActiveProject] = useState<IAuraProject | null>(null);
@@ -123,13 +132,14 @@ export default function ProjectWorkspace({
   }
 
   const handleProjectSelected = useCallback(
-    (project: IAuraProject) => {
-      projectEngine.setCurrentProject(project);
+    (project: IAuraProject | null) => {
+      if (project) projectEngine.setCurrentProject(project);
       setActiveProject(project);
       setShowCreateForm(false);
       onProjectSelected?.(project);
 
       if (
+        project &&
         entryIntent === "branding" &&
         !consumedEntryIntentRef.current
       ) {
@@ -330,6 +340,27 @@ export default function ProjectWorkspace({
       ? allStudios.filter((studio) => creativeStudioIds.has(studio.id))
       : [];
 
+  const savedThemeDNA = normalizeThemeDNA(activeProject?.themeDNA);
+  const themeDNA = environmentThemeDNA ?? savedThemeDNA;
+  const projectTheme = resolveProjectTheme(themeDNA);
+  const motion = resolveMotionSignature(activeProject?.id ?? "vaeora", themeDNA);
+  const direction = motion.direction;
+  const projectStyle = {
+    ...projectTheme.tokens,
+    "--project-ambient-x": `${motion.ambientX}%`,
+    "--project-ambient-y": `${motion.ambientY}%`,
+    "--project-micro-duration": `${motion.microDuration}ms`,
+    "--project-normal-duration": `${motion.normalDuration}ms`,
+    "--project-context-duration": `${motion.contextDuration}ms`,
+    "--project-stagger": `${motion.stagger}ms`,
+    "--project-easing": motion.easing,
+    "--project-enter-scale": motion.scale,
+    "--project-enter-x": `${direction === "left" ? -motion.distance : direction === "right" ? motion.distance : 0}px`,
+    "--project-enter-y": `${direction === "up" ? -motion.distance : direction === "down" ? motion.distance : 0}px`,
+    "--project-item-x": `${direction === "left" ? -motion.distance / 2 : direction === "right" ? motion.distance / 2 : 0}px`,
+    "--project-item-y": `${direction === "up" ? -motion.distance / 2 : direction === "down" ? motion.distance / 2 : 0}px`,
+  } as CSSProperties;
+
   return (
     <section className="space-y-6">
       <FounderProjectImport />
@@ -341,7 +372,7 @@ export default function ProjectWorkspace({
         <button
           type="button"
           onClick={startNewProject}
-          className="min-h-12 touch-manipulation rounded-2xl border border-white/10 bg-white/[0.025] px-4 py-2 text-sm text-zinc-300 transition hover:border-violet-400/40 hover:text-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 motion-reduce:transform-none motion-reduce:transition-none"
+          className="min-h-12 touch-manipulation rounded-2xl border border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface,var(--vaeora-surface))] px-4 py-2 text-sm font-medium text-[var(--project-link,var(--vaeora-text))] transition hover:border-[var(--project-border-strong,var(--vaeora-focus))] hover:bg-[var(--project-surface-hover,var(--vaeora-raised))] hover:text-[var(--project-link-hover,var(--vaeora-text))] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus,var(--vaeora-focus))] motion-reduce:transform-none motion-reduce:transition-none"
         >
           + Nuevo proyecto
         </button>
@@ -355,30 +386,30 @@ export default function ProjectWorkspace({
       />
 
       {activeProject && !showCreateForm && (
-        <div className="overflow-hidden rounded-[32px] border border-violet-400/15 bg-[radial-gradient(circle_at_78%_5%,rgba(91,73,190,0.13),transparent_38%),rgba(255,255,255,0.018)] p-5 backdrop-blur-sm sm:p-8 lg:p-10">
-          <div className="grid gap-8 border-b border-white/[0.07] pb-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <div className={`${environmentStyles.environment} ${environmentStyles.arrival}`} data-surface={themeDNA.surfacePersonality} data-project-id={activeProject.id} style={projectStyle}>
+          <div className={environmentStyles.identity}>
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-[0.4em] text-violet-300/65">
+              <p className={environmentStyles.eyebrow}>
                 Current mission
               </p>
               <h2
                 ref={workspaceHeadingRef}
                 tabIndex={-1}
-                className="mt-5 text-4xl font-light tracking-[-0.045em] text-white outline-none sm:text-5xl lg:text-6xl"
+                className={environmentStyles.title}
               >
                 {activeProject.name}
               </h2>
-              <p className="mt-5 max-w-2xl text-base font-light leading-8 text-zinc-400 sm:text-lg">
+              <p className={environmentStyles.goal}>
                 {activeProject.goal || "Sin objetivo definido"}
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full border border-emerald-300/10 bg-emerald-400/[0.06] px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-200/70">
+            <div>
+              <span className={environmentStyles.status}>
                 {activeProject.status}
               </span>
               {activeProject.creativeStudio && (
-                <span className="rounded-full border border-violet-300/10 bg-violet-400/[0.06] px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-violet-200/70">
+                <span className={`${environmentStyles.memoryChip} rounded-full border px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em]`}>
                   Creative memory active
                 </span>
               )}
@@ -390,20 +421,20 @@ export default function ProjectWorkspace({
             onOpenConversation={onContinueWithAura}
           />
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+          <div className={`${environmentStyles.actionGrid} ${environmentStyles.actions}`}>
             <button
               type="button"
               onClick={() => onContinueWithAura?.()}
               disabled={!onContinueWithAura}
-              className="min-h-[116px] touch-manipulation rounded-[22px] border border-violet-300/20 bg-violet-500/[0.08] p-5 text-left transition hover:bg-violet-500/[0.13] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transform-none motion-reduce:transition-none"
+              className={environmentStyles.action}
             >
-              <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-violet-200/60">
+              <span className={`${environmentStyles.actionLabel} font-mono text-[9px] uppercase tracking-[0.2em]`}>
                 VOZ Y CONTEXTO
               </span>
-              <span className="mt-3 block text-base font-medium text-zinc-100">
+              <span className={`${environmentStyles.actionTitle} mt-3 block text-base font-medium`}>
                 Continuar construyendo con Aura →
               </span>
-              <span className="mt-1 block text-sm leading-6 text-zinc-500">
+              <span className={`${environmentStyles.actionDescription} mt-1 block text-sm leading-6`}>
                 Habla, revisa las fases y toma la siguiente decisión con un toque.
               </span>
             </button>
@@ -412,38 +443,38 @@ export default function ProjectWorkspace({
               type="button"
               onClick={onOpenIntelligence}
               disabled={!onOpenIntelligence}
-              className="min-h-[116px] touch-manipulation rounded-[22px] border border-white/[0.08] bg-white/[0.025] p-5 text-left transition hover:border-violet-300/20 hover:bg-white/[0.045] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transform-none motion-reduce:transition-none"
+              className={environmentStyles.action}
             >
-              <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-zinc-600">
+              <span className={`${environmentStyles.actionLabel} font-mono text-[9px] uppercase tracking-[0.2em]`}>
                 METAS Y PROGRESO
               </span>
-              <span className="mt-3 block text-base font-medium text-zinc-100">
+              <span className={`${environmentStyles.actionTitle} mt-3 block text-base font-medium`}>
                 Ver inteligencia personal ↗
               </span>
-              <span className="mt-1 block text-sm leading-6 text-zinc-500">
+              <span className={`${environmentStyles.actionDescription} mt-1 block text-sm leading-6`}>
                 Objetivos, hábitos, prioridades y progreso en el mismo sistema.
               </span>
             </button>
           </div>
 
           {studios.length > 0 ? (
-          <div className="mt-8">
+          <div className={environmentStyles.studios}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.32em] text-zinc-600">
+                <p className={`${environmentStyles.studiosLabel} text-[10px] uppercase tracking-[0.32em]`}>
                   Studios
                 </p>
-                <h3 className="mt-2 text-xl font-light text-zinc-200">
+                <h3 className={`${environmentStyles.studiosTitle} mt-2 text-xl font-light`}>
                   One direction. Every expression.
                 </h3>
               </div>
-              <p className="max-w-md text-sm leading-6 text-zinc-500">
+              <p className={`${environmentStyles.studiosDescription} max-w-md text-sm leading-6`}>
                 Cada estudio guarda su trabajo dentro del proyecto para que Aura pueda
                 mantener contexto entre identidad, web, imágenes y lanzamiento.
               </p>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className={environmentStyles.studioGrid}>
               {studios.map((studio) => (
                 <button
                   key={studio.id}
@@ -460,27 +491,23 @@ export default function ProjectWorkspace({
                     lastStudioTriggerIdRef.current = studio.id;
                     setCurrentStudio(studio.selection);
                   }}
-                  className={`group min-h-[168px] touch-manipulation rounded-[24px] border p-5 text-left transition duration-300 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 motion-reduce:transform-none motion-reduce:transition-none ${
-                    studio.featured
-                      ? "border-violet-300/20 bg-gradient-to-br from-violet-500/[0.12] via-blue-500/[0.05] to-transparent hover:border-violet-300/38"
-                      : "border-white/[0.075] bg-white/[0.018] hover:border-violet-300/25 hover:bg-violet-500/[0.055]"
-                  }`}
+                  className={environmentStyles.studioCard}
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <span className="grid h-10 w-10 place-items-center rounded-2xl border border-white/[0.08] font-mono text-[10px] tracking-[0.15em] text-zinc-500 transition group-hover:border-violet-300/25 group-hover:text-violet-200">
+                    <span className={`${environmentStyles.studioIndex} grid h-10 w-10 place-items-center rounded-2xl border font-mono text-[10px] tracking-[0.15em] transition`}>
                       {studio.index}
                     </span>
                     <span
                       aria-hidden="true"
-                      className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-600 transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-violet-200 motion-reduce:transform-none motion-reduce:transition-none"
+                      className={`${environmentStyles.studioAction} inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transform-none motion-reduce:transition-none`}
                     >
                       Abrir <span className="text-sm">↗</span>
                     </span>
                   </div>
-                  <h4 className="mt-5 text-base font-medium text-zinc-100">
+                  <h4 className={`${environmentStyles.studioTitle} mt-5 text-base font-medium`}>
                     {studio.title}
                   </h4>
-                  <p className="mt-2 text-sm font-light leading-6 text-zinc-500">
+                  <p className={`${environmentStyles.studioDescription} mt-2 text-sm font-light leading-6`}>
                     {studio.description}
                   </p>
                 </button>
@@ -488,6 +515,7 @@ export default function ProjectWorkspace({
             </div>
           </div>
           ) : null}
+          <ProjectThemeDemoSelector key={activeProject.id} savedTheme={savedThemeDNA} onPreview={(theme) => onThemePreviewChange?.(theme)} />
         </div>
       )}
     </section>

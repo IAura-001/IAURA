@@ -178,9 +178,9 @@ export function AuraPresence({
 
       <style jsx>{`
         .aura-presence {
-          --aura-primary: 168, 85, 247;
-          --aura-secondary: 59, 130, 246;
-          --aura-accent: 216, 180, 254;
+          --aura-primary: var(--iaura-primary-rgb, 168, 85, 247);
+          --aura-secondary: var(--iaura-secondary-rgb, 59, 130, 246);
+          --aura-accent: var(--iaura-accent-rgb, 216, 180, 254);
           isolation: isolate;
         }
 
@@ -237,7 +237,7 @@ export function AuraPresence({
         }
 
         .aura-grid {
-          opacity: 0.12;
+          opacity: calc(0.12 * var(--iaura-particle-opacity, 1));
           mask-image: radial-gradient(
             circle,
             black,
@@ -281,7 +281,7 @@ export function AuraPresence({
 
         .aura-orbit {
           border: 1px solid
-            rgba(var(--aura-primary), 0.22);
+            rgba(var(--aura-primary), var(--iaura-ring-alpha, 0.22));
           box-shadow:
             inset 0 0 24px
               rgba(var(--aura-secondary), 0.04),
@@ -329,12 +329,12 @@ export function AuraPresence({
           background: rgba(3, 2, 12, 0.72);
           box-shadow:
             0 0 20px
-              rgba(var(--aura-primary), 0.28),
+              rgba(var(--aura-primary), var(--iaura-glow-alpha, 0.28)),
             0 0 70px
               rgba(var(--aura-secondary), 0.22),
             inset 0 0 36px
               rgba(var(--aura-primary), 0.16);
-          backdrop-filter: blur(16px);
+          backdrop-filter: blur(var(--iaura-surface-depth, 16px));
           animation: aura-breathe 4.2s ease-in-out
             infinite;
           cursor: pointer;

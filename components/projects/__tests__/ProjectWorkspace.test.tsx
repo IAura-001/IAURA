@@ -1,4 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -111,6 +113,16 @@ async function selectProject() {
 }
 
 describe("ProjectWorkspace studio routing", () => {
+  it("uses semantic roles for every functional secondary card consumer", () => {
+    const source = readFileSync(resolve(process.cwd(), "components/projects/ProjectWorkspace.tsx"), "utf8");
+    const css = readFileSync(resolve(process.cwd(), "components/projects/ProjectEnvironment.module.css"), "utf8");
+    expect(source).not.toMatch(/Continuar construyendo[\s\S]{0,180}text-zinc-/);
+    expect(source).not.toMatch(/Ver inteligencia personal[\s\S]{0,180}text-zinc-/);
+    expect(css).toMatch(/\.actionTitle\s*{\s*color: var\(--project-link\);/);
+    expect(css).toMatch(/\.actionDescription\s*{\s*color: var\(--project-text-secondary\);/);
+    expect(css).toMatch(/\.memoryChip\s*{[\s\S]*?color: var\(--project-metadata\);/);
+    expect(css).toMatch(/\.studioTitle\s*{\s*color: var\(--project-text\);/);
+  });
   it("opens Creative Studio from the branding deep-link intent", async () => {
     render(<ProjectWorkspace entryIntent="branding" />);
 

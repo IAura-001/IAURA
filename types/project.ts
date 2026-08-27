@@ -1,4 +1,5 @@
 import type { CreativeStudioMemory } from "@/types/creative-studio";
+import type { ProjectThemeDNA } from "@/core/projectTheme/types";
 
 export type ProjectStatus =
   | "planning"
@@ -116,4 +117,5 @@ export interface IAuraProject {
   brandingStudio?: BrandingStudioMemory;
   launchStudio?: LaunchStudioMemory;
   creativeStudio?: CreativeStudioMemory;
+  themeDNA?: ProjectThemeDNA;
 }

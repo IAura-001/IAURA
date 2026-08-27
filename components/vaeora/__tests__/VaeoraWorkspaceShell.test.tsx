@@ -7,6 +7,9 @@ import { resolve } from "node:path";
 
 import VaeoraWorkspaceShell from "@/components/vaeora/VaeoraWorkspaceShell";
 import WorkspaceLogoutControl from "@/components/vaeora/WorkspaceLogoutControl";
+import ProjectThemeDemoSelector from "@/components/projects/ProjectThemeDemoSelector";
+import { DEFAULT_PROJECT_THEME_DNA, PROJECT_THEME_PRESETS } from "@/core/projectTheme/themeDNA";
+import type { ProjectThemeDNA } from "@/core/projectTheme/types";
 
 function DraftProbe() {
   const [value, setValue] = useState("");
@@ -29,6 +32,21 @@ function renderShell(initialView?: "presence" | "projects" | "intelligence") {
       presence={<DraftProbe />}
       projects={<p>Project workspace</p>}
       intelligence={<p>Personal intelligence</p>}
+    />
+  );
+}
+
+function PreviewEnvironmentProbe() {
+  const [preview, setPreview] = useState<ProjectThemeDNA | null>(null);
+  return (
+    <VaeoraWorkspaceShell
+      locale="es-419"
+      userName="Diego"
+      activeProjectId="project-a"
+      projectThemeDNA={preview}
+      presence={<p>Presence</p>}
+      projects={<ProjectThemeDemoSelector savedTheme={DEFAULT_PROJECT_THEME_DNA} onPreview={setPreview} />}
+      intelligence={<p>Intelligence</p>}
     />
   );
 }
@@ -141,6 +159,53 @@ describe("VaeoraWorkspaceShell", () => {
     expect(
       document.getElementById("vaeora-panel-projects"),
     ).not.toHaveAttribute("hidden");
+  });
+
+  it("scopes an active project's resolved Theme DNA to the complete shell", () => {
+    render(
+      <VaeoraWorkspaceShell
+        locale="es-419" userName="Diego" activeProjectId="custom-project"
+        projectThemeDNA={PROJECT_THEME_PRESETS.autoSales}
+        presence={<p>Presence</p>} projects={<p>Projects</p>} intelligence={<p>Intelligence</p>}
+      />,
+    );
+    const shell = screen.getByRole("main");
+    expect(shell).toHaveAttribute("data-project-environment", "custom");
+    expect(shell.style.getPropertyValue("--project-primary")).toBe("#F97316");
+  });
+
+  it("returns the shell to canonical VAEORA when active project authority is null", () => {
+    const shell = (activeProjectId: string | null, projectThemeDNA: ProjectThemeDNA | null) => (
+      <VaeoraWorkspaceShell locale="es-419" userName="Diego" activeProjectId={activeProjectId} projectThemeDNA={projectThemeDNA}
+        presence={<p>Presence</p>} projects={<p>Projects</p>} intelligence={<p>Intelligence</p>} />
+    );
+    const { rerender } = render(shell("project-a", PROJECT_THEME_PRESETS.wellness));
+    expect(screen.getByRole("main")).toHaveAttribute("data-project-surface", "light");
+    rerender(shell(null, PROJECT_THEME_PRESETS.wellness));
+    expect(screen.getByRole("main")).toHaveAttribute("data-project-environment", "canonical");
+    expect(screen.getByRole("main").style.getPropertyValue("--project-primary")).toBe("");
+  });
+
+  it("replaces the full shell tokens during rapid project switching", () => {
+    const shell = (id: string, theme: ProjectThemeDNA) => (
+      <VaeoraWorkspaceShell locale="es-419" userName="Diego" activeProjectId={id} projectThemeDNA={theme}
+        presence={<p>Presence</p>} projects={<p>Projects</p>} intelligence={<p>Intelligence</p>} />
+    );
+    const { rerender } = render(shell("a", PROJECT_THEME_PRESETS.autoSales));
+    rerender(shell("b", PROJECT_THEME_PRESETS.wellness));
+    rerender(shell("c", PROJECT_THEME_PRESETS.cybersecurity));
+    expect(screen.getByRole("main").style.getPropertyValue("--project-primary")).toBe("#12305A");
+    expect(screen.getByRole("main").style.getPropertyValue("--project-primary")).not.toBe("#F97316");
+  });
+
+  it("lets the dev preview affect the full shell without persistence and restores canonical scope", async () => {
+    const user = userEvent.setup();
+    render(<PreviewEnvironmentProbe />);
+    await user.click(screen.getByRole("tab", { name: "Proyectos" }));
+    await user.click(screen.getByRole("button", { name: "Auto Sales" }));
+    expect(screen.getByRole("main").style.getPropertyValue("--project-primary")).toBe("#F97316");
+    await user.click(screen.getByRole("button", { name: "Saved theme" }));
+    expect(screen.getByRole("main")).toHaveAttribute("data-project-environment", "canonical");
   });
 
   it.each([320, 375, 390, 430])("keeps the complete workspace header intentional at %ipx", (width) => {
