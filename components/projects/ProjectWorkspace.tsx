@@ -20,6 +20,8 @@ import type { BrandProfile, IAuraProject } from "@/types/project";
 import type { WorkspaceEntryIntent } from "@/components/vaeora/VaeoraWorkspaceShell";
 import { normalizeThemeDNA, resolveMotionSignature, resolveProjectTheme } from "@/core/projectTheme/themeDNA";
 import type { ProjectThemeDNA } from "@/core/projectTheme/types";
+import type { ProjectEnvironmentContext } from "@/core/projectTheme/environmentContext";
+import { sonicEngine } from "@/core/sonic/SonicDNA";
 
 import CreateProjectForm from "./CreateProjectForm";
 import LegacyBrandingStudio from "./BrandingStudio";
@@ -28,6 +30,8 @@ import ProjectList from "./ProjectList";
 import ProjectContinuityCard from "./ProjectContinuityCard";
 import FounderProjectImport from "./FounderProjectImport";
 import ProjectThemeDemoSelector from "./ProjectThemeDemoSelector";
+import ProjectBrandSystem from "./ProjectBrandSystem";
+import SonicLab from "./SonicLab";
 import environmentStyles from "./ProjectEnvironment.module.css";
 
 const CreativeStudio = dynamic(
@@ -53,11 +57,13 @@ interface ProjectWorkspaceProps {
   preferredLocale?: SupportedLocale;
   initialProject?: IAuraProject | null;
   studioRequest?: CreativeStudioRequest;
+  brandSystemRequest?: { id: number; projectId: string };
   onProjectSelected?: (project: IAuraProject | null) => void;
   onContinueWithAura?: (targetMessageId?: string) => void;
   onOpenIntelligence?: () => void;
   environmentThemeDNA?: ProjectThemeDNA;
   onThemePreviewChange?: (theme: ProjectThemeDNA | null) => void;
+  onEnvironmentContextPreview?: (context: ProjectEnvironmentContext | null) => void;
 }
 
 type StudioSelection =
@@ -70,6 +76,9 @@ type StudioSelection =
     }
   | {
       id: "brand-system";
+    }
+  | {
+      id: "brand-assets";
     }
   | {
       id: "legacy-branding";
@@ -90,19 +99,23 @@ export default function ProjectWorkspace({
   preferredLocale,
   initialProject,
   studioRequest,
+  brandSystemRequest,
   onProjectSelected,
   onContinueWithAura,
   onOpenIntelligence,
   environmentThemeDNA,
   onThemePreviewChange,
+  onEnvironmentContextPreview,
 }: ProjectWorkspaceProps) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeProject, setActiveProject] = useState<IAuraProject | null>(null);
   const [currentStudio, setCurrentStudio] = useState<StudioSelection>(null);
+  const [creativeReturnTarget, setCreativeReturnTarget] = useState<"workspace" | "brand-system">("workspace");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [projectListReady, setProjectListReady] = useState(false);
   const consumedEntryIntentRef = useRef(false);
   const consumedStudioRequestRef = useRef<number | null>(null);
+  const consumedBrandSystemRequestRef = useRef<number | null>(null);
   const lastStudioTriggerIdRef = useRef<string | null>(null);
   const studioTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const workspaceHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -118,6 +131,7 @@ export default function ProjectWorkspace({
 
     consumedStudioRequestRef.current = studioRequest.id;
     lastStudioTriggerIdRef.current = null;
+    setCreativeReturnTarget("workspace");
     setCurrentStudio(
       studioRequest.area === "launch"
         ? { id: "launch" }
@@ -125,10 +139,27 @@ export default function ProjectWorkspace({
     );
   }, [activeProject, studioRequest]);
 
+  useEffect(() => {
+    if (!activeProject || !brandSystemRequest || brandSystemRequest.projectId !== activeProject.id || consumedBrandSystemRequestRef.current === brandSystemRequest.id) return;
+    consumedBrandSystemRequestRef.current = brandSystemRequest.id;
+    lastStudioTriggerIdRef.current = null;
+    setCurrentStudio({ id: "brand-system" });
+    sonicEngine.play("open", activeProject.themeDNA);
+  }, [activeProject, brandSystemRequest]);
+
   function refreshProjects(): void {
     setShowCreateForm(false);
     setProjectListReady(false);
     setRefreshKey((current) => current + 1);
+  }
+
+  function handleProjectCreated(project?: IAuraProject, openIdentity = false): void {
+    refreshProjects();
+    if (!project) return;
+    projectEngine.setCurrentProject(project);
+    setActiveProject(project);
+    onProjectSelected?.(project);
+    if (openIdentity) setCurrentStudio({ id: "brand-system" });
   }
 
   const handleProjectSelected = useCallback(
@@ -145,7 +176,7 @@ export default function ProjectWorkspace({
       ) {
         consumedEntryIntentRef.current = true;
         lastStudioTriggerIdRef.current = null;
-        setCurrentStudio({ id: "creative", area: "direction" });
+        setCurrentStudio({ id: "brand-system" });
       }
     },
     [entryIntent, onProjectSelected],
@@ -226,7 +257,7 @@ export default function ProjectWorkspace({
         preferredLocale={preferredLocale}
         initialArea={currentStudio.area}
         onProjectUpdated={handleStudioProjectUpdated}
-        onClose={closeStudio}
+        onClose={creativeReturnTarget === "brand-system" ? () => setCurrentStudio({ id: "brand-system" }) : closeStudio}
       />
     );
   }
@@ -237,13 +268,22 @@ export default function ProjectWorkspace({
 
   if (currentStudio?.id === "brand-system" && activeProject) {
     return (
-      <BrandSystemStudio
+      <ProjectBrandSystem
         key={activeProject.id}
         project={activeProject}
-        onSave={handleBrandProfileSave}
+        onProjectUpdated={handleStudioProjectUpdated}
+        onPreview={(theme) => onThemePreviewChange?.(theme)}
+        onOpenAsset={(area) => {
+          setCreativeReturnTarget("brand-system");
+          setCurrentStudio(area === "foundation" ? { id: "brand-assets" } : { id: "creative", area });
+        }}
         onClose={closeStudio}
       />
     );
+  }
+
+  if (currentStudio?.id === "brand-assets" && activeProject) {
+    return <BrandSystemStudio key={activeProject.id} project={activeProject} onSave={handleBrandProfileSave} onClose={() => setCurrentStudio({ id: "brand-system" })} />;
   }
 
   if (currentStudio?.id === "legacy-branding" && activeProject) {
@@ -302,7 +342,7 @@ export default function ProjectWorkspace({
         {
           id: "library",
           index: "06",
-          title: "Asset Library",
+          title: "Library",
           description:
             "Versiones, procedencia, selección, aprobación y descarga de originales.",
           selection: { id: "creative", area: "library" },
@@ -340,13 +380,32 @@ export default function ProjectWorkspace({
       ? allStudios.filter((studio) => creativeStudioIds.has(studio.id))
       : [];
 
-  const savedThemeDNA = normalizeThemeDNA(activeProject?.themeDNA);
+  const savedThemeDNA = activeProject?.themeDNA ? normalizeThemeDNA(activeProject.themeDNA) : null;
   const themeDNA = environmentThemeDNA ?? savedThemeDNA;
-  const projectTheme = resolveProjectTheme(themeDNA);
-  const motion = resolveMotionSignature(activeProject?.id ?? "vaeora", themeDNA);
+  const previewThemeDNA = themeDNA ?? normalizeThemeDNA(undefined);
+  const projectTheme = themeDNA ? resolveProjectTheme(themeDNA) : null;
+  const motion = resolveMotionSignature(themeDNA ? activeProject?.id ?? "vaeora" : "vaeora", previewThemeDNA);
   const direction = motion.direction;
   const projectStyle = {
-    ...projectTheme.tokens,
+    ...(projectTheme?.tokens ?? {
+      "--project-bg": "var(--vaeora-background)",
+      "--project-bg-subtle": "#020205",
+      "--project-surface": "var(--vaeora-surface)",
+      "--project-surface-elevated": "var(--vaeora-raised)",
+      "--project-surface-hover": "var(--vaeora-raised)",
+      "--project-border": "var(--vaeora-line)",
+      "--project-border-strong": "rgba(170, 160, 255, 0.42)",
+      "--project-text": "var(--vaeora-text)",
+      "--project-text-secondary": "#c8c3d1",
+      "--project-text-muted": "var(--vaeora-muted)",
+      "--project-metadata": "var(--vaeora-muted)",
+      "--project-link": "var(--vaeora-text)",
+      "--project-link-hover": "#ffffff",
+      "--project-accent": "var(--vaeora-focus)",
+      "--project-accent-soft": "rgba(119, 100, 232, 0.12)",
+      "--project-glow": "rgba(119, 100, 232, 0.16)",
+      "--project-focus": "var(--vaeora-focus)",
+    }),
     "--project-ambient-x": `${motion.ambientX}%`,
     "--project-ambient-y": `${motion.ambientY}%`,
     "--project-micro-duration": `${motion.microDuration}ms`,
@@ -365,7 +424,7 @@ export default function ProjectWorkspace({
     <section className="space-y-6">
       <FounderProjectImport />
       {(showCreateForm || (projectListReady && !activeProject)) && (
-        <CreateProjectForm onProjectCreated={refreshProjects} />
+        <CreateProjectForm onProjectCreated={handleProjectCreated} />
       )}
 
       <div className="flex justify-end">
@@ -386,7 +445,7 @@ export default function ProjectWorkspace({
       />
 
       {activeProject && !showCreateForm && (
-        <div className={`${environmentStyles.environment} ${environmentStyles.arrival}`} data-surface={themeDNA.surfacePersonality} data-project-id={activeProject.id} style={projectStyle}>
+        <div className={`${environmentStyles.environment} ${environmentStyles.arrival}`} data-surface={themeDNA?.surfacePersonality} data-project-identity={themeDNA ? "custom" : "canonical"} data-project-id={activeProject.id} style={projectStyle}>
           <div className={environmentStyles.identity}>
             <div>
               <p className={environmentStyles.eyebrow}>
@@ -488,6 +547,8 @@ export default function ProjectWorkspace({
                   type="button"
                   data-state="ready"
                   onClick={() => {
+                    sonicEngine.play("open", activeProject.themeDNA);
+                    setCreativeReturnTarget("workspace");
                     lastStudioTriggerIdRef.current = studio.id;
                     setCurrentStudio(studio.selection);
                   }}
@@ -510,12 +571,22 @@ export default function ProjectWorkspace({
                   <p className={`${environmentStyles.studioDescription} mt-2 text-sm font-light leading-6`}>
                     {studio.description}
                   </p>
+                  {studio.id === "brand-system" ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-[var(--project-metadata,var(--vaeora-muted))]">
+                      <span>{activeProject.themeDNA ? "Project Identity" : "VAEORA Original"}</span>
+                      {[previewThemeDNA.primaryColor, previewThemeDNA.secondaryColor, previewThemeDNA.accentColor].map((color) => (
+                        <span key={color} aria-hidden="true" className="h-4 w-4 rounded-full border border-[var(--project-border)]" style={{ backgroundColor: color }} />
+                      ))}
+                      <span>{themeDNA ? `${previewThemeDNA.surfaceMode} · ${previewThemeDNA.visualIntensity} · ${previewThemeDNA.motionStyle}` : "VAEORA Original"}</span>
+                    </div>
+                  ) : null}
                 </button>
               ))}
             </div>
           </div>
           ) : null}
-          <ProjectThemeDemoSelector key={activeProject.id} savedTheme={savedThemeDNA} onPreview={(theme) => onThemePreviewChange?.(theme)} />
+          <ProjectThemeDemoSelector key={activeProject.id} savedTheme={previewThemeDNA} onPreview={(theme) => onThemePreviewChange?.(theme)} onContextPreview={onEnvironmentContextPreview} />
+          <SonicLab theme={previewThemeDNA} />
         </div>
       )}
     </section>

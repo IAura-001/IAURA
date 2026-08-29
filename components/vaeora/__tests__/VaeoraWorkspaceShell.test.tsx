@@ -1,9 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
 import VaeoraWorkspaceShell from "@/components/vaeora/VaeoraWorkspaceShell";
 import WorkspaceLogoutControl from "@/components/vaeora/WorkspaceLogoutControl";
@@ -52,6 +52,45 @@ function PreviewEnvironmentProbe() {
 }
 
 describe("VaeoraWorkspaceShell", () => {
+  it("localizes the persistent sound control with the workspace locale", () => {
+    const view = render(
+      <VaeoraWorkspaceShell locale="en-US" userName="Diego" presence={<p>Presence</p>} projects={<p>Projects</p>} intelligence={<p>Intelligence</p>} />,
+    );
+    expect(screen.getByRole("button", { name: "Sound on" })).toHaveTextContent("Sound on");
+    view.rerender(
+      <VaeoraWorkspaceShell locale="fr-FR" userName="Diego" presence={<p>Présence</p>} projects={<p>Projets</p>} intelligence={<p>Intelligence</p>} />,
+    );
+    expect(screen.getByRole("button", { name: "Son activé" })).toHaveTextContent("Son activé");
+  });
+
+  it("scopes living context tokens to the active project and replaces them safely", () => {
+    const view = render(
+      <VaeoraWorkspaceShell locale="es-419" userName="Diego" activeProjectId="a" projectThemeDNA={PROJECT_THEME_PRESETS.wellness} environmentContext="processing"
+        presence={<p>Presence</p>} projects={<p>Projects</p>} intelligence={<p>Intelligence</p>} />,
+    );
+    const shell = screen.getByRole("main");
+    const processingGlow = shell.style.getPropertyValue("--living-glow-multiplier");
+    expect(shell).toHaveAttribute("data-environment-context", "processing");
+    expect(processingGlow).not.toBe("");
+    view.rerender(
+      <VaeoraWorkspaceShell locale="es-419" userName="Diego" activeProjectId="b" projectThemeDNA={PROJECT_THEME_PRESETS.cybersecurity} environmentContext="reviewing"
+        presence={<p>Presence</p>} projects={<p>Projects</p>} intelligence={<p>Intelligence</p>} />,
+    );
+    expect(shell).toHaveAttribute("data-environment-context", "reviewing");
+    expect(shell.style.getPropertyValue("--living-glow-multiplier")).not.toBe(processingGlow);
+    view.rerender(
+      <VaeoraWorkspaceShell locale="es-419" userName="Diego" activeProjectId={null} projectThemeDNA={null} environmentContext="completed"
+        presence={<p>Presence</p>} projects={<p>Projects</p>} intelligence={<p>Intelligence</p>} />,
+    );
+    expect(shell).not.toHaveAttribute("data-environment-context");
+    expect(document.documentElement.style.getPropertyValue("--living-glow-multiplier")).toBe("");
+  });
+
+  it("suppresses living motion for reduced motion and bounds it on mobile", () => {
+    const css = readFileSync(resolve(process.cwd(), "components/vaeora/VaeoraWorkspaceShell.module.css"), "utf8");
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation: none !important;/);
+    expect(css).toMatch(/@media \(max-width: 700px\)[\s\S]*?--living-shift-x[\s\S]*?0\.35/);
+  });
   it("offers discreet support navigation in the authenticated shell", () => {
     renderShell();
     expect(screen.getByRole("link", { name: "Support" }))
@@ -204,7 +243,7 @@ describe("VaeoraWorkspaceShell", () => {
     await user.click(screen.getByRole("tab", { name: "Proyectos" }));
     await user.click(screen.getByRole("button", { name: "Auto Sales" }));
     expect(screen.getByRole("main").style.getPropertyValue("--project-primary")).toBe("#F97316");
-    await user.click(screen.getByRole("button", { name: "Saved theme" }));
+    await user.click(screen.getByRole("button", { name: "VAEORA Original" }));
     expect(screen.getByRole("main")).toHaveAttribute("data-project-environment", "canonical");
   });
 
@@ -220,7 +259,8 @@ describe("VaeoraWorkspaceShell", () => {
     const shellCss = readFileSync(resolve(process.cwd(), "components/vaeora/VaeoraWorkspaceShell.module.css"), "utf8");
     const logoutCss = readFileSync(resolve(process.cwd(), "components/vaeora/WorkspaceLogoutControl.module.css"), "utf8");
     expect(shellCss).not.toContain("overflow-x: clip");
-    expect(shellCss).toMatch(/@media \(max-width: 560px\)[\s\S]*?\.identityStatus\s*{\s*display: none;/);
+    expect(shellCss).toMatch(/@media \(max-width: 560px\)[\s\S]*?\.identityStatus\s*{\s*display: flex;/);
+    expect(shellCss).toMatch(/@media \(max-width: 560px\)[\s\S]*?\.soundToggle\s*{[\s\S]*?border-radius: 999px;/);
     expect(shellCss).toMatch(/@media \(max-width: 560px\)[\s\S]*?\.navigation\s*{[\s\S]*?width: 100%;/);
     expect(shellCss).toMatch(/\.tab\s*{[\s\S]*?min-width: 0;/);
     expect(logoutCss).toMatch(/@media \(max-width: 560px\)[\s\S]*?\.logoutForm\s*{[\s\S]*?max-width: calc\(100vw - 1\.5rem\);/);

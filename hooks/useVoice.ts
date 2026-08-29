@@ -1296,11 +1296,11 @@ console.info(
     }
   }
 
-  function stopSpeaking() {
+  const stopSpeaking = useCallback(() => {
     speechOperationRef.current += 1;
     voiceEngine.stop();
     setState("idle");
-  }
+  }, []);
 
   return {
     state,

@@ -9,6 +9,7 @@ import {
 } from "vitest";
 
 import { detectVoiceCaptureMode } from "../../core/voice/captureMode";
+import { activateHandsFreeVoice } from "../../core/voice/handsFreeActivation";
 
 const voiceEngineMock = vi.hoisted(() => ({
   unlock: vi.fn(() => Promise.resolve()),
@@ -153,6 +154,41 @@ describe("useVoice safe stop", () => {
     expect(window.localStorage.getItem("iaura.voice.enabled")).toBe("false");
     expect(result.current.voiceMode).toBe(false);
     expect(result.current.state).toBe("idle");
+  });
+
+  it("keeps stopSpeaking stable across the listening state transition", async () => {
+    const hook = renderHook(() => useVoice());
+    await waitFor(() => expect(hook.result.current.captureMode).toBe("speech-recognition"));
+    const initialStopSpeaking = hook.result.current.stopSpeaking;
+
+    await act(async () => { await hook.result.current.startContinuousListening(); });
+
+    expect(hook.result.current.state).toBe("listening");
+    expect(hook.result.current.stopSpeaking).toBe(initialStopSpeaking);
+    expect(RecognitionMock.latest?.start).toHaveBeenCalledOnce();
+    expect(RecognitionMock.latest?.abort).not.toHaveBeenCalled();
+  });
+
+  it("transitions from Voice disabled through Aura Live activation to authoritative listening", async () => {
+    const hook = renderHook(() => useVoice());
+    await waitFor(() => expect(hook.result.current.captureMode).toBe("speech-recognition"));
+    act(() => hook.result.current.setVoiceMode(false));
+    expect(hook.result.current.voiceMode).toBe(false);
+    let auraLive = false;
+
+    await act(async () => {
+      activateHandsFreeVoice({
+        setLive: (active) => { auraLive = active; },
+        setVoiceMode: hook.result.current.setVoiceMode,
+        unlockAudio: hook.result.current.unlockAudio,
+        startContinuousListening: hook.result.current.startContinuousListening,
+      });
+    });
+
+    expect(auraLive).toBe(true);
+    expect(hook.result.current.voiceMode).toBe(true);
+    expect(RecognitionMock.latest?.start).toHaveBeenCalledOnce();
+    expect(hook.result.current.state).toBe("listening");
   });
 
   it("does not let an old cancelled speech overwrite a newer operation", async () => {

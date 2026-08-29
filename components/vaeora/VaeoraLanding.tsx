@@ -8,6 +8,7 @@ import VaeoraSignalDock, {
   type VaeoraSignal,
 } from "./VaeoraSignalDock";
 import { VAEORA_SUPPORT_URL } from "@/config/support";
+import { sonicEngine } from "@/core/sonic/SonicDNA";
 import styles from "./VaeoraLanding.module.css";
 
 export default function VaeoraLanding() {
@@ -27,7 +28,12 @@ export default function VaeoraLanding() {
             VAEORA
           </h1>
           <p className={styles.tagline}>Where intelligence takes shape.</p>
-          <Link className={styles.entry} href="/iaura" aria-label="Enter VAEORA">
+          <Link
+            className={styles.entry}
+            href="/iaura"
+            aria-label="Enter VAEORA"
+            onClick={() => sonicEngine.play("open")}
+          >
             <span>Enter</span>
             <span className={styles.entryLine} aria-hidden="true" />
             <span aria-hidden="true">↗</span>

@@ -82,10 +82,21 @@ vi.mock("@/components/projects/LaunchStudio", () => ({
 
 vi.mock("@/components/sections/BrandingStudio", () => ({
   default: ({ onClose }: { onClose: () => void }) => (
-    <section aria-label="Brand System workspace">
+    <section aria-label="Creative Intelligence workspace">
       <button type="button" onClick={onClose}>
         Close Brand System
       </button>
+    </section>
+  ),
+}));
+
+vi.mock("@/components/projects/ProjectBrandSystem", () => ({
+  default: ({ project, onClose, onOpenAsset }: { project: IAuraProject; onClose: () => void; onOpenAsset: (area: CreativeStudioArea | "foundation") => void }) => (
+    <section aria-label="Brand System workspace">
+      <span data-testid="brand-project-id">{project.id}</span>
+      <button type="button" onClick={() => onOpenAsset("image")}>Image Lab</button>
+      <button type="button" onClick={() => onOpenAsset("foundation")}>Brand Foundation</button>
+      <button type="button" onClick={onClose}>Close Brand System</button>
     </section>
   ),
 }));
@@ -113,6 +124,15 @@ async function selectProject() {
 }
 
 describe("ProjectWorkspace studio routing", () => {
+  it("uses canonical VAEORA aliases instead of derived Theme DNA when the project has no identity", async () => {
+    const { container } = render(<ProjectWorkspace />);
+    await selectProject();
+    const environment = container.querySelector<HTMLElement>('[data-project-identity="canonical"]');
+    expect(environment).toBeInTheDocument();
+    expect(environment?.style.getPropertyValue("--project-bg")).toBe("var(--vaeora-background)");
+    expect(environment?.getAttribute("data-surface")).toBeNull();
+  });
+
   it("uses semantic roles for every functional secondary card consumer", () => {
     const source = readFileSync(resolve(process.cwd(), "components/projects/ProjectWorkspace.tsx"), "utf8");
     const css = readFileSync(resolve(process.cwd(), "components/projects/ProjectEnvironment.module.css"), "utf8");
@@ -123,15 +143,41 @@ describe("ProjectWorkspace studio routing", () => {
     expect(css).toMatch(/\.memoryChip\s*{[\s\S]*?color: var\(--project-metadata\);/);
     expect(css).toMatch(/\.studioTitle\s*{\s*color: var\(--project-text\);/);
   });
-  it("opens Creative Studio from the branding deep-link intent", async () => {
+  it("opens ProjectBrandSystem from the branding deep-link intent", async () => {
     render(<ProjectWorkspace entryIntent="branding" />);
 
     await selectProject();
 
     expect(
-      screen.getByRole("region", { name: "Creative Studio" }),
+      screen.getByRole("region", { name: "Brand System workspace" }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("creative-area")).toHaveTextContent("direction");
+    expect(screen.getByTestId("brand-project-id")).toHaveTextContent("vaeora-project");
+  });
+
+  it("routes Image Lab with the active project and returns to Brand System", async () => {
+    render(<ProjectWorkspace brandSystemRequest={{ id: 7, projectId: "vaeora-project" }} />);
+    const user = await selectProject();
+    expect(screen.getByTestId("brand-project-id")).toHaveTextContent("vaeora-project");
+    await user.click(screen.getByRole("button", { name: "Image Lab" }));
+    expect(screen.getByRole("region", { name: "Creative Studio" })).toBeInTheDocument();
+    expect(screen.getByTestId("creative-area")).toHaveTextContent("image");
+    await user.click(screen.getByRole("button", { name: "Close Creative Studio" }));
+    expect(screen.getByTestId("brand-project-id")).toHaveTextContent("vaeora-project");
+  });
+
+  it("keeps the distinct Brand Foundation surface accessible and returns to Brand System", async () => {
+    render(<ProjectWorkspace brandSystemRequest={{ id: 9, projectId: "vaeora-project" }} />);
+    const user = await selectProject();
+    await user.click(screen.getByRole("button", { name: "Brand Foundation" }));
+    expect(screen.getByRole("region", { name: "Creative Intelligence workspace" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close Brand System" }));
+    expect(screen.getByTestId("brand-project-id")).toHaveTextContent("vaeora-project");
+  });
+
+  it("ignores a Brand System request scoped to another project", async () => {
+    render(<ProjectWorkspace brandSystemRequest={{ id: 8, projectId: "project-b" }} />);
+    await selectProject();
+    expect(screen.queryByRole("region", { name: "Brand System workspace" })).not.toBeInTheDocument();
   });
 
   it("opens a requested studio from an IAURA action", async () => {
@@ -165,7 +211,7 @@ describe("ProjectWorkspace studio routing", () => {
     ["Legacy Branding Drafts", "legacy-branding"],
     ["Image Lab", "creative", "image"],
     ["Website Kit", "creative", "website"],
-    ["Asset Library", "creative", "library"],
+    ["Library", "creative", "library"],
     ["Launch Studio", "launch"],
   ])("opens $card in its intended workspace", async (card, destination, area) => {
     render(<ProjectWorkspace />);

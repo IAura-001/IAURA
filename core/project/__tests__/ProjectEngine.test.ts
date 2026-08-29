@@ -31,6 +31,28 @@ describe("ProjectEngine creative studio integration", () => {
     window.localStorage.clear();
   });
 
+  it("removes project-owned Theme DNA to restore the canonical fallback", () => {
+    const engine = new ProjectEngine();
+    const project = engine.createProject({ name: "Canonical reset" });
+    engine.updateProject(project.id, {
+      themeDNA: {
+        version: 1,
+        primaryColor: "#B8956A",
+        secondaryColor: "#55735B",
+        accentColor: "#E8DCC6",
+        surfaceMode: "light",
+        visualIntensity: "subtle",
+        surfacePersonality: "soft",
+        motionStyle: "fluid",
+      },
+    });
+
+    const reset = engine.resetProjectThemeDNA(project.id);
+
+    expect(reset.themeDNA).toBeUndefined();
+    expect(engine.getProject(project.id)?.themeDNA).toBeUndefined();
+  });
+
   it("activates creative capabilities without disabling existing studios", () => {
     const engine = new ProjectEngine();
     const project = engine.createProject({ name: "VAEORA" });

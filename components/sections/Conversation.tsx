@@ -104,6 +104,7 @@ const AnimatedMessage = memo(
     return (
       <article
         data-message-id={message.id}
+        data-message-role={message.role}
         className={[
           "aura-message relative overflow-hidden rounded-2xl border p-5",
           animate ? "animate-[message-enter_500ms_ease-out]" : "",
@@ -640,6 +641,14 @@ export function Conversation({
             transparent 45%
           );
           animation: aura-flash 900ms ease-out;
+        }
+
+        .aura-message:has([data-nested-surface]) {
+          overflow: visible;
+          padding-right: 0;
+          padding-left: 0;
+          border-color: transparent;
+          background: transparent;
         }
 
         .aura-dot {

@@ -119,7 +119,7 @@ export function BetaSessionReviewCard({
               disabled={disabled || !onChoose || pendingChoice !== null}
               aria-busy={pendingChoice === index}
               onClick={() => void choose(index, choice)}
-              className="min-h-[4.5rem] rounded-2xl border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-elevated)] p-3.5 text-left transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus)] disabled:cursor-not-allowed disabled:saturate-50"
+              className="min-h-[4.5rem] rounded-xl border border-transparent bg-[color-mix(in_srgb,var(--iaura-rich-dark-elevated)_58%,transparent)] p-3.5 text-left transition hover:border-[var(--iaura-rich-dark-border)] hover:bg-[var(--iaura-rich-dark-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus)] disabled:cursor-not-allowed disabled:saturate-50"
             >
               <span className="text-sm font-medium text-[var(--iaura-rich-dark-text)]">{choice.label}</span>
               <span className="mt-1 block text-xs leading-5 text-[var(--iaura-rich-dark-muted)]">

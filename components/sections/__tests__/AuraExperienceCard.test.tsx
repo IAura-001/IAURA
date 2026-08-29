@@ -51,6 +51,8 @@ describe("AuraExperienceCard", () => {
     expect(surface?.className).toContain("--iaura-rich-dark-surface");
     expect(container.innerHTML).toContain("--iaura-rich-dark-muted");
     expect(container.innerHTML).not.toContain("disabled:opacity-50");
+    expect(screen.getByRole("button", { name: /Abrir Image Lab/ }).className).toContain("--iaura-rich-action");
+    expect(screen.getByRole("button", { name: /Empezar por el logo/ }).className).toContain("border-transparent");
   });
   it("shows an adaptive phase route without depending on branding", () => {
     renderCard();

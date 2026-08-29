@@ -13,7 +13,10 @@ import {
 import type { SupportedLocale } from "@/core/i18n/languages";
 import { VAEORA_SUPPORT_URL } from "@/config/support";
 import { resolveMotionSignature, resolveProjectTheme } from "@/core/projectTheme/themeDNA";
+import { resolveAdaptiveEnvironment, type ProjectEnvironmentContext } from "@/core/projectTheme/environmentContext";
 import type { ProjectThemeDNA } from "@/core/projectTheme/types";
+import { sonicEngine } from "@/core/sonic/SonicDNA";
+import { useInterfaceSounds } from "@/hooks/useInterfaceSounds";
 
 import styles from "./VaeoraWorkspaceShell.module.css";
 
@@ -37,6 +40,9 @@ interface WorkspaceCopy {
   navigation: string;
   workspace: string;
   auraStatus: string;
+  sound: string;
+  soundOn: string;
+  soundOff: string;
   views: Record<WorkspaceView, WorkspaceViewCopy>;
 }
 
@@ -51,6 +57,7 @@ interface VaeoraWorkspaceShellProps {
   intelligence: ReactNode;
   activeProjectId?: string | null;
   projectThemeDNA?: ProjectThemeDNA | null;
+  environmentContext?: ProjectEnvironmentContext;
 }
 
 const VIEW_ORDER: readonly WorkspaceView[] = [
@@ -64,6 +71,9 @@ const WORKSPACE_COPY: Record<SupportedLocale, WorkspaceCopy> = {
     navigation: "Navegación del workspace",
     workspace: "Espacio de inteligencia",
     auraStatus: "Aura activa",
+    sound: "Sonido",
+    soundOn: "activado",
+    soundOff: "desactivado",
     views: {
       presence: {
         label: "Presencia",
@@ -92,6 +102,9 @@ const WORKSPACE_COPY: Record<SupportedLocale, WorkspaceCopy> = {
     navigation: "Workspace navigation",
     workspace: "Intelligence workspace",
     auraStatus: "Aura online",
+    sound: "Sound",
+    soundOn: "on",
+    soundOff: "off",
     views: {
       presence: {
         label: "Presence",
@@ -120,6 +133,9 @@ const WORKSPACE_COPY: Record<SupportedLocale, WorkspaceCopy> = {
     navigation: "Navegação do workspace",
     workspace: "Espaço de inteligência",
     auraStatus: "Aura ativa",
+    sound: "Som",
+    soundOn: "ativado",
+    soundOff: "desativado",
     views: {
       presence: {
         label: "Presença",
@@ -148,6 +164,9 @@ const WORKSPACE_COPY: Record<SupportedLocale, WorkspaceCopy> = {
     navigation: "Navigation de l’espace de travail",
     workspace: "Espace d’intelligence",
     auraStatus: "Aura active",
+    sound: "Son",
+    soundOn: "activé",
+    soundOff: "désactivé",
     views: {
       presence: {
         label: "Présence",
@@ -185,12 +204,14 @@ export default function VaeoraWorkspaceShell({
   intelligence,
   activeProjectId = null,
   projectThemeDNA = null,
+  environmentContext = "idle",
 }: VaeoraWorkspaceShellProps) {
   const [internalActiveView, setInternalActiveView] =
     useState<WorkspaceView>(initialView);
   const activeView = controlledActiveView ?? internalActiveView;
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const copy = WORKSPACE_COPY[locale];
+  const interfaceSounds = useInterfaceSounds();
   const content: Record<WorkspaceView, ReactNode> = {
     presence,
     projects,
@@ -201,8 +222,10 @@ export default function VaeoraWorkspaceShell({
     ? (() => {
         const { tokens } = resolveProjectTheme(projectThemeDNA);
         const motion = resolveMotionSignature(activeProjectId!, projectThemeDNA);
+        const living = resolveAdaptiveEnvironment(projectThemeDNA!, motion, environmentContext);
         return {
           ...tokens,
+          ...living,
           "--project-context-duration": `${motion.contextDuration}ms`,
           "--project-normal-duration": `${motion.normalDuration}ms`,
           "--project-easing": motion.easing,
@@ -217,7 +240,7 @@ export default function VaeoraWorkspaceShell({
     const propertyNames = environmentStyle ? Object.keys(environmentStyle) : [];
     for (let index = root.style.length - 1; index >= 0; index -= 1) {
       const name = root.style.item(index);
-      if (name.startsWith("--project-") || name.startsWith("--iaura-")) root.style.removeProperty(name);
+      if (name.startsWith("--project-") || name.startsWith("--iaura-") || name.startsWith("--living-")) root.style.removeProperty(name);
     }
     if (environmentStyle) {
       for (const [name, token] of Object.entries(environmentStyle)) root.style.setProperty(name, String(token));
@@ -230,6 +253,7 @@ export default function VaeoraWorkspaceShell({
   }, [environmentStyle]);
 
   function selectView(view: WorkspaceView, focus = false) {
+    if (view !== activeView) sonicEngine.play("navigation", projectThemeDNA);
     if (controlledActiveView === undefined) {
       setInternalActiveView(view);
     }
@@ -268,6 +292,7 @@ export default function VaeoraWorkspaceShell({
       className={styles.shell}
       data-project-environment={hasProjectEnvironment ? "custom" : "canonical"}
       data-project-surface={hasProjectEnvironment ? projectThemeDNA?.surfaceMode : undefined}
+      data-environment-context={hasProjectEnvironment ? environmentContext : undefined}
       style={environmentStyle}
     >
       <div className={styles.ambient} aria-hidden="true" />
@@ -331,6 +356,19 @@ export default function VaeoraWorkspaceShell({
                 Support
               </Link>
             ) : null}
+            <button
+              type="button"
+              className={`${styles.supportLink} ${styles.soundToggle}`}
+              aria-pressed={interfaceSounds.enabled}
+              aria-label={`${copy.sound} ${interfaceSounds.enabled ? copy.soundOn : copy.soundOff}`}
+              onClick={() => {
+                const next = !interfaceSounds.enabled;
+                interfaceSounds.setEnabled(next);
+                if (next) sonicEngine.play("confirm", projectThemeDNA);
+              }}
+            >
+              {copy.sound} {interfaceSounds.enabled ? copy.soundOn : copy.soundOff}
+            </button>
             <span className={styles.statusDot} aria-hidden="true" />
             <span className={styles.statusText}>{copy.auraStatus}</span>
             <span className={styles.userName}>{userName}</span>

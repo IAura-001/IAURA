@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { projectEngine } from "@/core/project/ProjectEngine";
 import { runProjectContextTransition } from "@/core/projectTheme/projectTransition";
 import type { IAuraProject } from "@/types/project";
+import { sonicEngine } from "@/core/sonic/SonicDNA";
 
 interface ProjectListProps {
   refreshKey: number;
@@ -104,6 +105,7 @@ export default function ProjectList({
   }, [refreshKey, synchronizeFromRepository]);
 
   function handleSelectProject(project: IAuraProject) {
+    sonicEngine.play("select", project.themeDNA);
     const select = () => {
       emittedProjectSignatureRef.current = projectSnapshotSignature(project);
       projectEngine.setCurrentProject(project);

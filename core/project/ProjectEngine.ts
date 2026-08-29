@@ -210,6 +210,19 @@ export class ProjectEngine {
     return result.project;
   }
 
+  resetProjectThemeDNA(projectId: string): IAuraProject {
+    const currentProject = this.repository.getProject(projectId);
+    if (!currentProject) throw new Error(`Project "${projectId}" was not found.`);
+
+    const result = this.repository.updateProject({
+      ...currentProject,
+      themeDNA: undefined,
+      updatedAt: new Date().toISOString(),
+    });
+    this.lastPersistenceSucceeded = result.persisted;
+    return result.project;
+  }
+
   updateBrandingStudio(
     projectId: string,
     brandingStudio: BrandingStudioMemory,

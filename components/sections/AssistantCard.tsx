@@ -17,6 +17,7 @@ type AssistantCardProps = {
   onStart?: (
     mission: string
   ) => void | Promise<void>;
+  sonicTheme?: import("@/core/projectTheme/types").ProjectThemeDNA | null;
 };
 
 type AuraPhase = "idle" | "awakening";
@@ -48,6 +49,7 @@ export default function AssistantCard({
   isAuraLive = false,
   onToggleAuraLive,
   onStart,
+  sonicTheme,
 }: AssistantCardProps) {
   const { locale, t } = useI18n();
   const [mission, setMission] = useState("");
@@ -126,6 +128,7 @@ export default function AssistantCard({
           phase={phase}
           isLive={isAuraLive}
           onToggleLive={onToggleAuraLive}
+          sonicTheme={sonicTheme}
         />
 
         <div

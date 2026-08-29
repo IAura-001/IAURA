@@ -136,13 +136,13 @@ export default function AuraExperienceCard({
   }
 
   return (
-    <section data-nested-surface="dark" className="mt-5 overflow-hidden rounded-[24px] border border-[var(--iaura-rich-dark-border,rgba(196,181,253,.2))] bg-[var(--iaura-rich-dark-surface,#090811)] text-[var(--iaura-rich-dark-text,#f7f5fa)] shadow-[0_24px_70px_rgba(20,5,45,0.22)]">
+    <section data-nested-surface="dark" className="mt-5 overflow-hidden rounded-[22px] border border-[var(--iaura-rich-dark-border,rgba(196,181,253,.2))] bg-[var(--iaura-rich-dark-surface,#090811)] text-[var(--iaura-rich-dark-text,#f7f5fa)] shadow-[0_16px_42px_rgba(20,5,45,0.14)]">
       <div className="border-b border-white/[0.07] p-5 sm:p-6">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[rgb(var(--iaura-accent-rgb,216,180,254))]">
             {text.route}
           </span>
-          <span className="rounded-full border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-elevated)] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--iaura-rich-dark-muted)]">
+          <span className="rounded-full bg-[var(--iaura-rich-dark-elevated)] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.14em] text-[var(--iaura-rich-dark-muted)]">
             {experience.kind.replace("-", " ")}
           </span>
         </div>
@@ -159,9 +159,9 @@ export default function AuraExperienceCard({
       </div>
 
       {experience.phases.length ? (
-        <ol className="grid gap-px bg-white/[0.06] sm:grid-cols-2 xl:grid-cols-3">
+        <ol className="grid border-y border-[var(--iaura-rich-dark-border)] sm:grid-cols-2 xl:grid-cols-3">
           {experience.phases.map((phase, index) => (
-            <li key={`${phase.title}-${index}`} className="bg-[var(--iaura-rich-dark-elevated,#0e0d16)] p-4 sm:p-5">
+            <li key={`${phase.title}-${index}`} className="border-b border-[var(--iaura-rich-dark-border)] p-4 last:border-b-0 sm:border-b-0 sm:border-r sm:p-5 sm:[&:nth-child(2n)]:border-r-0 xl:[&:nth-child(2n)]:border-r xl:[&:nth-child(3n)]:border-r-0">
               <div className="flex gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-violet-300/20 bg-violet-400/[0.07] font-mono text-[9px] text-violet-200">
                   {String(index + 1).padStart(2, "0")}
@@ -213,7 +213,7 @@ export default function AuraExperienceCard({
                   aria-pressed={isChosen}
                   aria-busy={isPending}
                   data-state={isPending ? "loading" : isChosen ? "selected" : "ready"}
-                  className="min-h-[4.75rem] touch-manipulation rounded-2xl border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-elevated)] p-3.5 text-left transition hover:border-[rgb(var(--iaura-accent-rgb))] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus,var(--vaeora-focus))] disabled:cursor-not-allowed disabled:saturate-50 motion-reduce:transform-none motion-reduce:transition-none"
+                  className="min-h-[4.75rem] touch-manipulation rounded-xl border border-transparent bg-[color-mix(in_srgb,var(--iaura-rich-dark-elevated)_58%,transparent)] p-3.5 text-left transition hover:border-[var(--iaura-rich-dark-border)] hover:bg-[var(--iaura-rich-dark-elevated)] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--project-focus,var(--vaeora-focus))] disabled:cursor-not-allowed disabled:saturate-50 motion-reduce:transform-none motion-reduce:transition-none"
                 >
                   <span className="flex items-center justify-between gap-3 text-sm font-medium text-[var(--iaura-rich-dark-text)]">
                     <span>{choice.label}</span>

@@ -21,11 +21,12 @@
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.58;
+  opacity: var(--living-ambient-opacity, 0.58);
   background:
     radial-gradient(ellipse 28% 30% at 18% 82%, var(--project-primary-soft, rgba(54, 43, 122, 0.08)), transparent 76%),
     radial-gradient(ellipse 24% 22% at 82% 34%, var(--project-secondary-soft, rgba(48, 73, 160, 0.07)), transparent 78%);
-  transition: background var(--project-context-duration, 360ms) var(--project-easing, ease), opacity var(--project-normal-duration, 260ms) ease;
+  transition: background var(--project-context-duration, 360ms) var(--project-easing, ease), opacity var(--living-response-duration, var(--project-normal-duration, 260ms)) var(--project-easing, ease), transform var(--living-response-duration, 260ms) var(--project-easing, ease);
+  transform: translateX(var(--living-shift-x, 0));
 }
 
 .chrome {
@@ -282,12 +283,21 @@
   min-width: 0;
 }
 
+.shell[data-environment-context="completed"] .ambient {
+  animation: living-completion var(--living-event-duration, 620ms) var(--project-easing, ease-out) both;
+}
+
+.shell[data-environment-context="attention"] .panelBody {
+  outline: 1px solid var(--project-border-strong);
+  outline-offset: 0.75rem;
+}
+
 .shell[data-project-environment="custom"] .panelBody :where(input, textarea)::placeholder {
   color: var(--project-placeholder) !important;
   opacity: 1;
 }
 
-.shell[data-project-environment="custom"] .panelBody :where(section, article) {
+.shell[data-project-environment="custom"] .panelBody :where(section:not([data-nested-surface]), article:not(:has([data-nested-surface]))) {
   border-color: var(--project-border) !important;
 }
 
@@ -327,6 +337,11 @@
   }
 }
 
+@keyframes living-completion {
+  0%, 100% { filter: saturate(1); }
+  45% { filter: saturate(1.08); opacity: min(0.78, calc(var(--living-ambient-opacity, 0.58) + 0.08)); }
+}
+
 @media (max-width: 960px) {
   .chromeInner {
     grid-template-columns: 1fr auto;
@@ -352,6 +367,7 @@
 }
 
 @media (max-width: 700px) {
+  .ambient { transform: translateX(calc(var(--living-shift-x, 0px) * 0.35)); }
   .chromeInner {
     grid-template-columns: minmax(0, 1fr) auto;
     min-height: auto;
@@ -439,17 +455,27 @@
 
 @media (max-width: 560px) {
   .chromeInner {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.7rem;
     padding-top: 0.8rem;
   }
 
   .identityStatus {
-    display: none;
+    display: flex;
+    grid-column: 2;
+    grid-row: 1;
   }
 
+  .identityStatus > a,
+  .identityStatus .statusDot,
+  .identityStatus .statusText,
+  .identityStatus .userName { display: none; }
+
+  .soundToggle { margin: 0; padding: 0.45rem 0.55rem; border: 1px solid var(--project-border, var(--vaeora-line)); border-radius: 999px; }
+
   .navigation {
-    grid-column: 1;
+    grid-column: 1 / -1;
+    grid-row: 2;
     width: 100%;
   }
 
@@ -470,6 +496,8 @@
   .shell,
   .ambient {
     transition: none;
+    transform: none;
+    animation: none !important;
   }
 
   .shell[data-project-environment="custom"] .panelBody > :where(section, div) > section,

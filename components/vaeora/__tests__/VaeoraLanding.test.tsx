@@ -2,6 +2,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+const play = vi.hoisted(() => vi.fn());
+vi.mock("@/core/sonic/SonicDNA", () => ({ sonicEngine: { play } }));
+
 vi.mock("@/components/vaeora/VaeoraPhenomenon", () => ({
   default: ({ activeSignal }: { activeSignal: string | null }) => (
     <output data-testid="phenomenon" data-signal={activeSignal ?? "idle"} />
@@ -83,5 +86,16 @@ describe("VaeoraLanding", () => {
 
     fireEvent.pointerCancel(creation, { pointerType: "touch" });
     expect(creation).toHaveAttribute("data-active", "false");
+  });
+
+  it("plays exactly one VAEORA entry mark from the trusted navigation click", async () => {
+    const user = userEvent.setup();
+    render(<VaeoraLanding />);
+    const entry = screen.getByRole("link", { name: "Enter VAEORA" });
+    entry.addEventListener("click", (event) => event.preventDefault());
+    await user.click(entry);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledWith("open");
+    expect(entry).toHaveAttribute("href", "/iaura");
   });
 });

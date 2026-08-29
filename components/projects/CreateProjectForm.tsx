@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { projectEngine } from "@/core/project/ProjectEngine";
-import type { ProjectKind } from "@/types/project";
+import type { IAuraProject, ProjectKind } from "@/types/project";
 
 const PROJECT_KINDS: Array<{ id: ProjectKind; label: string }> = [
   { id: "general", label: "General" },
@@ -15,7 +15,7 @@ const PROJECT_KINDS: Array<{ id: ProjectKind; label: string }> = [
 ];
 
 interface CreateProjectFormProps {
-  onProjectCreated?: () => void;
+  onProjectCreated?: (project: IAuraProject, openIdentity: boolean) => void;
 }
 
 export default function CreateProjectForm({
@@ -25,6 +25,7 @@ export default function CreateProjectForm({
   const [goal, setGoal] = useState("");
   const [kind, setKind] = useState<ProjectKind>("general");
   const [error, setError] = useState("");
+  const [createIdentity, setCreateIdentity] = useState(false);
 
   function handleSubmit(
     event: React.FormEvent<HTMLFormElement>,
@@ -33,7 +34,7 @@ export default function CreateProjectForm({
     setError("");
 
     try {
-      projectEngine.createProject({
+      const project = projectEngine.createProject({
         name,
         goal,
         kind,
@@ -42,7 +43,7 @@ export default function CreateProjectForm({
       setName("");
       setGoal("");
       setKind("general");
-      onProjectCreated?.();
+      onProjectCreated?.(project, createIdentity);
     } catch (creationError) {
       setError(
         creationError instanceof Error
@@ -116,6 +117,14 @@ export default function CreateProjectForm({
         rows={4}
         className="w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none placeholder:text-zinc-500 focus:border-violet-400/60 focus-visible:ring-2 focus-visible:ring-violet-300/30"
       />
+
+      <fieldset className="rounded-2xl border border-white/10 p-4">
+        <legend className="px-1 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">Identidad visual</legend>
+        <label className="flex cursor-pointer items-start gap-3 text-sm text-zinc-300">
+          <input type="checkbox" checked={createIdentity} onChange={(event) => setCreateIdentity(event.target.checked)} className="mt-1" />
+          <span><strong className="block text-white">Crear identidad del proyecto</strong>Opcional. Si se omite, el proyecto usa VAEORA canónico. Si se activa, Brand System se abre después de crear.</span>
+        </label>
+      </fieldset>
 
       {error && (
         <p className="text-sm text-red-300" role="alert">

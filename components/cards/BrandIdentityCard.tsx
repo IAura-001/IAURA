@@ -33,7 +33,7 @@ export function BrandIdentityCard({
   return (
     <article
       data-nested-surface="dark"
-      className="relative overflow-hidden rounded-[28px] border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-surface)] p-6 text-[var(--iaura-rich-dark-text)] shadow-[0_24px_90px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+      className="relative overflow-hidden rounded-[22px] border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-surface)] p-6 text-[var(--iaura-rich-dark-text)] shadow-[0_16px_42px_rgba(0,0,0,0.18)]"
       style={{
         backgroundImage: `radial-gradient(circle at 100% 0%, ${colors[2]}24, transparent 38%)`,
       }}
@@ -63,7 +63,7 @@ export function BrandIdentityCard({
             {colors.map((color) => (
               <span
                 key={color}
-                className="h-9 w-9 rounded-full border-2 border-[#0b0712] shadow-lg"
+                className="h-9 w-9 rounded-full border-2 border-[var(--iaura-rich-dark-surface)] shadow-sm"
                 style={{ backgroundColor: color }}
                 title={color}
               />
@@ -81,7 +81,7 @@ export function BrandIdentityCard({
             </p>
           </div>
 
-          <div className="rounded-full border border-[var(--iaura-rich-dark-border)] bg-[var(--iaura-rich-dark-elevated)] px-3 py-1.5 text-xs text-[var(--iaura-rich-dark-secondary)]">
+          <div className="rounded-full bg-[var(--iaura-rich-dark-elevated)] px-3 py-1.5 text-xs text-[var(--iaura-rich-dark-secondary)]">
             {font}
           </div>
         </div>

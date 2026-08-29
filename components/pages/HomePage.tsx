@@ -16,6 +16,7 @@ import type {
 import type { ChatMessage } from "@/types/chat";
 import type { IAuraProject } from "@/types/project";
 import type { ProjectThemeDNA } from "@/core/projectTheme/types";
+import { projectEnvironmentContext, type ProjectEnvironmentContext } from "@/core/projectTheme/environmentContext";
 
 import { theme } from "@/config/theme";
 import {
@@ -41,6 +42,8 @@ import {
 } from "@/core/i18n/messages";
 import { performanceMonitor } from "@/core/performance";
 import { trackBetaUsage } from "@/core/betaUsage/client";
+import { sonicEngine } from "@/core/sonic/SonicDNA";
+import { activateHandsFreeVoice } from "@/core/voice/handsFreeActivation";
 
 import { useAuraActions } from "@/hooks/useAuraActions";
 import { useMemory } from "@/hooks/useMemory";
@@ -89,6 +92,7 @@ export default function Home({
   authenticatedDisplayName = "",
 }: HomePageProps) {
   const {
+    state: voiceState,
     speak,
     voiceMode,
     setVoiceMode,
@@ -112,6 +116,10 @@ export default function Home({
   const [projectThemePreview, setProjectThemePreview] = useState<{
     projectId: string;
     theme: ProjectThemeDNA;
+  } | null>(null);
+  const [environmentContextPreview, setEnvironmentContextPreview] = useState<{
+    projectId: string;
+    context: ProjectEnvironmentContext;
   } | null>(null);
   const effectiveProjectTheme = activeProject
     ? projectThemePreview?.projectId === activeProject.id
@@ -139,6 +147,7 @@ export default function Home({
     creativeStudioRequest,
     setCreativeStudioRequest,
   ] = useState<CreativeStudioRequest>();
+  const [brandSystemRequest, setBrandSystemRequest] = useState<{ id: number; projectId: string }>();
   const [messages, setMessages] =
     useState<ChatMessage[]>([]);
   const [messagesProjectId, setMessagesProjectId] =
@@ -153,6 +162,10 @@ export default function Home({
     useState<ReadonlySet<string>>(() => new Set());
   const [isSending, setIsSending] =
     useState(false);
+  const [temporaryEnvironmentState, setTemporaryEnvironmentState] = useState<{
+    projectId: string;
+    context: Extract<ProjectEnvironmentContext, "completed" | "attention">;
+  } | null>(null);
   const sendInFlightRef = useRef(false);
   const [isAuraLive, setIsAuraLive] =
     useState(false);
@@ -164,6 +177,44 @@ export default function Home({
   const workspaceRequestIdRef = useRef(0);
   const activeProjectIdRef = useRef<string | null>(null);
   const messageGenerationRef = useRef(0);
+  const wasSendingRef = useRef(false);
+  const environmentTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (wasSendingRef.current && !isSending && activeProjectId) {
+      if (voiceState !== "listening" && voiceState !== "speaking") {
+        sonicEngine.playIaura("completion", effectiveProjectTheme);
+      }
+      setTemporaryEnvironmentState({ projectId: activeProjectId, context: "completed" });
+      if (environmentTimerRef.current !== null) window.clearTimeout(environmentTimerRef.current);
+      environmentTimerRef.current = window.setTimeout(() => {
+        setTemporaryEnvironmentState(null);
+        environmentTimerRef.current = null;
+      }, 720);
+    }
+    wasSendingRef.current = isSending;
+  }, [activeProjectId, effectiveProjectTheme, isSending, voiceState]);
+
+  useEffect(() => {
+    sonicEngine.setVoiceActive(voiceState === "listening" || voiceState === "speaking");
+    return () => sonicEngine.setVoiceActive(false);
+  }, [voiceState]);
+
+  useEffect(() => () => {
+    if (environmentTimerRef.current !== null) window.clearTimeout(environmentTimerRef.current);
+  }, []);
+
+  const livingEnvironmentContext = projectEnvironmentContext({
+    activeView: activeWorkspaceView,
+    voiceState,
+    isSending,
+    temporaryState: temporaryEnvironmentState?.projectId === activeProjectId
+      ? temporaryEnvironmentState.context
+      : null,
+  });
+  const effectiveLivingEnvironmentContext = activeProjectId && environmentContextPreview?.projectId === activeProjectId
+    ? environmentContextPreview.context
+    : livingEnvironmentContext;
 
   useEffect(() => {
     if (!isLoaded) {
@@ -249,6 +300,13 @@ export default function Home({
     [],
   );
 
+  const openProjectBrandSystem = useCallback(() => {
+    if (!activeProjectId) return;
+    workspaceRequestIdRef.current += 1;
+    setActiveWorkspaceView("projects");
+    setBrandSystemRequest({ id: workspaceRequestIdRef.current, projectId: activeProjectId });
+  }, [activeProjectId]);
+
   const openExperienceSurface = useCallback(
     (surface: AuraExperienceSurface) => {
       switch (surface) {
@@ -303,6 +361,13 @@ export default function Home({
         project: IAuraProject | null,
       ) => {
         setProjectThemePreview(null);
+        setEnvironmentContextPreview(null);
+        setTemporaryEnvironmentState(null);
+        wasSendingRef.current = false;
+        if (environmentTimerRef.current !== null) {
+          window.clearTimeout(environmentTimerRef.current);
+          environmentTimerRef.current = null;
+        }
         const nextProjectId = project?.id ?? null;
 
         if (project) {
@@ -436,11 +501,12 @@ export default function Home({
       }
 
       auraLiveRef.current = true;
-      setIsAuraLive(true);
-      setVoiceMode(true);
-
-      void unlockAudio();
-      void startContinuousListening();
+      activateHandsFreeVoice({
+        setLive: setIsAuraLive,
+        setVoiceMode,
+        unlockAudio,
+        startContinuousListening,
+      });
     }, [
       isSending,
       setVoiceMode,
@@ -468,6 +534,7 @@ export default function Home({
         return;
       }
 
+      sonicEngine.play("confirm", effectiveProjectTheme);
       sendInFlightRef.current = true;
 
       const requestFromAuraLive =
@@ -792,6 +859,7 @@ export default function Home({
     [
       executeActions,
       activeProjectId,
+      effectiveProjectTheme,
       memory.preferredLocale,
       messagesProjectId,
       scheduleAuraLiveListening,
@@ -844,6 +912,7 @@ export default function Home({
           }
           activeProjectId={activeProjectId}
           projectThemeDNA={effectiveProjectTheme}
+          environmentContext={effectiveLivingEnvironmentContext}
           presence={
             <>
               <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(420px,1.18fr)]">
@@ -875,6 +944,7 @@ export default function Home({
                     onToggleAuraLive={
                       toggleAuraLive
                     }
+                    sonicTheme={effectiveProjectTheme}
                   />
 
                   <section className="min-w-0 space-y-5 rounded-[28px] border border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface,var(--vaeora-surface))] p-4 sm:p-6">
@@ -894,10 +964,7 @@ export default function Home({
                       }
                       onOpenBranding={
                         activeProject
-                          ? () =>
-                              openCreativeStudio(
-                                "direction",
-                              )
+                          ? openProjectBrandSystem
                           : undefined
                       }
                       onChoose={
@@ -960,6 +1027,7 @@ export default function Home({
                 studioRequest={
                   creativeStudioRequest
                 }
+                brandSystemRequest={brandSystemRequest}
                 onProjectSelected={
                   handleWorkspaceProjectSelected
                 }
@@ -976,6 +1044,11 @@ export default function Home({
                       ? { projectId: activeProjectId, theme: nextTheme }
                       : null,
                   );
+                }}
+                onEnvironmentContextPreview={(context) => {
+                  setEnvironmentContextPreview(activeProjectId && context
+                    ? { projectId: activeProjectId, context }
+                    : null);
                 }}
               />
             </section>
