@@ -63,6 +63,7 @@ export interface CognitiveRequest {
   originalUserMessage: string;
   structuredContext: BrainStructuredContext;
   compiledPrompt: string;
+  projectId?: string;
 }
 
 export interface BrainResult extends CognitiveRequest {

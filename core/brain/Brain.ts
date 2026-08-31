@@ -156,6 +156,9 @@ export class Brain {
       originalUserMessage: context.message,
       structuredContext,
       compiledPrompt,
+      ...(input.conversationIdentity?.projectId
+        ? { projectId: input.conversationIdentity.projectId }
+        : {}),
     };
 
     assertValidCognitiveRequest(cognitiveRequest);

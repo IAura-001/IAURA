@@ -27,6 +27,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <label htmlFor="login-password">Contraseña</label><div className={styles.field}><input id="login-password" name="password" type="password" autoComplete="current-password" required minLength={8} maxLength={128} placeholder="Tu señal personal" /><span /></div>
               <button type="submit"><span>Entrar a IAURA</span><i aria-hidden="true" /><svg aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M6 3h7v7" /></svg></button>
             </form>
+            <p className={styles.switch}><Link href="/forgot-password">¿Olvidaste tu contraseña?</Link></p>
             <p className={styles.switch}>¿Primera vez aquí? <Link href={`/signup?next=${encodeURIComponent(nextPath)}`}>Crear identidad</Link></p>
           </div>
         </section>

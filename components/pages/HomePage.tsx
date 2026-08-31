@@ -32,6 +32,7 @@ import {
   authenticatedConversationRepository as conversationRepository,
 } from "@/core/conversation/AuthenticatedConversationRepository";
 import { authenticatedProjectRepository } from "@/core/project/AuthenticatedProjectRepository";
+import { projectEngine } from "@/core/project/ProjectEngine";
 import { useAuthenticatedActiveProject } from "@/core/project/useAuthenticatedActiveProject";
 import { useVoiceContext } from "@/core/context/VoiceContext";
 import {
@@ -77,6 +78,10 @@ import VaeoraWorkspaceShell, {
   type WorkspaceView,
 } from "@/components/vaeora/VaeoraWorkspaceShell";
 import WelcomeOverlay from "@/components/vaeora/WelcomeOverlay";
+import CommercialActivationGuide from "@/components/onboarding/CommercialActivationGuide";
+import { commercialNextAction, provisionalLaunchName, shouldEnterCommercialOnboarding,
+  type CommercialNextAction } from "@/core/onboarding/commercialOnboarding";
+import { persistedLaunchMilestones } from "@/core/betaUsage/funnel";
 
 interface HomePageProps {
   initialView?: WorkspaceView;
@@ -170,6 +175,10 @@ export default function Home({
   const [isAuraLive, setIsAuraLive] =
     useState(false);
   const [intelligenceRefreshKey, setIntelligenceRefreshKey] = useState(0);
+  const [directionPersistence, setDirectionPersistence] = useState<{
+    projectId: string; status: "pending" | "saved" | "failed";
+  } | null>(null);
+  const [commercialLaunchPending, setCommercialLaunchPending] = useState(false);
 
   const auraLiveRef = useRef(false);
   const auraLiveRestartTimerRef =
@@ -179,6 +188,7 @@ export default function Home({
   const messageGenerationRef = useRef(0);
   const wasSendingRef = useRef(false);
   const environmentTimerRef = useRef<number | null>(null);
+  const commercialIntentTrackedRef = useRef(false);
 
   useEffect(() => {
     if (wasSendingRef.current && !isSending && activeProjectId) {
@@ -520,6 +530,7 @@ export default function Home({
       missionOverride?: string | AuraExperienceChoice,
       sourceMessageId?: string,
       intelligenceBridgeAuthority?: IntelligenceBridgeAuthority,
+      commercialOptions?: { firstIntentTracked?: boolean; throwOnFailure?: boolean },
     ) => {
       const trimmedInput =
         (typeof missionOverride === "string"
@@ -569,6 +580,16 @@ export default function Home({
 
       setIsSending(true);
 
+      if (!commercialOptions?.firstIntentTracked) {
+        void trackBetaUsage({
+          type: "first_intent_submitted",
+          eventKey: "first_intent:first",
+          source: requestedProjectId ? "project" : "presence",
+          inputMode: requestFromAuraLive ? "voice" : "text",
+          projectId: requestedProjectId,
+        });
+      }
+
       try {
         const turn =
           typeof missionOverride === "object"
@@ -593,20 +614,6 @@ export default function Home({
           setIntelligenceRefreshKey((current) => current + 1);
         }
 
-        void trackBetaUsage({ type: "message_sent", projectId: requestedProjectId });
-        if (requestedProjectId) {
-          const milestone = typeof missionOverride === "object"
-            ? missionOverride.confirmation?.kind
-            : undefined;
-          if (milestone) {
-            void trackBetaUsage({
-              type: "beta_step_completed",
-              projectId: requestedProjectId,
-              milestone,
-            });
-          }
-        }
-
         if (!canApplyConversationTurnResult({
           requestedProjectId,
           activeProjectId: activeProjectIdRef.current,
@@ -614,6 +621,31 @@ export default function Home({
           currentMessageGeneration: messageGenerationRef.current,
         })) {
           return;
+        }
+
+        void trackBetaUsage({ type: "message_sent", projectId: requestedProjectId });
+        if (requestedProjectId) {
+          void trackBetaUsage({
+            type: "project_scoped_result",
+            projectId: requestedProjectId,
+            eventKey: `project_result:${turn.assistantMessageId}`,
+            source: "conversation",
+          });
+          const milestone = typeof missionOverride === "object"
+            ? missionOverride.confirmation?.kind
+            : undefined;
+          if (milestone) {
+            void trackBetaUsage({
+              type: "beta_step_completed", projectId: requestedProjectId, milestone,
+            });
+          }
+          if (milestone === "beta-session-decision" || milestone === "beta-next-step") {
+            void trackBetaUsage({
+              type: "durable_output", projectId: requestedProjectId,
+              eventKey: `durable:${requestedProjectId}:confirmed_next_action:${sourceMessageId ?? turn.assistantMessageId}`,
+              source: "conversation", durableKind: "confirmed_next_action",
+            });
+          }
         }
 
         if (
@@ -842,7 +874,7 @@ export default function Home({
           }
         }
 
-        if (typeof missionOverride === "object") {
+        if (typeof missionOverride === "object" || commercialOptions?.throwOnFailure) {
           throw error;
         }
       } finally {
@@ -869,6 +901,76 @@ export default function Home({
     ],
   );
 
+  const handleCommercialLaunch = useCallback(async (intent: string) => {
+    setCommercialLaunchPending(true);
+    if (!commercialIntentTrackedRef.current) {
+      commercialIntentTrackedRef.current = true;
+      void trackBetaUsage({
+        type: "first_intent_submitted", eventKey: "first_intent:first",
+        source: "presence", inputMode: "text",
+      });
+    }
+    const existingProject = projectEngine.findEquivalentProject(provisionalLaunchName(intent));
+    const project = projectEngine.createProject({
+      name: provisionalLaunchName(intent), goal: intent, kind: "business",
+      commercialOnboarding: { version: 1, source: "first-launch" },
+    });
+    if (existingProject) authenticatedProjectRepository.retryProjectPersistence(project);
+    await authenticatedProjectRepository.flush();
+    if (!authenticatedProjectRepository.getLastOperationResult().ok) {
+      throw new Error("The project could not be saved. Check your connection and retry.");
+    }
+    handleWorkspaceProjectSelected(project);
+    updateMemory({ hasCompletedOnboarding: true, activeProject: project });
+    setActiveWorkspaceView("presence");
+    await handleSend(intent, undefined, { scopeType: "project", projectId: project.id }, {
+      firstIntentTracked: true, throwOnFailure: true,
+    });
+    setCommercialLaunchPending(false);
+  }, [handleSend, handleWorkspaceProjectSelected, updateMemory]);
+
+  const handleCommercialSkip = useCallback(() => {
+    setCommercialLaunchPending(false);
+    handleWelcomeContinue();
+  }, [handleWelcomeContinue]);
+
+  const handleSaveCommercialDirection = useCallback(async () => {
+    if (!activeProject?.commercialOnboarding) return;
+    setDirectionPersistence({ projectId: activeProject.id, status: "pending" });
+    const updated = projectEngine.updateProject(activeProject.id, {
+      commercialOnboarding: {
+        ...activeProject.commercialOnboarding,
+        directionConfirmedAt: new Date().toISOString(),
+      },
+    });
+    await authenticatedProjectRepository.flush();
+    if (!authenticatedProjectRepository.getLastOperationResult().ok) {
+      setDirectionPersistence({ projectId: activeProject.id, status: "failed" });
+      throw new Error("The direction could not be saved. Please retry.");
+    }
+    setDirectionPersistence({ projectId: activeProject.id, status: "saved" });
+    updateMemory({ activeProject: updated });
+  }, [activeProject, updateMemory]);
+
+  const handleCommercialNextAction = useCallback((action: CommercialNextAction) => {
+    if (action === "build-brand-system") return openProjectBrandSystem();
+    if (action === "approve-first-visual") return openCreativeStudio("image");
+    if (action === "develop-website-messaging") return openCreativeStudio("website");
+    setActiveWorkspaceView("presence");
+  }, [openCreativeStudio, openProjectBrandSystem]);
+
+  const projects = projectEngine.getProjects();
+  const showCommercialOnboarding = commercialLaunchPending || shouldEnterCommercialOnboarding(
+    memory.hasCompletedOnboarding, projects,
+  );
+  const isCommercialLaunch = activeProject?.commercialOnboarding?.source === "first-launch";
+  const hasCommercialResult = Boolean(activeProject && messagesProjectId === activeProject.id &&
+    messages.some((message) => message.role === "assistant" && Boolean(message.experience)));
+  const directionState = directionPersistence && directionPersistence.projectId === activeProject?.id
+    ? directionPersistence.status : null;
+  const hasCommercialDurableOutput = Boolean(activeProject && directionState !== "pending" &&
+    directionState !== "failed" && persistedLaunchMilestones(activeProject).length > 0);
+
   if (!isLoaded) {
     return (
       <main
@@ -891,12 +993,11 @@ export default function Home({
       locale={memory.preferredLocale}
     >
       <>
-        {!memory.hasCompletedOnboarding && (
+        {showCommercialOnboarding && (
           <WelcomeOverlay
             userName={authenticatedDisplayName}
-            onContinue={
-              handleWelcomeContinue
-            }
+            onLaunch={handleCommercialLaunch}
+            onSkip={handleCommercialSkip}
           />
         )}
 
@@ -948,6 +1049,16 @@ export default function Home({
                   />
 
                   <section className="min-w-0 space-y-5 rounded-[28px] border border-[var(--project-border,var(--vaeora-line))] bg-[var(--project-surface,var(--vaeora-surface))] p-4 sm:p-6">
+                    {isCommercialLaunch && activeProject ? (
+                      <CommercialActivationGuide
+                        hasProjectResult={hasCommercialResult}
+                        hasDurableDirection={hasCommercialDurableOutput}
+                        nextAction={commercialNextAction(activeProject)}
+                        isBusy={isSending}
+                        onSaveDirection={handleSaveCommercialDirection}
+                        onNextAction={handleCommercialNextAction}
+                      />
+                    ) : null}
                     <Conversation
                       conversationKey={activeProjectId}
                       messages={

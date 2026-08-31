@@ -17,8 +17,9 @@ describe("founder beta operations", () => {
       activationStatus: "REGISTERED_ONLY", lifecycleStatus: "NEVER_ACTIVATED",
     });
   });
-  it("activates meaningful product usage", () => {
+  it("activates only the canonical derived activation event", () => {
     expect(founderUsageResult([row({ meaningful_interaction_count: 1,
+      activated_at: "2026-08-24T00:00:00Z",
       message_count: 1, last_active_at: "2026-08-24T00:00:00Z" })], null, now).users[0])
       .toMatchObject({ activationStatus: "ACTIVATED", lifecycleStatus: "ACTIVE" });
   });
@@ -33,6 +34,7 @@ describe("founder beta operations", () => {
     const result = founderUsageResult([
       row({ data_quality_issues: ["MISSING_PROFILE"] }),
       row({ user_id: "active", meaningful_interaction_count: 3, message_count: 3,
+        activated_at: "2026-08-24T00:00:00Z",
         last_active_at: "2026-08-24T00:00:00Z" }),
     ], null, now);
     expect(result.summary).toMatchObject({ totalRegistered: 2, activated: 1,

@@ -17,8 +17,8 @@ reset role; set local role authenticated;
 select set_config('request.jwt.claim.sub','52000000-0000-0000-0000-000000000002',true);
 select set_config('request.jwt.claim.role','authenticated',true);
 select throws_ok('select * from public.ai_usage_events','42501',null,'member cannot read financial events');
-select throws_ok($$select public.reserve_ai_usage_operation('51000000-0000-0000-0000-000000000001','chat','spoof')$$,
-  '42883',null,'caller cannot supply or spoof another user id');
+select is(to_regprocedure('public.reserve_ai_usage_operation(uuid,text,text)')::text,null::text,
+  'caller-facing reservation signature cannot accept or spoof another user id');
 select throws_ok($$select public.founder_ai_cost_operations()$$,'42501',null,'member cannot read founder cost data');
 reset role; set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
@@ -62,7 +62,7 @@ reset role; set local role authenticated;
 select set_config('request.jwt.claim.sub','51000000-0000-0000-0000-000000000001',true);
 select set_config('request.jwt.claim.role','authenticated',true);
 select throws_ok($$select public.reserve_ai_usage_operation('chat','over-concurrency-limit')$$,
-  'P0001',null,'founder concurrency remains isolated from member policy and events');
+  'P0003',null,'founder commercial concurrency remains isolated from member policy and events');
 select lives_ok($$select * from public.founder_ai_cost_operations()$$,'founder can read cost analytics');
 select is((select operations from public.founder_ai_cost_operations() where scope='7d'),4::bigint,'7d total aggregates');
 select is((select total_tokens from public.founder_ai_cost_operations() where scope='30d'),15::bigint,'30d tokens aggregate');

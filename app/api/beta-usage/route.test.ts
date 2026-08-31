@@ -20,8 +20,8 @@ vi.mock("@/core/betaUsage/server", async () => {
 import { GET, POST } from "./route";
 import { FounderUsageAccessError } from "@/core/betaUsage/founder";
 
-function client(insertError: unknown = null, projectOwner = true) {
-  const insert = vi.fn().mockResolvedValue({ error: insertError });
+function client(rpcError: unknown = null, projectOwner = true) {
+  const rpc = vi.fn().mockResolvedValue({ data: !rpcError, error: rpcError });
   const maybeSingle = vi.fn().mockResolvedValue({
     data: projectOwner ? { id: "project-a" } : null,
     error: null,
@@ -29,8 +29,8 @@ function client(insertError: unknown = null, projectOwner = true) {
   const projectQuery = { select: vi.fn(), eq: vi.fn(), maybeSingle };
   projectQuery.select.mockReturnValue(projectQuery);
   projectQuery.eq.mockReturnValue(projectQuery);
-  const from = vi.fn((table: string) => table === "projects" ? projectQuery : { insert });
-  return { from, insert };
+  const from = vi.fn(() => projectQuery);
+  return { from, rpc };
 }
 
 describe("POST /api/beta-usage", () => {
@@ -69,10 +69,10 @@ describe("POST /api/beta-usage", () => {
     }));
 
     expect(response.status).toBe(202);
-    expect(supabase.insert).toHaveBeenCalledWith(expect.objectContaining({
-      user_id: "user-a", event_type: "message_sent", project_id: "project-a", metadata: {},
+    expect(supabase.rpc).toHaveBeenCalledWith("record_product_funnel_event", expect.objectContaining({
+      p_event_type: "message_sent", p_project_id: "project-a", p_metadata: {},
     }));
-    expect(JSON.stringify(supabase.insert.mock.calls[0][0])).not.toContain("private text");
+    expect(JSON.stringify(supabase.rpc.mock.calls[0][1])).not.toContain("private text");
   });
 
   it("rejects a project that is not owned by the authenticated user", async () => {
@@ -82,7 +82,7 @@ describe("POST /api/beta-usage", () => {
       method: "POST", body: JSON.stringify({ type: "project_opened", projectId: "project-b" }),
     }));
     expect(response.status).toBe(400);
-    expect(supabase.insert).not.toHaveBeenCalled();
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
   it("records general IAURA usage without inventing a project scope", async () => {
@@ -92,21 +92,21 @@ describe("POST /api/beta-usage", () => {
       method: "POST", body: JSON.stringify({ type: "message_sent" }),
     }));
     expect(response.status).toBe(202);
-    expect(supabase.insert).toHaveBeenCalledWith(expect.objectContaining({
-      user_id: "user-a", project_id: null, metadata: {},
+    expect(supabase.rpc).toHaveBeenCalledWith("record_product_funnel_event", expect.objectContaining({
+      p_event_type: "message_sent", p_project_id: null, p_metadata: {},
     }));
   });
 
-  it("records beta_signed_in without a project and treats its daily duplicate as recorded", async () => {
-    const supabase = client({ code: "23505", message: "duplicate" });
+  it("records beta_signed_in idempotently without a project", async () => {
+    const supabase = client();
     mocks.createClient.mockResolvedValue(supabase);
     const response = await POST(new Request("http://localhost/api/beta-usage", {
       method: "POST", body: JSON.stringify({ type: "beta_signed_in" }),
     }));
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toEqual({ recorded: true, deduplicated: true });
-    expect(supabase.insert).toHaveBeenCalledWith(expect.objectContaining({
-      user_id: "user-a", event_type: "beta_signed_in", project_id: null,
+    await expect(response.json()).resolves.toEqual({ recorded: true });
+    expect(supabase.rpc).toHaveBeenCalledWith("record_product_funnel_event", expect.objectContaining({
+      p_event_type: "beta_signed_in", p_project_id: null,
     }));
   });
 

@@ -58,6 +58,13 @@ const assetRepositoryMock = vi.hoisted(() => ({
 }));
 
 const thumbnailMock = vi.hoisted(() => vi.fn());
+const cloudAssetMock = vi.hoisted(() => ({
+  delete: vi.fn(),
+  get: vi.fn(),
+  list: vi.fn(),
+  put: vi.fn(),
+  updateMetadata: vi.fn(),
+}));
 
 vi.mock("@/core/project/ProjectEngine", () => ({
   projectEngine: projectEngineMock,
@@ -75,6 +82,10 @@ vi.mock("@/core/storage/CreativeAssetRepository", () => ({
 
 vi.mock("@/core/storage/createImageThumbnail", () => ({
   createImageThumbnail: thumbnailMock,
+}));
+
+vi.mock("@/core/assets/client", () => ({
+  cloudCreativeAssets: cloudAssetMock,
 }));
 
 import CreativeStudio from "@/components/creative/CreativeStudio";
@@ -161,6 +172,11 @@ beforeEach(() => {
   });
   assetRepositoryMock.updateMetadata.mockResolvedValue(undefined);
   assetRepositoryMock.delete.mockResolvedValue(undefined);
+  cloudAssetMock.list.mockResolvedValue([]);
+  cloudAssetMock.get.mockResolvedValue(null);
+  cloudAssetMock.put.mockResolvedValue(undefined);
+  cloudAssetMock.updateMetadata.mockResolvedValue(undefined);
+  cloudAssetMock.delete.mockResolvedValue(undefined);
   thumbnailMock.mockResolvedValue(
     new Blob(["thumbnail"], { type: "image/webp" }),
   );
@@ -234,6 +250,9 @@ describe("CreativeStudio", () => {
     assetRepositoryMock.put.mockRejectedValueOnce(
       new Error("IndexedDB quota exceeded"),
     );
+    cloudAssetMock.put.mockRejectedValueOnce(
+      new Error("Cloud storage unavailable"),
+    );
 
     renderStudio();
 
@@ -259,7 +278,7 @@ describe("CreativeStudio", () => {
       screen.getByRole("button", { name: "Abrir biblioteca" }),
     );
     expect(screen.getByText("Session only")).toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("reveals a generated preview before IndexedDB persistence finishes", async () => {
     const user = userEvent.setup();

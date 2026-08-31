@@ -33,6 +33,16 @@ describe("AuthenticatedProjectRepository ownership scoping", () => {
     expect(fetch).toHaveBeenCalledWith("/api/projects", expect.objectContaining({ method: "POST", body: expect.not.stringContaining("user-a") }));
   });
 
+  it("can safely retry the same project persistence after an interrupted onboarding write", async () => {
+    const repository = new AuthenticatedProjectRepository();
+    const launch = project("launch", "Launch");
+    repository.configure("user-a", [launch]);
+    repository.retryProjectPersistence(launch);
+    await repository.flush();
+    expect(vi.mocked(fetch).mock.calls.filter(([url, init]) =>
+      url === "/api/projects" && init?.method === "POST")).toHaveLength(1);
+  });
+
   it("hydrates and selects an unchanged project without issuing a PUT", async () => {
     const repository = new AuthenticatedProjectRepository();
     const initial = project("existing", "Existing");

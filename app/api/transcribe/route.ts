@@ -9,8 +9,8 @@ import {
   getLanguageDefinition,
   normalizeLocale,
 } from "@/core/i18n/languages";
-import { AiSafetyLimitError } from "@/core/aiUsage/types";
-import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
+import { AiEntitlementError, AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiEntitlementResponse, aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
 import { unknownProviderUsage } from "@/core/aiUsage/provider";
 
 export const runtime = "nodejs";
@@ -89,7 +89,8 @@ export async function POST(
       getLanguageDefinition(language);
     let reservation;
     try { reservation = await reserveAiUsage(request, "transcription"); }
-    catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error); throw error; }
+    catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error);
+      if (error instanceof AiEntitlementError) return aiEntitlementResponse(error); throw error; }
     let transcription;
     try { transcription = await openai.audio.transcriptions.create({
         file: audio,

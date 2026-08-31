@@ -1,6 +1,7 @@
 import type { MigrationOutcome, StateOperationResult } from "@/core/storage/StateReliability";
 import { PROJECT_STATE_VERSION, normalizeProject, type ProjectRepository, type ProjectRepositorySnapshot, type ProjectWriteResult } from "./ProjectRepository";
 import type { IAuraProject } from "./types";
+import { productSessionId } from "@/core/betaUsage/client";
 
 type Listener = () => void;
 
@@ -48,14 +49,22 @@ export class AuthenticatedProjectRepository implements ProjectRepository {
 
   async flush(): Promise<void> { await this.pending; }
 
+  retryProjectPersistence(project: IAuraProject): void {
+    this.queue("POST", project);
+  }
+
   private queue(method: "POST" | "PUT" | "DELETE", project?: IAuraProject, projectId?: string): void {
     const scopedUser = this.userId;
     const path = projectId ? `/api/projects/${encodeURIComponent(projectId)}` : "/api/projects";
     this.pending = this.pending.catch(() => undefined).then(async () => {
       if (!scopedUser || scopedUser !== this.userId) return;
+      const sessionId = productSessionId();
       const response = await fetch(path, {
         method,
-        headers: project ? { "Content-Type": "application/json" } : undefined,
+        headers: project ? {
+          "Content-Type": "application/json",
+          ...(sessionId ? { "X-VAEORA-Session-Id": sessionId } : {}),
+        } : undefined,
         body: project ? JSON.stringify({ project }) : undefined,
       });
       if (!response.ok) throw new Error(`Project persistence failed (${response.status}).`);

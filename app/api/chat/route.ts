@@ -14,8 +14,8 @@ import {
   BrainValidationError,
 } from "@/core/validator/ResponseValidator";
 import { createOpenAIProvider } from "@/services/providers";
-import { AiSafetyLimitError } from "@/core/aiUsage/types";
-import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
+import { AiEntitlementError, AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiEntitlementResponse, aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
 
 export const runtime = "nodejs";
 
@@ -23,6 +23,7 @@ interface ChatRequestBody {
   originalUserMessage?: unknown;
   structuredContext?: unknown;
   compiledPrompt?: unknown;
+  projectId?: unknown;
   prompt?: unknown;
   instructions?: unknown;
 }
@@ -60,6 +61,7 @@ function readCognitiveRequest(
     originalUserMessage: body.originalUserMessage,
     structuredContext: body.structuredContext,
     compiledPrompt: body.compiledPrompt,
+    projectId: body.projectId,
   };
 
   assertValidCognitiveRequest(cognitiveRequest);
@@ -191,9 +193,12 @@ export async function POST(request: Request) {
 
   let usageReservation;
   try {
-    usageReservation = await reserveAiUsage(request, "chat");
+    usageReservation = cognitiveRequest.projectId
+      ? await reserveAiUsage(request, "chat", undefined, cognitiveRequest.projectId)
+      : await reserveAiUsage(request, "chat");
   } catch (error) {
     if (error instanceof AiSafetyLimitError) return aiLimitResponse(error);
+    if (error instanceof AiEntitlementError) return aiEntitlementResponse(error);
     return NextResponse.json({ error: "AI usage controls are temporarily unavailable.", code: "VAEORA_AI_GUARD_UNAVAILABLE" },
       { status: 503, headers: noStoreHeaders() });
   }

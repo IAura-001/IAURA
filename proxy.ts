@@ -13,10 +13,14 @@ import {
   refreshSupabaseSession,
 } from "@/lib/supabase/proxy";
 
-const AUTH_PAGES = new Set(["/login", "/signup"]);
-const AUTH_ENTRY_APIS = new Set(["/api/auth/login", "/api/auth/signup"]);
+const AUTH_PAGES = new Set(["/login", "/signup", "/forgot-password"]);
+const AUTH_ENTRY_APIS = new Set(["/api/auth/login", "/api/auth/signup", "/api/auth/password/request"]);
+const PUBLIC_AUTH_PATHS = new Set([...AUTH_PAGES, ...AUTH_ENTRY_APIS, "/reset-password", "/api/auth/password/update"]);
 
 export async function proxy(request: NextRequest) {
+  if (PUBLIC_AUTH_PATHS.has(request.nextUrl.pathname) && !isRequestAuthorized(request)) {
+    return NextResponse.next();
+  }
   if (
     request.nextUrl.pathname === "/api/access"
   ) {

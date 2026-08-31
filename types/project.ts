@@ -118,4 +118,9 @@ export interface IAuraProject {
   launchStudio?: LaunchStudioMemory;
   creativeStudio?: CreativeStudioMemory;
   themeDNA?: ProjectThemeDNA;
+  commercialOnboarding?: {
+    version: 1;
+    source: "first-launch";
+    directionConfirmedAt?: string;
+  };
 }

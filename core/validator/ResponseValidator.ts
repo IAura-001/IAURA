@@ -263,6 +263,11 @@ function cognitiveRequestIssues(
       message: "A non-empty compiled cognitive prompt is required.",
     });
   }
+  if (request.projectId !== undefined &&
+    (typeof request.projectId !== "string" || !request.projectId.trim() || request.projectId.length > 200)) {
+    issues.push({ code: "IAURA_COGNITIVE_REQUEST_INVALID", field: "projectId",
+      message: "Project attribution is invalid." });
+  }
 
   issues.push(...structuredContextIssues(request.structuredContext));
 

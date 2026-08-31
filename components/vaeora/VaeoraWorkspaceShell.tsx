@@ -351,6 +351,7 @@ export default function VaeoraWorkspaceShell({
           </nav>
 
           <div className={styles.identityStatus}>
+            <Link className={styles.supportLink} href="/iaura/settings">Data &amp; privacy</Link>
             {VAEORA_SUPPORT_URL ? (
               <Link className={styles.supportLink} href="/support">
                 Support

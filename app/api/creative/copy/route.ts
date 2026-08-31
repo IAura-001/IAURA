@@ -35,8 +35,8 @@ import {
 import {
   createOpenAICreativeProvider,
 } from "@/services/providers/OpenAICreativeProvider";
-import { AiSafetyLimitError } from "@/core/aiUsage/types";
-import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
+import { AiEntitlementError, AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiEntitlementResponse, aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -110,8 +110,9 @@ export async function POST(request: Request) {
 
     try {
       let reservation;
-      try { reservation = await reserveAiUsage(request, "creative_copy", requestId); }
-      catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error); throw error; }
+      try { reservation = await reserveAiUsage(request, "creative_copy", requestId, validated.data.projectId); }
+      catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error);
+        if (error instanceof AiEntitlementError) return aiEntitlementResponse(error); throw error; }
       let result;
       try {
         const provider = createOpenAICreativeProvider({ onUsage: (usage) => reservation.complete(usage) });

@@ -15,8 +15,8 @@ import {
   normalizeAuraVoiceMode,
   type AuraVoiceMode,
 } from "@/core/voice/providers/voiceModes";
-import { AiSafetyLimitError } from "@/core/aiUsage/types";
-import { aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
+import { AiEntitlementError, AiSafetyLimitError } from "@/core/aiUsage/types";
+import { aiEntitlementResponse, aiLimitResponse, reserveAiUsage } from "@/core/aiUsage/server";
 import { unknownProviderUsage } from "@/core/aiUsage/provider";
 import { isAbortError } from "@/utils/abort";
 
@@ -229,7 +229,8 @@ export async function POST(request: Request) {
 
     let voiceReservation;
     try { voiceReservation = await reserveAiUsage(request, "speech"); }
-    catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error); throw error; }
+    catch (error) { if (error instanceof AiSafetyLimitError) return aiLimitResponse(error);
+      if (error instanceof AiEntitlementError) return aiEntitlementResponse(error); throw error; }
     try {
       audioBuffer = await generateElevenLabsVoice(
           safeText,
@@ -253,8 +254,9 @@ export async function POST(request: Request) {
 
       provider = "openai";
       let fallbackReservation;
-      try { fallbackReservation = await reserveAiUsage(request, "speech"); }
-      catch (limitError) { if (limitError instanceof AiSafetyLimitError) return aiLimitResponse(limitError); throw limitError; }
+      try { fallbackReservation = await reserveAiUsage(request, "speech", undefined, null, null, 0); }
+      catch (limitError) { if (limitError instanceof AiSafetyLimitError) return aiLimitResponse(limitError);
+        if (limitError instanceof AiEntitlementError) return aiEntitlementResponse(limitError); throw limitError; }
       try { audioBuffer = await generateOpenAIFallback(
           safeText,
           normalizedLanguage,

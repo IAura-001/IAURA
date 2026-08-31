@@ -4,6 +4,8 @@ import { getAuthenticatedUser, authenticationRequiredResponse } from "@/core/aut
 import { BETA_USAGE_EVENT_TYPES, type BetaUsageEventType } from "@/core/betaUsage/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FounderUsageAccessError, getFounderBetaUsage } from "@/core/betaUsage/server";
+import { normalizeProductFunnelEvent } from "@/core/betaUsage/funnel";
+import { recordProductEvent } from "@/core/betaUsage/record";
 
 const MILESTONES = new Set([
   "beta-context", "beta-outcome", "beta-next-step", "beta-session-decision",
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
     ? body.projectId.trim().slice(0, 200) : null;
   const milestone = typeof body?.milestone === "string" && MILESTONES.has(body.milestone)
     ? body.milestone : null;
-  if (["project_opened", "project_created", "beta_step_completed"].includes(type)
+  if (["project_opened", "project_created", "beta_step_completed", "project_scoped_result", "durable_output"].includes(type)
     && !projectId) {
     return NextResponse.json({ error: "Project scope required." }, { status: 400 });
   }
@@ -58,27 +60,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Project scope not found." }, { status: 400 });
     }
   }
-  const eventKey = type === "beta_signed_in"
-    ? `beta_signed_in:${new Date().toISOString().slice(0, 10)}` : null;
-  const { error } = await supabase.from("beta_usage_events").insert({
-    user_id: user.id, event_type: type, project_id: projectId,
-    event_key: eventKey, metadata: milestone ? { milestone } : {},
+  const normalized = normalizeProductFunnelEvent({ ...body, schemaVersion: body?.schemaVersion ?? 1 });
+  if (!normalized) return NextResponse.json({ error: "Invalid event schema." }, { status: 400 });
+  const eventKey = normalized.eventKey ?? (type === "beta_signed_in"
+    ? `beta_signed_in:${new Date().toISOString().slice(0, 10)}` : null);
+  const recorded = await recordProductEvent(supabase, {
+    type, projectId, eventKey, sessionId: normalized.sessionId,
+    source: normalized.source,
+    metadata: { ...normalized.metadata, ...(milestone ? { milestone } : {}) },
   });
-
-  if (error?.code === "23505" && type === "beta_signed_in") {
-    return NextResponse.json({ recorded: true, deduplicated: true }, { status: 202 });
-  }
-
-  if (error) {
-    console.error("Beta usage event persistence failed:", {
-      code: error.code ?? "unknown",
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      userId: user.id,
-      eventType: type,
-      projectId,
-    });
+  if (!recorded) {
     return NextResponse.json({ recorded: false }, { status: 503 });
   }
 

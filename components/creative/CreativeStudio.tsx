@@ -29,6 +29,7 @@ import {
   type CreativeAssetPageCursor,
 } from "@/core/storage/CreativeAssetRepository";
 import { createImageThumbnail } from "@/core/storage/createImageThumbnail";
+import { cloudCreativeAssets } from "@/core/assets/client";
 import {
   CreativeClientError,
   generateCreativeCopy,
@@ -729,6 +730,18 @@ export default function CreativeStudio({
         }
       });
 
+    void cloudCreativeAssets.list(snapshot.id).then((assets) => {
+      if (cancelled || lifecycleRef.current !== lifecycle) return;
+      const existingIds = new Set(assetViewsRef.current.map((asset) => asset.metadata.id));
+      const cloudViews = assets.filter((asset) => !existingIds.has(asset.metadata.id))
+        .map((asset) => createAssetView(asset, true));
+      if (!cloudViews.length) return;
+      const merged = [...cloudViews, ...assetViewsRef.current];
+      assetViewsRef.current = merged; setAssetViews(merged);
+      setActiveAssetId((current) => current ?? merged[0]?.metadata.id ?? null);
+      setLibraryLoading(false);
+    }).catch(() => undefined);
+
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -830,6 +843,7 @@ export default function CreativeStudio({
 
     void creativeAssetRepository
       .get(assetId)
+      .then(async (stored) => stored ?? cloudCreativeAssets.get(assetId))
       .then((stored) => {
         if (!stored || ignored || !isActiveLifecycle(lifecycle)) return;
 
@@ -1180,8 +1194,14 @@ export default function CreativeStudio({
           throw new DOMException("Creative Studio closed.", "AbortError");
         }
 
-        await creativeAssetRepository.put(metadata, result.blob, thumbnail);
-        persisted = true;
+        try {
+          await cloudCreativeAssets.put(metadata, result.blob, thumbnail);
+          persisted = true;
+        } catch {
+          // Keep the original device copy and allow a later lazy cloud retry.
+        }
+        try { await creativeAssetRepository.put(metadata, result.blob, thumbnail); }
+        catch (error) { if (!persisted) throw error; }
       } catch (error) {
         if ((error as Error).name === "AbortError") throw error;
       }
@@ -1614,13 +1634,11 @@ export default function CreativeStudio({
 
     try {
       if (view.persisted) {
-        await creativeAssetRepository.updateMetadata(updatedMetadata);
+        await cloudCreativeAssets.updateMetadata(updatedMetadata);
+        await creativeAssetRepository.updateMetadata(updatedMetadata).catch(() => undefined);
       } else if (view.blob) {
-        await creativeAssetRepository.put(
-          updatedMetadata,
-          view.blob,
-          view.thumbnail,
-        );
+        await cloudCreativeAssets.put(updatedMetadata, view.blob, view.thumbnail);
+        await creativeAssetRepository.put(updatedMetadata, view.blob, view.thumbnail).catch(() => undefined);
       } else {
         throw new Error("The original asset is unavailable.");
       }
@@ -1727,13 +1745,11 @@ export default function CreativeStudio({
 
     try {
       if (view.persisted) {
-        await creativeAssetRepository.updateMetadata(updatedMetadata);
+        await cloudCreativeAssets.updateMetadata(updatedMetadata);
+        await creativeAssetRepository.updateMetadata(updatedMetadata).catch(() => undefined);
       } else if (view.blob) {
-        await creativeAssetRepository.put(
-          updatedMetadata,
-          view.blob,
-          view.thumbnail,
-        );
+        await cloudCreativeAssets.put(updatedMetadata, view.blob, view.thumbnail);
+        await creativeAssetRepository.put(updatedMetadata, view.blob, view.thumbnail).catch(() => undefined);
       } else {
         throw new Error("The original asset is unavailable.");
       }
@@ -1828,7 +1844,8 @@ export default function CreativeStudio({
     try {
       if (!blob && view.persisted) {
         showFeedback("Preparando el original local…");
-        blob = (await creativeAssetRepository.get(view.metadata.id))?.blob;
+        blob = (await creativeAssetRepository.get(view.metadata.id))?.blob ??
+          (await cloudCreativeAssets.get(view.metadata.id))?.blob;
       }
 
       if (!blob || !isActiveLifecycle(lifecycle)) {
@@ -1929,7 +1946,8 @@ export default function CreativeStudio({
 
     try {
       if (view.persisted) {
-        await creativeAssetRepository.delete(view.metadata.id);
+        await cloudCreativeAssets.delete(view.metadata.id);
+        await creativeAssetRepository.delete(view.metadata.id).catch(() => undefined);
       }
       if (!isActiveLifecycle(lifecycle)) return;
 

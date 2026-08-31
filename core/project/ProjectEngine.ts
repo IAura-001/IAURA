@@ -24,6 +24,7 @@ export interface CreateProjectInput {
   kind?: ProjectKind;
   studios?: Partial<ProjectStudios>;
   createdAt?: string;
+  commercialOnboarding?: IAuraProject["commercialOnboarding"];
 }
 
 export interface UpdateProjectInput {
@@ -37,6 +38,7 @@ export interface UpdateProjectInput {
   launchStudio?: LaunchStudioMemory;
   creativeStudio?: CreativeStudioMemory;
   themeDNA?: ProjectThemeDNA;
+  commercialOnboarding?: IAuraProject["commercialOnboarding"];
 }
 
 const DEFAULT_STUDIOS: ProjectStudios = {
@@ -145,6 +147,7 @@ export class ProjectEngine {
         ...studiosForKind(kind),
         ...input.studios,
       },
+      ...(input.commercialOnboarding ? { commercialOnboarding: input.commercialOnboarding } : {}),
     };
 
     const result = this.repository.createProject(project);

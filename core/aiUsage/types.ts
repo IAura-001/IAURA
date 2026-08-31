@@ -22,3 +22,13 @@ export class AiSafetyLimitError extends Error {
     this.name = "AiSafetyLimitError";
   }
 }
+
+export type AiEntitlementReason = "CAPABILITY_NOT_ALLOWED" | "AI_ALLOWANCE_EXHAUSTED"
+  | "IMAGE_ALLOWANCE_EXHAUSTED" | "IMAGE_TIER_NOT_ALLOWED" | "CONCURRENCY_LIMIT_REACHED";
+
+export class AiEntitlementError extends Error {
+  constructor(readonly reason: AiEntitlementReason) {
+    super(reason);
+    this.name = "AiEntitlementError";
+  }
+}

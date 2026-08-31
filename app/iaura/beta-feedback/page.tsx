@@ -1,0 +1,6 @@
+import Link from "next/link";import Beta2FeedbackForm from "@/components/beta2/Beta2FeedbackForm";
+export default function BetaFeedbackPage(){return <main className="min-h-screen bg-[#07070d] px-4 py-12 text-white"><div className="mx-auto max-w-2xl space-y-6">
+ <header><Link href="/iaura" className="text-sm text-violet-300">← Workspace</Link><p className="mt-5 text-xs uppercase tracking-widest text-violet-300">Measured Beta 2</p><h1 className="mt-2 text-3xl font-semibold">Build a credible launch foundation in seven days.</h1>
+ <p className="mt-3 text-zinc-400">Work on a real brand, productized service, or digital offer. Report blockers here or through Support. Your normal privacy and account controls remain available.</p></header>
+ <Beta2FeedbackForm/><section className="rounded-2xl border border-white/10 p-5"><h2 className="font-semibold">End-of-week reflection</h2><p className="mt-2 text-sm text-zinc-400">The concise exit interview covers continuity, tool switching, valuable artifacts, next-action clarity, willingness to keep using VAEORA, and optional price expectations. Pricing answers are research only.</p></section>
+ <Link href="/support" className="inline-block text-sm text-violet-300">Report a blocker through Support →</Link></div></main>}
